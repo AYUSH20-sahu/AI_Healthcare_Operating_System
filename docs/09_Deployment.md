@@ -14,21 +14,57 @@ docker compose up
 ### Environment
 Uses `.env.local` for development configuration (gitignored).
 
-## Environment Separation
-- `.env.local` — local development (gitignored)
-- `.env.staging` — staging environment
-- `.env.prod` — production environment
+## Environment Separation (M5)
+- `.env.local` — local development (gitignored, copy from `.env.dev`)
+- `.env.dev` — development template with placeholder values
+- `.env.staging` — staging template with GitHub Actions secret references
+- `.env.prod` — production template with GitHub Actions secret references
 
-## Secrets Management
-- Never commit secrets to source control
-- Inject via environment variables / secrets manager per environment
-- CI/CD pipelines receive secrets at runtime
+### Required Secrets per Environment
+| Secret | Dev | Staging | Prod |
+|--------|-----|---------|------|
+| `LLM_PROVIDER` | ✓ | ✓ | ✓ |
+| `LLM_API_KEY` | ✓ | ✓ | ✓ |
+| `DATABASE_URL` | ✓ | ✓ | ✓ |
+| `POSTGRES_USER` | ✓ | ✓ | ✓ |
+| `POSTGRES_PASSWORD` | ✓ | ✓ | ✓ |
+| `POSTGRES_DB` | ✓ | ✓ | ✓ |
+| `REDIS_URL` | ✓ | ✓ | ✓ |
+| `JWT_SECRET_KEY` | ✓ | ✓ | ✓ |
+| `NEXT_PUBLIC_API_URL` | ✓ | ✓ | ✓ |
+| `NEXT_PUBLIC_APP_URL` | ✓ | ✓ | ✓ |
+| `WHISPER_API_KEY` | Phase 6 | Phase 6 | Phase 6 |
+| `ELEVENLABS_API_KEY` | Phase 6 | Phase 6 | Phase 6 |
+| `ABDM_CLIENT_ID` | Phase 4+ | Phase 4+ | Phase 4+ |
+| `ABDM_CLIENT_SECRET` | Phase 4+ | Phase 4+ | Phase 4+ |
+| `FHIR_BASE_URL` | Phase 4+ | Phase 4+ | Phase 4+ |
+| `SENTRY_DSN` | Optional | ✓ | ✓ |
 
-## CI/CD Pipeline (GitHub Actions)
-- On every push:
-  - Lint and run backend tests (pytest)
-  - Lint and run frontend tests/build
-- Separate workflows for staging/prod deployments
+## CI/CD Pipeline (GitHub Actions) — M5
+**Workflow:** `.github/workflows/ci.yml`
+
+### On every push to main / PR:
+1. **Backend Lint & Test** (`backend-lint-and-test`):
+   - Spins up PostgreSQL 16 + Redis 7 service containers
+   - Installs Python 3.11 + dependencies (cached)
+   - Runs `ruff` linting
+   - Runs `pytest` with coverage
+   - Uploads coverage to Codecov
+
+2. **Frontend Lint & Build** (`frontend-lint-and-build`):
+   - Installs Node.js 20 + dependencies (cached)
+   - Runs `npm run lint` (ESLint)
+   - Runs `npm run build` (Next.js production build)
+   - Runs `npm test` (if configured)
+
+3. **Docker Build** (`docker-build`):
+   - Builds backend Docker image (`backend/Dockerfile.dev`)
+   - Builds frontend Docker image (`frontend/Dockerfile.dev`)
+
+### Secrets Injection
+- **Development**: Uses `.env.local` (gitignored, not in CI)
+- **Staging/Production**: Secrets injected via GitHub Actions `secrets` context
+- Configure secrets in GitHub repo: Settings → Secrets and variables → Actions
 
 ## Infrastructure
 - Docker + Kubernetes

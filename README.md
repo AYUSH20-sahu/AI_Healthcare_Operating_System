@@ -63,11 +63,19 @@ AI-HOS/
 ├── ai-services/             # AI agent services
 ├── database/                # Migrations, seeds
 ├── docker/                  # Docker configs
-├── .github/workflows/       # CI/CD
+├── .github/workflows/       # CI/CD (M5)
 ├── .gitignore
-├── .env.example
+├── .env.example             # Template with variable names
+├── .env.dev                 # Development template (M5)
+├── .env.staging             # Staging template with secret refs (M5)
+├── .env.prod                # Production template with secret refs (M5)
 └── README.md
 ```
+
+## CI/CD (M5)
+- **GitHub Actions**: `.github/workflows/ci.yml`
+- On every push/PR: backend lint (ruff) + test (pytest), frontend lint + build + test, Docker builds
+- Secrets injected via GitHub Actions secrets for staging/prod
 
 ## Documentation
 - [01 Project Charter](docs/01_Project_Charter.md)
