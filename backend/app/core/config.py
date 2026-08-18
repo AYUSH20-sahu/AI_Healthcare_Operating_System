@@ -1,5 +1,5 @@
-from pydantic_settings import BaseSettings
 from typing import Optional
+from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
@@ -25,19 +25,19 @@ class Settings(BaseSettings):
 
     # LLM
     LLM_PROVIDER: str = "openai"
-    LLM_API_KEY: Optional[str] = None
+    LLM_API_KEY: str | None = None
 
     # Voice
-    WHISPER_API_KEY: Optional[str] = None
-    ELEVENLABS_API_KEY: Optional[str] = None
+    WHISPER_API_KEY: str | None = None
+    ELEVENLABS_API_KEY: str | None = None
 
     # ABDM/FHIR
-    ABDM_CLIENT_ID: Optional[str] = None
-    ABDM_CLIENT_SECRET: Optional[str] = None
+    ABDM_CLIENT_ID: str | None = None
+    ABDM_CLIENT_SECRET: str | None = None
     FHIR_BASE_URL: str = "https://hapi.fhir.org/baseR4"
 
     # Monitoring
-    SENTRY_DSN: Optional[str] = None
+    SENTRY_DSN: str | None = None
     LOG_LEVEL: str = "INFO"
 
     class Config:
