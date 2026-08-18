@@ -34,19 +34,25 @@ git clone <your-repo-url>
 cd AI_Healthcare_Operating_System
 
 # Copy environment template
-cp .env.example .env
-# Edit .env with your API keys
+cp .env.example .env.local
+# Edit .env.local with your API keys
 
-# Start development environment
+# Start development environment (M2)
 docker compose up
 ```
 
-### Services
-- **Frontend** (Next.js): http://localhost:3000
+### Services (M2)
+- **Frontend** (Next.js + Tailwind): http://localhost:3000
 - **Backend** (FastAPI): http://localhost:8000
 - **API Docs** (OpenAPI): http://localhost:8000/docs
-- **PostgreSQL**: localhost:5432
-- **Redis**: localhost:6379
+- **PostgreSQL**: localhost:5432 (with healthcheck)
+- **Redis**: localhost:6379 (with healthcheck)
+
+### Docker Compose Services
+- `postgres` — PostgreSQL 16 with named volume `postgres_data`
+- `redis` — Redis 7 with persistence and named volume `redis_data`
+- `backend` — FastAPI with hot-reload (uvicorn --reload)
+- `frontend` — Next.js with hot-reload (npm run dev)
 
 ## Monorepo Structure
 ```

@@ -1,12 +1,21 @@
 # Deployment — AI-HOS
 
-## Local Development
+## Local Development (M2)
 ```bash
 docker compose up
 ```
 
+### Services Started
+- **postgres** — PostgreSQL 16 (port 5432) with healthcheck, named volume `postgres_data`
+- **redis** — Redis 7 (port 6379) with persistence, healthcheck, named volume `redis_data`
+- **backend** — FastAPI (port 8000) with hot-reload, depends on healthy postgres/redis
+- **frontend** — Next.js (port 3000) with hot-reload, depends on backend
+
+### Environment
+Uses `.env.local` for development configuration (gitignored).
+
 ## Environment Separation
-- `.env.dev` — local development
+- `.env.local` — local development (gitignored)
 - `.env.staging` — staging environment
 - `.env.prod` — production environment
 
