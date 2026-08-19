@@ -28,6 +28,7 @@ class UserRole(PyEnum):
     DOCTOR = "doctor"
     ADMIN = "admin"
     NURSE = "nurse"
+    RECEPTIONIST = "receptionist"
 
 
 class AppointmentStatus(PyEnum):
