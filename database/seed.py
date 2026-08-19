@@ -14,6 +14,7 @@ Or: make seed (if Makefile exists)
 
 import asyncio
 import uuid
+import json
 from datetime import datetime, timedelta, date
 from passlib.context import CryptContext
 
@@ -26,13 +27,32 @@ from sqlalchemy import text
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-# Database URL - matches docker-compose
-DATABASE_URL = "postgresql+asyncpg://postgres:postgres@localhost:5432/ai_hos"
+# Database URL - use environment variable or default to Nhost
+import os
+from pathlib import Path
+
+# Load .env.local from project root (parent of database/)
+env_path = Path(__file__).parent.parent / ".env.local"
+if env_path.exists():
+    from dotenv import load_dotenv
+    load_dotenv(env_path)
+
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql+asyncpg://postgres:postgres@localhost:5432/ai_hos")
+
+# Ensure asyncpg driver
+if DATABASE_URL.startswith("postgresql://"):
+    DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
+elif DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql+asyncpg://", 1)
 
 
 async def seed_database():
     """Seed the database with development data."""
-    engine = create_async_engine(DATABASE_URL, echo=True)
+    engine = create_async_engine(
+        DATABASE_URL,
+        connect_args={'ssl': True, 'command_timeout': 10},
+        echo=True
+    )
     async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
     async with async_session() as session:
@@ -146,7 +166,7 @@ async def seed_doctors(session: AsyncSession):
                                hospital_affiliation, email, full_name, phone, created_at, updated_at)
             VALUES (:doctor_id, :user_id, :specialty, :license_number,
                     :hospital_affiliation, :email, :full_name, :phone, NOW(), NOW())
-            ON CONFLICT (doctor_id) DO NOTHING
+            ON CONFLICT (license_number) DO NOTHING
         """), doc)
 
     return doctors_data
@@ -225,7 +245,7 @@ async def seed_patients(session: AsyncSession):
             VALUES (:patient_id, :abha_address, :full_name, :date_of_birth,
                     :gender, :phone, :email, :address, :emergency_contact_name,
                     :emergency_contact_phone, NOW(), NOW())
-            ON CONFLICT (patient_id) DO NOTHING
+            ON CONFLICT (abha_address) DO NOTHING
         """), pat)
 
     return patients_data
@@ -266,7 +286,7 @@ async def seed_appointments(session: AsyncSession, doctors, patients):
                                     duration_minutes, status, notes, created_at, updated_at)
             VALUES (:appointment_id, :patient_id, :doctor_id, :scheduled_at,
                     :duration_minutes, :status, :notes, :created_at, :updated_at)
-            ON CONFLICT (appointment_id) DO NOTHING
+            ON CONFLICT (patient_id, doctor_id, scheduled_at) DO NOTHING
         """), appt)
 
     return appointments_data
@@ -327,13 +347,16 @@ async def seed_medical_records(session: AsyncSession, doctors, patients, appoint
         })
 
     for rec in records_data:
+        # Serialize JSON fields
+        rec_copy = rec.copy()
+        rec_copy['content'] = json.dumps(rec_copy['content'])
         await session.execute(text("""
             INSERT INTO medical_records (record_id, patient_id, doctor_id, appointment_id,
                                        content, status, created_at, updated_at, finalized_at)
             VALUES (:record_id, :patient_id, :doctor_id, :appointment_id,
                     :content, :status, :created_at, :updated_at, :finalized_at)
             ON CONFLICT (record_id) DO NOTHING
-        """), rec)
+        """), rec_copy)
 
     return records_data
 
@@ -398,13 +421,16 @@ async def seed_prescriptions(session: AsyncSession, doctors, patients, medical_r
         })
 
     for presc in prescriptions_data:
+        # Serialize JSON fields
+        presc_copy = presc.copy()
+        presc_copy['medications'] = json.dumps(presc_copy['medications'])
         await session.execute(text("""
             INSERT INTO prescriptions (prescription_id, medical_record_id, patient_id, doctor_id,
                                      medications, status, created_at, updated_at, finalized_at)
             VALUES (:prescription_id, :medical_record_id, :patient_id, :doctor_id,
                     :medications, :status, :created_at, :updated_at, :finalized_at)
             ON CONFLICT (prescription_id) DO NOTHING
-        """), presc)
+        """), presc_copy)
 
     return prescriptions_data
 

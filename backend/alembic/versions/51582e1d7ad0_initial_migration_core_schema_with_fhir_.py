@@ -32,36 +32,38 @@ def upgrade() -> None:
     # - consents → FHIR Consent
     # =============================================================================
 
-    # Create enum types
-    appointment_status = postgresql.ENUM(
-        'scheduled', 'completed', 'cancelled', 'no_show',
-        name='appointment_status', create_type=True
-    )
-    appointment_status.create(op.get_bind())
-
-    medical_record_status = postgresql.ENUM(
-        'draft', 'finalized', 'amended',
-        name='medical_record_status', create_type=True
-    )
-    medical_record_status.create(op.get_bind())
-
-    prescription_status = postgresql.ENUM(
-        'draft', 'finalized', 'cancelled',
-        name='prescription_status', create_type=True
-    )
-    prescription_status.create(op.get_bind())
-
-    consent_scope = postgresql.ENUM(
-        'full_access', 'limited', 'emergency_only',
-        name='consent_scope', create_type=True
-    )
-    consent_scope.create(op.get_bind())
-
-    audit_outcome = postgresql.ENUM(
-        'success', 'failure', 'partial',
-        name='audit_outcome', create_type=True
-    )
-    audit_outcome.create(op.get_bind())
+    # Get connection to check existing types
+    conn = op.get_bind()
+    
+    # Create enum types only if they don't exist
+    enum_definitions = [
+        ('appointment_status', ['scheduled', 'completed', 'cancelled', 'no_show']),
+        ('medical_record_status', ['draft', 'finalized', 'amended']),
+        ('prescription_status', ['draft', 'finalized', 'cancelled']),
+        ('consent_scope', ['full_access', 'limited', 'emergency_only']),
+        ('audit_outcome', ['success', 'failure', 'partial']),
+    ]
+    
+    # Store enum types for use in table definitions
+    enum_types = {}
+    
+    for enum_name, enum_values in enum_definitions:
+        # Check if enum type exists
+        result = conn.execute(sa.text(
+            "SELECT 1 FROM pg_type WHERE typname = :name AND typtype = 'e'"
+        ), {"name": enum_name}).fetchone()
+        
+        if not result:
+            enum_type = postgresql.ENUM(*enum_values, name=enum_name, create_type=True)
+            enum_type.create(conn)
+        # Get the enum type for use in table definitions
+        enum_types[enum_name] = postgresql.ENUM(name=enum_name, create_type=False)
+    
+    appointment_status = enum_types['appointment_status']
+    medical_record_status = enum_types['medical_record_status']
+    prescription_status = enum_types['prescription_status']
+    consent_scope = enum_types['consent_scope']
+    audit_outcome = enum_types['audit_outcome']
 
     # -----------------------------------------------------------------------------
     # patients → FHIR Patient
@@ -116,6 +118,7 @@ def upgrade() -> None:
         sa.Column('notes', sa.Text, nullable=True),
         sa.Column('created_at', sa.DateTime, nullable=False, server_default=sa.func.now()),
         sa.Column('updated_at', sa.DateTime, nullable=False, server_default=sa.func.now()),
+        sa.UniqueConstraint('patient_id', 'doctor_id', 'scheduled_at', name='uq_appointment_patient_doctor_time'),
     )
 
     # -----------------------------------------------------------------------------

@@ -1,5 +1,6 @@
 from typing import Optional
 from pydantic_settings import BaseSettings
+from pathlib import Path
 
 
 class Settings(BaseSettings):
@@ -26,6 +27,8 @@ class Settings(BaseSettings):
     # LLM
     LLM_PROVIDER: str = "openai"
     LLM_API_KEY: str | None = None
+    LLM_BASE_URL: str | None = None
+    LLM_MODEL: str | None = None
 
     # Voice
     WHISPER_API_KEY: str | None = None
@@ -40,10 +43,16 @@ class Settings(BaseSettings):
     SENTRY_DSN: str | None = None
     LOG_LEVEL: str = "INFO"
 
+    # Frontend
+    NEXT_PUBLIC_API_URL: str | None = None
+    NEXT_PUBLIC_APP_URL: str | None = None
+
     class Config:
-        env_file = ".env.local"
+        # Find .env.local in project root (parent of backend/)
+        env_file = Path(__file__).parent.parent.parent.parent / ".env.local"
         env_file_encoding = "utf-8"
         case_sensitive = True
+        extra = "allow"
 
 
 settings = Settings()
