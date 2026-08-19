@@ -1,7 +1,8 @@
 from fastapi import FastAPI
 
 from app.core.config import settings
-from app.api import auth
+from app.api import auth, consent
+from app.services.auth.audit import AuditLoggingMiddleware
 
 app = FastAPI(
     title="AI-HOS Backend",
@@ -12,7 +13,11 @@ app = FastAPI(
     openapi_url="/openapi.json",
 )
 
+# Add audit logging middleware
+app.add_middleware(AuditLoggingMiddleware)
+
 app.include_router(auth.router, prefix="/api/v1")
+app.include_router(consent.router, prefix="/api/v1")
 
 
 @app.get("/health")
