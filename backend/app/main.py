@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 
 from app.core.config import settings
-
+from app.api import auth
 
 app = FastAPI(
     title="AI-HOS Backend",
@@ -11,6 +11,8 @@ app = FastAPI(
     redoc_url="/redoc",
     openapi_url="/openapi.json",
 )
+
+app.include_router(auth.router, prefix="/api/v1")
 
 
 @app.get("/health")

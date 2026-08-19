@@ -66,6 +66,33 @@ class AuditOutcome(PyEnum):
     PARTIAL = "partial"
 
 
+# FHIR: User (for authentication)
+class User(Base):
+    """User authentication and authorization.
+    
+    FHIR-R4 Mapping: Practitioner (for providers) / Patient (for patients) + Provenance
+    Key FHIR fields: identifier, name, telecom, authentication, authorization
+    """
+    __tablename__ = "users"
+
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
+    hashed_password: Mapped[str] = mapped_column(String(255))
+    full_name: Mapped[str] = mapped_column(String(255), index=True)
+    role: Mapped[UserRole] = mapped_column(
+        Enum(UserRole, values_callable=lambda x: [e.value for e in x]), default=UserRole.PATIENT, index=True
+    )
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    patient_profile: Mapped[Optional["Patient"]] = relationship(back_populates="user", uselist=False)
+    doctor_profile: Mapped[Optional["Doctor"]] = relationship(back_populates="user", uselist=False)
+
+
 # =============================================================================
 # FHIR Mapping Notes:
 # - patients → FHIR Patient
@@ -90,6 +117,9 @@ class Patient(Base):
     patient_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
+    user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.user_id"), unique=True, index=True
+    )
     abha_address: Mapped[Optional[str]] = mapped_column(String(255), unique=True, index=True)
     full_name: Mapped[str] = mapped_column(String(255), index=True)
     date_of_birth: Mapped[Date] = mapped_column(Date)
@@ -103,6 +133,7 @@ class Patient(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationships
+    user: Mapped[Optional["User"]] = relationship(back_populates="patient_profile")
     appointments: Mapped[List["Appointment"]] = relationship(back_populates="patient")
     medical_records: Mapped[List["MedicalRecord"]] = relationship(back_populates="patient")
     prescriptions: Mapped[List["Prescription"]] = relationship(back_populates="patient")
@@ -121,7 +152,9 @@ class Doctor(Base):
     doctor_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
-    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), unique=True, index=True)
+    user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.user_id"), unique=True, index=True
+    )
     specialty: Mapped[str] = mapped_column(String(100), index=True)
     license_number: Mapped[str] = mapped_column(String(100), unique=True, index=True)
     hospital_affiliation: Mapped[Optional[str]] = mapped_column(String(255))
@@ -132,6 +165,7 @@ class Doctor(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationships
+    user: Mapped[Optional["User"]] = relationship(back_populates="doctor_profile")
     appointments: Mapped[List["Appointment"]] = relationship(back_populates="doctor")
     medical_records: Mapped[List["MedicalRecord"]] = relationship(back_populates="doctor")
     prescriptions: Mapped[List["Prescription"]] = relationship(back_populates="doctor")
