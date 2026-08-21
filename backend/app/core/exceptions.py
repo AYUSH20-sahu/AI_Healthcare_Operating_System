@@ -7,6 +7,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from app.core.config import settings
 
 
 class ErrorDetail(BaseModel):
@@ -142,7 +143,3 @@ def register_exception_handlers(app: FastAPI) -> None:
         return app.openapi_schema
     
     app.openapi = custom_openapi
-
-
-# Import settings for DEBUG flag
-from app.core.config import settings
