@@ -257,8 +257,8 @@ class Prescription(Base):
     prescription_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
-    medical_record_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("medical_records.record_id"), index=True
+    medical_record_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("medical_records.record_id"), index=True, nullable=True
     )
     patient_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("patients.patient_id"), index=True
@@ -275,7 +275,7 @@ class Prescription(Base):
     finalized_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
     # Relationships
-    medical_record: Mapped["MedicalRecord"] = relationship(back_populates="prescriptions")
+    medical_record: Mapped[Optional["MedicalRecord"]] = relationship(back_populates="prescriptions")
     patient: Mapped["Patient"] = relationship(back_populates="prescriptions")
     doctor: Mapped["Doctor"] = relationship(back_populates="prescriptions")
 
