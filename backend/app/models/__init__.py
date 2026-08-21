@@ -138,6 +138,7 @@ class Patient(Base):
     appointments: Mapped[List["Appointment"]] = relationship(back_populates="patient")
     medical_records: Mapped[List["MedicalRecord"]] = relationship(back_populates="patient")
     prescriptions: Mapped[List["Prescription"]] = relationship(back_populates="patient")
+    voice_notes: Mapped[List["VoiceNote"]] = relationship(back_populates="patient")
     consents: Mapped[List["Consent"]] = relationship(back_populates="patient")
 
 
@@ -170,6 +171,7 @@ class Doctor(Base):
     appointments: Mapped[List["Appointment"]] = relationship(back_populates="doctor")
     medical_records: Mapped[List["MedicalRecord"]] = relationship(back_populates="doctor")
     prescriptions: Mapped[List["Prescription"]] = relationship(back_populates="doctor")
+    voice_notes: Mapped[List["VoiceNote"]] = relationship(back_populates="doctor")
     consents_given: Mapped[List["Consent"]] = relationship(back_populates="provider", foreign_keys="Consent.provider_id")
 
 
@@ -204,6 +206,7 @@ class Appointment(Base):
     patient: Mapped["Patient"] = relationship(back_populates="appointments")
     doctor: Mapped["Doctor"] = relationship(back_populates="appointments")
     medical_records: Mapped[List["MedicalRecord"]] = relationship(back_populates="appointment")
+    voice_notes: Mapped[List["VoiceNote"]] = relationship(back_populates="appointment")
 
 
 # FHIR: Composition / ClinicalImpression / DiagnosticReport
@@ -278,6 +281,46 @@ class Prescription(Base):
     medical_record: Mapped[Optional["MedicalRecord"]] = relationship(back_populates="prescriptions")
     patient: Mapped["Patient"] = relationship(back_populates="prescriptions")
     doctor: Mapped["Doctor"] = relationship(back_populates="prescriptions")
+
+
+# FHIR: Media / Binary (for voice notes)
+class VoiceNote(Base):
+    """Voice note recordings linked to appointments.
+    
+    FHIR-R4 Mapping: Media / Binary resource
+    Key FHIR fields: identifier, basedOn (appointment), status, content (attachment), 
+    createdDateTime, duration, operator (doctor)
+    """
+    __tablename__ = "voice_notes"
+
+    voice_note_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    appointment_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("appointments.appointment_id"), index=True
+    )
+    doctor_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("doctors.doctor_id"), index=True
+    )
+    patient_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("patients.patient_id"), index=True
+    )
+    file_path: Mapped[str] = mapped_column(String(500), comment="Storage path for audio file")
+    file_name: Mapped[str] = mapped_column(String(255), comment="Original file name")
+    content_type: Mapped[str] = mapped_column(String(100), comment="MIME type (e.g., audio/webm)")
+    file_size: Mapped[int] = mapped_column(comment="File size in bytes")
+    duration_seconds: Mapped[Optional[int]] = mapped_column(comment="Audio duration in seconds")
+    transcription: Mapped[Optional[str]] = mapped_column(Text, nullable=True, comment="Transcribed text")
+    transcription_status: Mapped[str] = mapped_column(
+        String(50), default="pending", comment="pending, processing, completed, failed"
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    appointment: Mapped["Appointment"] = relationship(back_populates="voice_notes")
+    doctor: Mapped["Doctor"] = relationship(back_populates="voice_notes")
+    patient: Mapped["Patient"] = relationship(back_populates="voice_notes")
 
 
 # FHIR: AuditEvent

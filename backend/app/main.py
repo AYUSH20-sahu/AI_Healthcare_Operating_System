@@ -2,7 +2,7 @@ from fastapi import FastAPI
 
 from app.core.config import settings
 from app.core.exceptions import register_exception_handlers
-from app.api import auth, consent, patients, doctors, appointments, medical_records, prescriptions
+from app.api import auth, consent, patients, doctors, appointments, medical_records, prescriptions, voice_notes
 from app.services.auth.audit import AuditLoggingMiddleware
 
 app = FastAPI(
@@ -27,6 +27,7 @@ app.include_router(doctors.router, prefix="/api/v1")
 app.include_router(appointments.router, prefix="/api/v1")
 app.include_router(medical_records.router, prefix="/api/v1")
 app.include_router(prescriptions.router, prefix="/api/v1")
+app.include_router(voice_notes.router, prefix="/api/v1")
 
 
 @app.get("/health")
