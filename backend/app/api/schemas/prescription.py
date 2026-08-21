@@ -1,9 +1,9 @@
 """Prescription Pydantic schemas."""
 
-from typing import Optional, List
-from uuid import UUID
 from datetime import datetime
-from pydantic import BaseModel, Field, ConfigDict
+from uuid import UUID
+
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class MedicationBase(BaseModel):
@@ -12,15 +12,14 @@ class MedicationBase(BaseModel):
     dosage: str = Field(..., min_length=1, max_length=100, description="Dosage (e.g., 500mg)")
     frequency: str = Field(..., min_length=1, max_length=100, description="Frequency (e.g., twice daily)")
     duration: str = Field(..., min_length=1, max_length=100, description="Duration (e.g., 7 days)")
-    route: Optional[str] = Field(None, max_length=50, description="Route of administration (e.g., oral, IV)")
-    instructions: Optional[str] = Field(None, max_length=500, description="Additional instructions")
-    quantity: Optional[int] = Field(None, ge=1, description="Quantity prescribed")
-    refills: Optional[int] = Field(0, ge=0, description="Number of refills allowed")
+    route: str | None = Field(None, max_length=50, description="Route of administration (e.g., oral, IV)")
+    instructions: str | None = Field(None, max_length=500, description="Additional instructions")
+    quantity: int | None = Field(None, ge=1, description="Quantity prescribed")
+    refills: int | None = Field(0, ge=0, description="Number of refills allowed")
 
 
 class MedicationCreate(MedicationBase):
     """Schema for creating a medication entry."""
-    pass
 
 
 class MedicationResponse(MedicationBase):
@@ -32,23 +31,22 @@ class PrescriptionBase(BaseModel):
     """Base prescription schema."""
     patient_id: UUID = Field(..., description="Patient ID")
     doctor_id: UUID = Field(..., description="Doctor ID")
-    medical_record_id: Optional[UUID] = Field(None, description="Associated medical record ID")
-    medications: List[MedicationCreate] = Field(..., min_length=1, description="List of medications")
-    notes: Optional[str] = Field(None, max_length=1000, description="Prescription notes")
+    medical_record_id: UUID | None = Field(None, description="Associated medical record ID")
+    medications: list[MedicationCreate] = Field(..., min_length=1, description="List of medications")
+    notes: str | None = Field(None, max_length=1000, description="Prescription notes")
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
 
 class PrescriptionCreate(PrescriptionBase):
     """Schema for creating a prescription."""
-    pass
 
 
 class PrescriptionUpdate(BaseModel):
     """Schema for updating a prescription."""
-    medications: Optional[List[MedicationCreate]] = Field(None, min_length=1, description="List of medications")
-    notes: Optional[str] = Field(None, max_length=1000, description="Prescription notes")
-    status: Optional[str] = Field(None, pattern="^(DRAFT|FINALIZED|CANCELLED)$", description="Prescription status")
+    medications: list[MedicationCreate] | None = Field(None, min_length=1, description="List of medications")
+    notes: str | None = Field(None, max_length=1000, description="Prescription notes")
+    status: str | None = Field(None, pattern="^(DRAFT|FINALIZED|CANCELLED)$", description="Prescription status")
 
 
 class PrescriptionResponse(PrescriptionBase):
@@ -57,14 +55,14 @@ class PrescriptionResponse(PrescriptionBase):
     status: str
     created_at: datetime
     updated_at: datetime
-    finalized_at: Optional[datetime] = None
+    finalized_at: datetime | None = None
 
     model_config = ConfigDict(from_attributes=True)
 
 
 class PrescriptionListResponse(BaseModel):
     """Schema for paginated prescription list response."""
-    prescriptions: List[PrescriptionResponse]
+    prescriptions: list[PrescriptionResponse]
     total: int
     page: int
     page_size: int
@@ -74,7 +72,7 @@ class PrescriptionListResponse(BaseModel):
 class InteractionCheckRequest(BaseModel):
     """Schema for interaction check request."""
     patient_id: UUID = Field(..., description="Patient ID")
-    medications: List[MedicationCreate] = Field(..., min_length=1, description="List of medications to check")
+    medications: list[MedicationCreate] = Field(..., min_length=1, description="List of medications to check")
 
 
 class InteractionWarning(BaseModel):
@@ -83,10 +81,10 @@ class InteractionWarning(BaseModel):
     type: str = Field(..., description="Warning type: interaction, allergy")
     medication: str = Field(..., description="Medication name")
     description: str = Field(..., description="Warning description")
-    recommendation: Optional[str] = Field(None, description="Clinical recommendation")
+    recommendation: str | None = Field(None, description="Clinical recommendation")
 
 
 class InteractionCheckResponse(BaseModel):
     """Schema for interaction check response."""
-    warnings: List[InteractionWarning]
+    warnings: list[InteractionWarning]
     has_warnings: bool

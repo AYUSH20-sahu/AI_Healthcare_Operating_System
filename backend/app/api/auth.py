@@ -5,18 +5,18 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
+from app.models import User
 from app.services.auth.service import (
+    Token,
     UserCreate,
     UserLogin,
     UserResponse,
-    Token,
     authenticate_user,
-    create_user,
     create_access_token,
     create_refresh_token,
+    create_user,
     get_current_active_user,
 )
-from app.models import User
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -58,8 +58,9 @@ async def login(form_data: UserLogin, db: AsyncSession = Depends(get_db)):
 @router.post("/refresh", response_model=Token)
 async def refresh_token(refresh_token: str, db: AsyncSession = Depends(get_db)):
     """Refresh access token using refresh token."""
-    from app.services.auth.service import jwt, settings, TokenData, get_user_by_id
     from uuid import UUID
+
+    from app.services.auth.service import TokenData, get_user_by_id, jwt, settings
     
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,

@@ -1,24 +1,23 @@
 """Tests for RBAC module."""
 
-import pytest
-from uuid import uuid4
 
+import pytest
+
+from app.models import User, UserRole
 from app.services.auth.rbac import (
-    Permission,
     ROLE_PERMISSIONS,
+    Permission,
     get_user_permissions,
     has_permission,
-    require_roles,
-    require_patient,
-    require_doctor,
     require_admin,
-    require_nurse,
-    require_receptionist,
+    require_doctor,
     require_doctor_or_admin,
     require_medical_staff,
+    require_nurse,
+    require_patient,
+    require_receptionist,
     require_staff,
 )
-from app.models import User, UserRole
 
 
 class TestRolePermissions:
@@ -142,7 +141,6 @@ class TestRequireRoles:
     @pytest.mark.asyncio
     async def test_require_patient_allows_patient(self):
         """Test require_patient allows patient user."""
-        from app.services.auth.rbac import require_patient
         from app.models import User, UserRole
         
         user = User(role=UserRole.PATIENT)
@@ -200,40 +198,32 @@ class TestConvenienceDependencies:
 
     def test_require_patient_exists(self):
         """Test require_patient dependency exists."""
-        from app.services.auth.rbac import require_patient
         assert require_patient is not None
 
     def test_require_doctor_exists(self):
         """Test require_doctor dependency exists."""
-        from app.services.auth.rbac import require_doctor
         assert require_doctor is not None
 
     def test_require_admin_exists(self):
         """Test require_admin dependency exists."""
-        from app.services.auth.rbac import require_admin
         assert require_admin is not None
 
     def test_require_nurse_exists(self):
         """Test require_nurse dependency exists."""
-        from app.services.auth.rbac import require_nurse
         assert require_nurse is not None
 
     def test_require_receptionist_exists(self):
         """Test require_receptionist dependency exists."""
-        from app.services.auth.rbac import require_receptionist
         assert require_receptionist is not None
 
     def test_require_doctor_or_admin_exists(self):
         """Test require_doctor_or_admin dependency exists."""
-        from app.services.auth.rbac import require_doctor_or_admin
         assert require_doctor_or_admin is not None
 
     def test_require_medical_staff_exists(self):
         """Test require_medical_staff dependency exists."""
-        from app.services.auth.rbac import require_medical_staff
         assert require_medical_staff is not None
 
     def test_require_staff_exists(self):
         """Test require_staff dependency exists."""
-        from app.services.auth.rbac import require_staff
         assert require_staff is not None

@@ -1,8 +1,17 @@
 from fastapi import FastAPI
 
+from app.api import (
+    appointments,
+    auth,
+    consent,
+    doctors,
+    medical_records,
+    patients,
+    prescriptions,
+    voice_notes,
+)
 from app.core.config import settings
 from app.core.exceptions import register_exception_handlers
-from app.api import auth, consent, patients, doctors, appointments, medical_records, prescriptions, voice_notes
 from app.services.auth.audit import AuditLoggingMiddleware
 
 app = FastAPI(

@@ -1,8 +1,8 @@
 """Appointment API schemas."""
 
 from datetime import datetime
-from typing import Optional
 from uuid import UUID
+
 from pydantic import BaseModel, Field
 
 
@@ -12,19 +12,18 @@ class AppointmentBase(BaseModel):
     doctor_id: UUID
     scheduled_at: datetime
     duration_minutes: int = Field(default=30, ge=15, le=240)
-    notes: Optional[str] = None
+    notes: str | None = None
 
 
 class AppointmentCreate(AppointmentBase):
     """Schema for creating an appointment."""
-    pass
 
 
 class AppointmentUpdate(BaseModel):
     """Schema for updating an appointment."""
-    scheduled_at: Optional[datetime] = None
-    duration_minutes: Optional[int] = Field(None, ge=15, le=240)
-    notes: Optional[str] = None
+    scheduled_at: datetime | None = None
+    duration_minutes: int | None = Field(None, ge=15, le=240)
+    notes: str | None = None
 
 
 class AppointmentResponse(AppointmentBase):

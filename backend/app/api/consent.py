@@ -1,24 +1,22 @@
 """Consent API routes."""
 
 from datetime import datetime
-from typing import List
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
+from app.models import ConsentScope, User, UserRole
 from app.services.auth.consent import (
-    grant_consent,
-    revoke_consent,
     get_active_consents_for_patient,
     get_all_consents_for_patient,
     get_consent_by_id,
+    grant_consent,
+    revoke_consent,
 )
-from app.services.auth.rbac import require_patient, require_doctor, require_admin
 from app.services.auth.service import get_current_active_user
-from app.models import Consent, ConsentScope, User, UserRole
-from pydantic import BaseModel
 
 
 class ConsentCreate(BaseModel):
@@ -107,7 +105,7 @@ async def revoke_consent_endpoint(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.get("/patients/{patient_id}", response_model=List[ConsentResponse])
+@router.get("/patients/{patient_id}", response_model=list[ConsentResponse])
 async def list_patient_consents(
     patient_id: UUID,
     active_only: bool = True,

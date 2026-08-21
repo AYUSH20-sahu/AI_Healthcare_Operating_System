@@ -1,20 +1,19 @@
 """Auth service - signup, login, JWT handling."""
 
 from datetime import datetime, timedelta
-from typing import Optional
 from uuid import UUID
 
-from fastapi import Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from jose import JWTError, jwt
 import bcrypt
+from fastapi import Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordBearer
+from jose import JWTError, jwt
 from pydantic import BaseModel, EmailStr
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.models import Base, User
 from app.database import get_db
+from app.models import User
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
 
@@ -26,9 +25,9 @@ class Token(BaseModel):
 
 
 class TokenData(BaseModel):
-    user_id: Optional[UUID] = None
-    email: Optional[str] = None
-    role: Optional[str] = None
+    user_id: UUID | None = None
+    email: str | None = None
+    role: str | None = None
 
 
 class UserCreate(BaseModel):
@@ -65,7 +64,7 @@ def get_password_hash(password: str) -> str:
     return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
 
 
-def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
+def create_access_token(data: dict, expires_delta: timedelta | None = None) -> str:
     """Create a JWT access token."""
     to_encode = data.copy()
     if expires_delta:
@@ -77,7 +76,7 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     return encoded_jwt
 
 
-def create_refresh_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
+def create_refresh_token(data: dict, expires_delta: timedelta | None = None) -> str:
     """Create a JWT refresh token."""
     to_encode = data.copy()
     if expires_delta:
@@ -89,19 +88,19 @@ def create_refresh_token(data: dict, expires_delta: Optional[timedelta] = None) 
     return encoded_jwt
 
 
-async def get_user_by_email(db: AsyncSession, email: str) -> Optional[User]:
+async def get_user_by_email(db: AsyncSession, email: str) -> User | None:
     """Get user by email."""
     result = await db.execute(select(User).where(User.email == email))
     return result.scalar_one_or_none()
 
 
-async def get_user_by_id(db: AsyncSession, user_id: UUID) -> Optional[User]:
+async def get_user_by_id(db: AsyncSession, user_id: UUID) -> User | None:
     """Get user by ID."""
     result = await db.execute(select(User).where(User.user_id == user_id))
     return result.scalar_one_or_none()
 
 
-async def authenticate_user(db: AsyncSession, email: str, password: str) -> Optional[User]:
+async def authenticate_user(db: AsyncSession, email: str, password: str) -> User | None:
     """Authenticate a user with email and password."""
     user = await get_user_by_email(db, email)
     if not user:

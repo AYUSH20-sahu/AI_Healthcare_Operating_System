@@ -1,8 +1,8 @@
 """Doctor API schemas."""
 
 from datetime import datetime
-from typing import Optional
 from uuid import UUID
+
 from pydantic import BaseModel, EmailStr, Field
 
 
@@ -10,25 +10,24 @@ class DoctorBase(BaseModel):
     """Base doctor schema."""
     specialty: str = Field(..., max_length=100)
     license_number: str = Field(..., max_length=100)
-    hospital_affiliation: Optional[str] = Field(None, max_length=255)
+    hospital_affiliation: str | None = Field(None, max_length=255)
     email: EmailStr
     full_name: str = Field(..., max_length=255)
-    phone: Optional[str] = Field(None, max_length=50)
+    phone: str | None = Field(None, max_length=50)
 
 
 class DoctorCreate(DoctorBase):
     """Schema for creating a doctor."""
-    pass
 
 
 class DoctorUpdate(BaseModel):
     """Schema for updating a doctor."""
-    specialty: Optional[str] = Field(None, max_length=100)
-    license_number: Optional[str] = Field(None, max_length=100)
-    hospital_affiliation: Optional[str] = Field(None, max_length=255)
-    email: Optional[EmailStr] = None
-    full_name: Optional[str] = Field(None, max_length=255)
-    phone: Optional[str] = Field(None, max_length=50)
+    specialty: str | None = Field(None, max_length=100)
+    license_number: str | None = Field(None, max_length=100)
+    hospital_affiliation: str | None = Field(None, max_length=255)
+    email: EmailStr | None = None
+    full_name: str | None = Field(None, max_length=255)
+    phone: str | None = Field(None, max_length=50)
 
 
 class DoctorResponse(DoctorBase):

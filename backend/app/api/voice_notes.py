@@ -1,26 +1,33 @@
 """Voice Notes API routes."""
 
-from typing import Optional, List
-from uuid import UUID
-from datetime import datetime
 import os
 import shutil
+from datetime import datetime
 from pathlib import Path
+from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status, UploadFile, File, Form
-from sqlalchemy import select, func, and_
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    Query,
+    UploadFile,
+    status,
+)
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database import get_db
-from app.models import VoiceNote, Appointment, Doctor, Patient, User, UserRole
-from app.services.auth.service import get_current_active_user
 from app.api.schemas.voice_note import (
-    VoiceNoteCreate,
-    VoiceNoteUpdate,
-    VoiceNoteResponse,
     VoiceNoteListResponse,
+    VoiceNoteResponse,
+    VoiceNoteUpdate,
     VoiceNoteUploadResponse,
 )
+from app.database import get_db
+from app.models import Appointment, Doctor, Patient, User, UserRole, VoiceNote
+from app.services.auth.service import get_current_active_user
 
 router = APIRouter(prefix="/voice-notes", tags=["voice-notes"])
 
@@ -105,7 +112,7 @@ async def upload_voice_note(
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to save file: {str(e)}",
+            detail=f"Failed to save file: {e!s}",
         )
     
     # Create voice note record

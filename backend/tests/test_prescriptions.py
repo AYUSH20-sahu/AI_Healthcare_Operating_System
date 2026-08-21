@@ -1,12 +1,23 @@
 """Tests for Prescriptions API."""
 
+from datetime import date, datetime, timedelta
+from uuid import uuid4
+
 import pytest
 import pytest_asyncio
-from uuid import uuid4
-from datetime import datetime, date, timedelta
 
-from app.models import Prescription, Patient, Doctor, User, UserRole, PrescriptionStatus, MedicalRecord, Appointment, AppointmentStatus
-from app.services.auth.service import get_password_hash, create_access_token
+from app.models import (
+    Appointment,
+    AppointmentStatus,
+    Doctor,
+    MedicalRecord,
+    Patient,
+    Prescription,
+    PrescriptionStatus,
+    User,
+    UserRole,
+)
+from app.services.auth.service import create_access_token, get_password_hash
 
 
 @pytest_asyncio.fixture

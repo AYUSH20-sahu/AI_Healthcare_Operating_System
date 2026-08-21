@@ -1,22 +1,21 @@
 """Appointments API routes."""
 
-from typing import Optional
-from uuid import UUID
 from datetime import datetime, timedelta
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select, func, and_
+from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database import get_db
-from app.models import Appointment, Patient, Doctor, User, UserRole, AppointmentStatus
-from app.services.auth.service import get_current_active_user
 from app.api.schemas.appointment import (
     AppointmentCreate,
-    AppointmentUpdate,
-    AppointmentResponse,
     AppointmentListResponse,
+    AppointmentResponse,
+    AppointmentUpdate,
 )
+from app.database import get_db
+from app.models import Appointment, AppointmentStatus, Doctor, Patient, User, UserRole
+from app.services.auth.service import get_current_active_user
 
 router = APIRouter(prefix="/appointments", tags=["appointments"])
 
@@ -26,8 +25,8 @@ async def check_slot_conflict(
     doctor_id: UUID,
     scheduled_at: datetime,
     duration_minutes: int,
-    exclude_appointment_id: Optional[UUID] = None
-) -> Optional[Appointment]:
+    exclude_appointment_id: UUID | None = None
+) -> Appointment | None:
     """
     Check if a doctor has a conflicting appointment at the given time.
     Returns the conflicting appointment if there's a conflict, None otherwise.
@@ -271,11 +270,11 @@ async def delete_appointment(
 async def list_appointments(
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(20, ge=1, le=100, description="Page size"),
-    patient_id: Optional[UUID] = Query(None, description="Filter by patient ID"),
-    doctor_id: Optional[UUID] = Query(None, description="Filter by doctor ID"),
-    date_from: Optional[datetime] = Query(None, description="Filter by date from"),
-    date_to: Optional[datetime] = Query(None, description="Filter by date to"),
-    status: Optional[str] = Query(None, description="Filter by status"),
+    patient_id: UUID | None = Query(None, description="Filter by patient ID"),
+    doctor_id: UUID | None = Query(None, description="Filter by doctor ID"),
+    date_from: datetime | None = Query(None, description="Filter by date from"),
+    date_to: datetime | None = Query(None, description="Filter by date to"),
+    status: str | None = Query(None, description="Filter by status"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):

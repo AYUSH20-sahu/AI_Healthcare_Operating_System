@@ -1,6 +1,7 @@
 """Standard error envelope and exception handlers for AI-HOS API."""
 
-from typing import Any, Dict, Optional
+from typing import Any
+
 from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
@@ -12,7 +13,7 @@ class ErrorDetail(BaseModel):
     """Error detail model."""
     code: str = Field(..., description="Error code")
     message: str = Field(..., description="Human-readable error message")
-    details: Optional[Dict[str, Any]] = Field(None, description="Additional error details")
+    details: dict[str, Any] | None = Field(None, description="Additional error details")
 
 
 class ErrorResponse(BaseModel):
@@ -23,7 +24,7 @@ class ErrorResponse(BaseModel):
 def create_error_response(
     code: str,
     message: str,
-    details: Optional[Dict[str, Any]] = None,
+    details: dict[str, Any] | None = None,
     status_code: int = status.HTTP_500_INTERNAL_SERVER_ERROR,
 ) -> JSONResponse:
     """Create a standardized error response."""

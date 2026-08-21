@@ -1,9 +1,10 @@
 """Tests for Patients API."""
 
+from datetime import date
+from uuid import uuid4
+
 import pytest
 import pytest_asyncio
-from uuid import uuid4
-from datetime import date, datetime
 
 from app.models import Patient, User, UserRole
 from app.services.auth.service import get_password_hash
@@ -204,8 +205,9 @@ class TestPatientsAPI:
     async def test_update_patient_duplicate_abha(self, client, admin_user, admin_token, test_patient):
         """Test updating patient with duplicate ABHA fails."""
         # Create another patient first
-        from app.models import Patient
         from uuid import uuid4
+
+        from app.models import Patient
         patient2 = Patient(
             patient_id=uuid4(),
             abha_address="other@abdm",
@@ -214,7 +216,6 @@ class TestPatientsAPI:
             gender="male",
         )
         # This would need db_session fixture - skipping for now
-        pass
 
     @pytest.mark.asyncio
     async def test_list_patients_admin(self, client, admin_user, admin_token, test_patient):

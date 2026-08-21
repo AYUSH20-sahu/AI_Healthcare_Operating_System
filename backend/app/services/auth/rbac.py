@@ -1,13 +1,11 @@
 """RBAC (Role-Based Access Control) module."""
 
-from functools import wraps
-from typing import List, Set, Dict
 from enum import Enum
 
 from fastapi import Depends, HTTPException, status
 
-from app.services.auth.service import get_current_active_user
 from app.models import User, UserRole
+from app.services.auth.service import get_current_active_user
 
 
 class Permission(str, Enum):
@@ -45,7 +43,7 @@ class Permission(str, Enum):
 
 
 # Central permissions matrix: role -> set of permissions
-ROLE_PERMISSIONS: Dict[UserRole, Set[Permission]] = {
+ROLE_PERMISSIONS: dict[UserRole, set[Permission]] = {
     UserRole.PATIENT: {
         Permission.PATIENT_READ_OWN,
         Permission.PATIENT_UPDATE_OWN,
@@ -102,7 +100,7 @@ ROLE_PERMISSIONS: Dict[UserRole, Set[Permission]] = {
 }
 
 
-def get_user_permissions(user: User) -> Set[Permission]:
+def get_user_permissions(user: User) -> set[Permission]:
     """Get all permissions for a user based on their role."""
     return ROLE_PERMISSIONS.get(user.role, set())
 

@@ -1,22 +1,27 @@
 """Medical Records API routes."""
 
-from typing import Optional, List
 from uuid import UUID
-from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select, func, and_
+from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database import get_db
-from app.models import MedicalRecord, Patient, Doctor, User, UserRole, MedicalRecordStatus
-from app.services.auth.service import get_current_active_user
 from app.api.schemas.medical_record import (
     MedicalRecordCreate,
-    MedicalRecordUpdate,
-    MedicalRecordResponse,
     MedicalRecordListResponse,
+    MedicalRecordResponse,
+    MedicalRecordUpdate,
 )
+from app.database import get_db
+from app.models import (
+    Doctor,
+    MedicalRecord,
+    MedicalRecordStatus,
+    Patient,
+    User,
+    UserRole,
+)
+from app.services.auth.service import get_current_active_user
 
 router = APIRouter(prefix="/medical-records", tags=["medical-records"])
 
@@ -203,7 +208,7 @@ async def list_patient_medical_records(
     patient_id: UUID,
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(20, ge=1, le=100, description="Page size"),
-    status_filter: Optional[str] = Query(None, description="Filter by status (draft/finalized/amended)"),
+    status_filter: str | None = Query(None, description="Filter by status (draft/finalized/amended)"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
@@ -302,9 +307,9 @@ async def list_patient_medical_records(
 async def list_medical_records(
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(20, ge=1, le=100, description="Page size"),
-    patient_id: Optional[UUID] = Query(None, description="Filter by patient ID"),
-    doctor_id: Optional[UUID] = Query(None, description="Filter by doctor ID"),
-    status_filter: Optional[str] = Query(None, description="Filter by status"),
+    patient_id: UUID | None = Query(None, description="Filter by patient ID"),
+    doctor_id: UUID | None = Query(None, description="Filter by doctor ID"),
+    status_filter: str | None = Query(None, description="Filter by status"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):

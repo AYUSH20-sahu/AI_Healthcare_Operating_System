@@ -1,18 +1,18 @@
 """Pytest configuration and fixtures."""
 
+from uuid import uuid4
+
 import pytest
 import pytest_asyncio
-from httpx import AsyncClient, ASGITransport
+from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import NullPool
 
-from app.core.config import settings
+from app.database import override_db_engine
 from app.main import app
 from app.models import Base, User, UserRole
-from app.services.auth.service import get_password_hash, create_access_token
-from app.database import override_db_engine
-from uuid import uuid4
+from app.services.auth.service import create_access_token, get_password_hash
 
 
 @pytest.fixture(scope="session")
@@ -29,8 +29,8 @@ async def db_session():
     """Create a test database session using SQLite file-based for complete isolation."""
     # Use SQLite file-based for tests - complete isolation from Nhost PostgreSQL
     # File-based SQLite allows multiple connections to share the same database
-    import tempfile
     import os
+    import tempfile
     
     # Create a temporary file for the database
     temp_db = tempfile.NamedTemporaryFile(suffix='.db', delete=False)

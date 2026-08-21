@@ -1,10 +1,9 @@
 """Consent service - grant, revoke, list consents."""
 
 from datetime import datetime
-from typing import List, Optional
 from uuid import UUID
 
-from sqlalchemy import select, and_
+from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Consent, ConsentScope, Doctor, Patient
@@ -68,7 +67,7 @@ async def revoke_consent(db: AsyncSession, consent_id: UUID) -> Consent:
     return consent
 
 
-async def get_active_consents_for_patient(db: AsyncSession, patient_id: UUID) -> List[Consent]:
+async def get_active_consents_for_patient(db: AsyncSession, patient_id: UUID) -> list[Consent]:
     """Get all active consents for a patient."""
     result = await db.execute(
         select(Consent).where(
@@ -81,7 +80,7 @@ async def get_active_consents_for_patient(db: AsyncSession, patient_id: UUID) ->
     return list(result.scalars().all())
 
 
-async def get_all_consents_for_patient(db: AsyncSession, patient_id: UUID) -> List[Consent]:
+async def get_all_consents_for_patient(db: AsyncSession, patient_id: UUID) -> list[Consent]:
     """Get all consents (active and revoked) for a patient."""
     result = await db.execute(
         select(Consent).where(
@@ -91,6 +90,6 @@ async def get_all_consents_for_patient(db: AsyncSession, patient_id: UUID) -> Li
     return list(result.scalars().all())
 
 
-async def get_consent_by_id(db: AsyncSession, consent_id: UUID) -> Optional[Consent]:
+async def get_consent_by_id(db: AsyncSession, consent_id: UUID) -> Consent | None:
     """Get a consent by ID."""
     return await db.get(Consent, consent_id)

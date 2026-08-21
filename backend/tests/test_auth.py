@@ -1,23 +1,22 @@
 """Tests for auth service."""
 
+from uuid import uuid4
+
 import pytest
 import pytest_asyncio
-from uuid import uuid4
-from datetime import datetime
 
+from app.models import User, UserRole
 from app.services.auth.service import (
     UserCreate,
-    UserLogin,
-    verify_password,
-    get_password_hash,
+    authenticate_user,
     create_access_token,
     create_refresh_token,
-    authenticate_user,
     create_user,
+    get_password_hash,
     get_user_by_email,
     get_user_by_id,
+    verify_password,
 )
-from app.models import User, UserRole
 
 
 @pytest_asyncio.fixture

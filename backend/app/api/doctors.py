@@ -1,22 +1,20 @@
 """Doctors API routes."""
 
-from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database import get_db
-from app.models import Doctor, User, UserRole
-from app.services.auth.rbac import require_admin, require_doctor
-from app.services.auth.service import get_current_active_user
 from app.api.schemas.doctor import (
     DoctorCreate,
-    DoctorUpdate,
-    DoctorResponse,
     DoctorListResponse,
+    DoctorResponse,
+    DoctorUpdate,
 )
+from app.database import get_db
+from app.models import Doctor, User, UserRole
+from app.services.auth.service import get_current_active_user
 
 router = APIRouter(prefix="/doctors", tags=["doctors"])
 
@@ -155,7 +153,7 @@ async def update_doctor(
 async def list_doctors(
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(20, ge=1, le=100, description="Page size"),
-    specialty: Optional[str] = Query(None, description="Filter by specialty"),
+    specialty: str | None = Query(None, description="Filter by specialty"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):

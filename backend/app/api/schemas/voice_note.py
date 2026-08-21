@@ -1,9 +1,9 @@
 """Voice Note Pydantic schemas."""
 
-from typing import Optional
-from uuid import UUID
 from datetime import datetime
-from pydantic import BaseModel, Field, ConfigDict
+from uuid import UUID
+
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class VoiceNoteBase(BaseModel):
@@ -12,18 +12,17 @@ class VoiceNoteBase(BaseModel):
     file_name: str = Field(..., min_length=1, max_length=255, description="Original file name")
     content_type: str = Field(..., max_length=100, description="MIME type (e.g., audio/webm)")
     file_size: int = Field(..., ge=1, description="File size in bytes")
-    duration_seconds: Optional[int] = Field(None, ge=0, description="Audio duration in seconds")
+    duration_seconds: int | None = Field(None, ge=0, description="Audio duration in seconds")
 
 
 class VoiceNoteCreate(VoiceNoteBase):
     """Schema for creating a voice note."""
-    pass
 
 
 class VoiceNoteUpdate(BaseModel):
     """Schema for updating a voice note."""
-    transcription: Optional[str] = Field(None, description="Transcribed text")
-    transcription_status: Optional[str] = Field(None, pattern="^(pending|processing|completed|failed)$", description="Transcription status")
+    transcription: str | None = Field(None, description="Transcribed text")
+    transcription_status: str | None = Field(None, pattern="^(pending|processing|completed|failed)$", description="Transcription status")
 
 
 class VoiceNoteResponse(VoiceNoteBase):
@@ -32,7 +31,7 @@ class VoiceNoteResponse(VoiceNoteBase):
     doctor_id: UUID
     patient_id: UUID
     file_path: str
-    transcription: Optional[str] = None
+    transcription: str | None = None
     transcription_status: str
     created_at: datetime
     updated_at: datetime
@@ -52,5 +51,5 @@ class VoiceNoteListResponse(BaseModel):
 class VoiceNoteUploadResponse(BaseModel):
     """Schema for voice note upload response."""
     voice_note_id: UUID
-    upload_url: Optional[str] = None
+    upload_url: str | None = None
     message: str

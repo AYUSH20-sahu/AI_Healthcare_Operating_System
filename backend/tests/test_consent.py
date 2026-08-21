@@ -1,18 +1,19 @@
 """Tests for consent service."""
 
+from datetime import datetime
+from uuid import uuid4
+
 import pytest
 import pytest_asyncio
-from uuid import uuid4
-from datetime import datetime
 
+from app.models import ConsentScope, Doctor, Patient, User, UserRole
 from app.services.auth.consent import (
-    grant_consent,
-    revoke_consent,
     get_active_consents_for_patient,
     get_all_consents_for_patient,
     get_consent_by_id,
+    grant_consent,
+    revoke_consent,
 )
-from app.models import Consent, ConsentScope, Doctor, Patient, User, UserRole
 
 
 @pytest_asyncio.fixture

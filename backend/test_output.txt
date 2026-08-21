@@ -1,0 +1,504 @@
+============================= test session starts =============================
+platform win32 -- Python 3.14.0, pytest-9.1.1, pluggy-1.6.0 -- C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\.venv\Scripts\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend
+plugins: anyio-4.14.2, asyncio-1.4.0
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 1 item
+
+tests/test_medical_records.py::TestMedicalRecordsAPI::test_list_patient_medical_records_doctor_other_forbidden FAILED [100%]
+
+================================== FAILURES ===================================
+_ TestMedicalRecordsAPI.test_list_patient_medical_records_doctor_other_forbidden _
+  + Exception Group Traceback (most recent call last):
+  |   File "C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\.venv\Lib\site-packages\starlette\_utils.py", line 87, in collapse_excgroups
+  |     yield
+  |   File "C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\.venv\Lib\site-packages\starlette\middleware\base.py", line 190, in __call__
+  |     async with anyio.create_task_group() as task_group:
+  |                ~~~~~~~~~~~~~~~~~~~~~~~^^
+  |   File "C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\.venv\Lib\site-packages\anyio\_backends\_asyncio.py", line 815, in __aexit__
+  |     raise BaseExceptionGroup(
+  |         "unhandled errors in a TaskGroup", self._exceptions
+  |     ) from None
+  | ExceptionGroup: unhandled errors in a TaskGroup (1 sub-exception)
+  +-+---------------- 1 ----------------
+    | Traceback (most recent call last):
+    |   File "C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\.venv\Lib\site-packages\_pytest\runner.py", line 361, in from_call
+    |     result: TResult | None = func()
+    |                              ~~~~^^
+    |   File "C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\.venv\Lib\site-packages\_pytest\runner.py", line 250, in <lambda>
+    |     lambda: runtest_hook(item=item, **kwds),
+    |             ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+    |   File "C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\.venv\Lib\site-packages\pluggy\_hooks.py", line 512, in __call__
+    |     return self._hookexec(self.name, self._hookimpls.copy(), kwargs, firstresult)
+    |            ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\.venv\Lib\site-packages\pluggy\_manager.py", line 120, in _hookexec
+    |     return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+    |            ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\.venv\Lib\site-packages\pluggy\_callers.py", line 167, in _multicall
+    |     raise exception
+    |   File "C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\.venv\Lib\site-packages\pluggy\_callers.py", line 139, in _multicall
+    |     teardown.throw(exception)
+    |     ~~~~~~~~~~~~~~^^^^^^^^^^^
+    |   File "C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\.venv\Lib\site-packages\_pytest\logging.py", line 865, in pytest_runtest_call
+    |     yield
+    |   File "C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\.venv\Lib\site-packages\pluggy\_callers.py", line 139, in _multicall
+    |     teardown.throw(exception)
+    |     ~~~~~~~~~~~~~~^^^^^^^^^^^
+    |   File "C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\.venv\Lib\site-packages\_pytest\capture.py", line 900, in pytest_runtest_call
+    |     return (yield)
+    |             ^^^^^
+    |   File "C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\.venv\Lib\site-packages\pluggy\_callers.py", line 139, in _multicall
+    |     teardown.throw(exception)
+    |     ~~~~~~~~~~~~~~^^^^^^^^^^^
+    |   File "C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\.venv\Lib\site-packages\_pytest\skipping.py", line 268, in pytest_runtest_call
+    |     return (yield)
+    |             ^^^^^
+    |   File "C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\.venv\Lib\site-packages\pluggy\_callers.py", line 121, in _multicall
+    |     res = hook_impl.function(*args)
+    |   File "C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\.venv\Lib\site-packages\_pytest\runner.py", line 184, in pytest_runtest_call
+    |     item.runtest()
+    |     ~~~~~~~~~~~~^^
+    |   File "C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\.venv\Lib\site-packages\pytest_asyncio\plugin.py", line 569, in runtest
+    |     super().runtest()
+    |     ~~~~~~~~~~~~~~~^^
+    |   File "C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\.venv\Lib\site-packages\_pytest\python.py", line 1707, in runtest
+    |     self.ihook.pytest_pyfunc_call(pyfuncitem=self)
+    |     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+    |   File "C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\.venv\Lib\site-packages\pluggy\_hooks.py", line 512, in __call__
+    |     return self._hookexec(self.name, self._hookimpls.copy(), kwargs, firstresult)
+    |            ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\.venv\Lib\site-packages\pluggy\_manager.py", line 120, in _hookexec
+    |     return self._inner_hookexec(hook_name, methods, kwargs, firstresult)
+    |            ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\.venv\Lib\site-packages\pluggy\_callers.py", line 167, in _multicall
+    |     raise exception
+    |   File "C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\.venv\Lib\site-packages\pluggy\_callers.py", line 139, in _multicall
+    |     teardown.throw(exception)
+    |     ~~~~~~~~~~~~~~^^^^^^^^^^^
+    |   File "C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\.venv\Lib\site-packages\pluggy\_callers.py", line 53, in run_old_style_hookwrapper
+    |     return result.get_result()
+    |            ~~~~~~~~~~~~~~~~~^^
+    |   File "C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\.venv\Lib\site-packages\pluggy\_result.py", line 103, in get_result
+    |     raise exc.with_traceback(tb)
+    |   File "C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\.venv\Lib\site-packages\pluggy\_callers.py", line 38, in run_old_style_hookwrapper
+    |     res = yield
+    |           ^^^^^
+    |   File "C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\.venv\Lib\site-packages\pluggy\_callers.py", line 121, in _multicall
+    |     res = hook_impl.function(*args)
+    |   File "C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\.venv\Lib\site-packages\_pytest\python.py", line 167, in pytest_pyfunc_call
+    |     result = testfunction(**testargs)
+    |   File "C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\.venv\Lib\site-packages\pytest_asyncio\plugin.py", line 905, in inner
+    |     runner.run(coro, context=context)
+    |     ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "C:\Python314\Lib\asyncio\runners.py", line 127, in run
+    |     return self._loop.run_until_complete(task)
+    |            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^
+    |   File "C:\Python314\Lib\asyncio\base_events.py", line 719, in run_until_complete
+    |     return future.result()
+    |            ~~~~~~~~~~~~~^^
+    |   File "C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\tests\test_medical_records.py", line 546, in test_list_patient_medical_records_doctor_other_forbidden
+    |     response = await client.get(
+    |                ^^^^^^^^^^^^^^^^^
+    |     ...<2 lines>...
+    |     )
+    |     ^
+    |   File "C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\.venv\Lib\site-packages\httpx\_client.py", line 1768, in get
+    |     return await self.request(
+    |            ^^^^^^^^^^^^^^^^^^^
+    |     ...<9 lines>...
+    |     )
+    |     ^
+    |   File "C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\.venv\Lib\site-packages\httpx\_client.py", line 1540, in request
+    |     return await self.send(request, auth=auth, follow_redirects=follow_redirects)
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\.venv\Lib\site-packages\httpx\_client.py", line 1629, in send
+    |     response = await self._send_handling_auth(
+    |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |     ...<4 lines>...
+    |     )
+    |     ^
+    |   File "C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\.venv\Lib\site-packages\httpx\_client.py", line 1657, in _send_handling_auth
+    |     response = await self._send_handling_redirects(
+    |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |     ...<3 lines>...
+    |     )
+    |     ^
+    |   File "C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\.venv\Lib\site-packages\httpx\_client.py", line 1694, in _send_handling_redirects
+    |     response = await self._send_single_request(request)
+    |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\.venv\Lib\site-packages\httpx\_client.py", line 1730, in _send_single_request
+    |     response = await transport.handle_async_request(request)
+    |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\.venv\Lib\site-packages\httpx\_transports\asgi.py", line 170, in handle_async_request
+    |     await self.app(scope, receive, send)
+    |   File "C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\.venv\Lib\site-packages\fastapi\applications.py", line 1054, in __call__
+    |     await super().__call__(scope, receive, send)
+    |   File "C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\.venv\Lib\site-packages\starlette\applications.py", line 123, in __call__
+    |     await self.middleware_stack(scope, receive, send)
+    |   File "C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\.venv\Lib\site-packages\starlette\middleware\errors.py", line 186, in __call__
+    |     raise exc
+    |   File "C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\.venv\Lib\site-packages\starlette\middleware\errors.py", line 164, in __call__
+    |     await self.app(scope, receive, _send)
+    |   File "C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\.venv\Lib\site-packages\starlette\middleware\base.py", line 189, in __call__
+    |     with collapse_excgroups():
+    |          ~~~~~~~~~~~~~~~~~~^^
+    |   File "C:\Python314\Lib\contextlib.py", line 162, in __exit__
+    |     self.gen.throw(value)
+    |     ~~~~~~~~~~~~~~^^^^^^^
+    |   File "C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\.venv\Lib\site-packages\starlette\_utils.py", line 93, in collapse_excgroups
+    |     raise exc
+    |   File "C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\.venv\Lib\site-packages\starlette\middleware\base.py", line 191, in __call__
+    |     response = await self.dispatch_func(request, call_next)
+    |                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\app\services\auth\audit.py", line 116, in dispatch
+    |     response = await call_next(request)
+    |                ^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\.venv\Lib\site-packages\starlette\middleware\base.py", line 165, in call_next
+    |     raise app_exc
+    |   File "C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\.venv\Lib\site-packages\starlette\middleware\base.py", line 151, in coro
+    |     await self.app(scope, receive_or_disconnect, send_no_error)
+    |   File "C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\.venv\Lib\site-packages\starlette\middleware\exceptions.py", line 65, in __call__
+    |     await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+    |   File "C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\.venv\Lib\site-packages\starlette\_exception_handler.py", line 64, in wrapped_app
+    |     raise exc
+    |   File "C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\.venv\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    |     await app(scope, receive, sender)
+    |   File "C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\.venv\Lib\site-packages\starlette\routing.py", line 756, in __call__
+    |     await self.middleware_stack(scope, receive, send)
+    |   File "C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\.venv\Lib\site-packages\starlette\routing.py", line 776, in app
+    |     await route.handle(scope, receive, send)
+    |   File "C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\.venv\Lib\site-packages\starlette\routing.py", line 297, in handle
+    |     await self.app(scope, receive, send)
+    |   File "C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\.venv\Lib\site-packages\starlette\routing.py", line 77, in app
+    |     await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+    |   File "C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\.venv\Lib\site-packages\starlette\_exception_handler.py", line 64, in wrapped_app
+    |     raise exc
+    |   File "C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\.venv\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    |     await app(scope, receive, sender)
+    |   File "C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\.venv\Lib\site-packages\starlette\routing.py", line 72, in app
+    |     response = await func(request)
+    |                ^^^^^^^^^^^^^^^^^^^
+    |   File "C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\.venv\Lib\site-packages\fastapi\routing.py", line 278, in app
+    |     raw_response = await run_endpoint_function(
+    |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |         dependant=dependant, values=values, is_coroutine=is_coroutine
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |     )
+    |     ^
+    |   File "C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\.venv\Lib\site-packages\fastapi\routing.py", line 191, in run_endpoint_function
+    |     return await dependant.call(**values)
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |   File "C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\app\api\medical_records.py", line 246, in list_patient_medical_records
+    |     status_code=status.HTTP_403_FORBIDDEN,
+    |                 ^^^^^^^^^^^^^^^^^^^^^^^^^
+    | AttributeError: 'NoneType' object has no attribute 'HTTP_403_FORBIDDEN'
+    +------------------------------------
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\tests\test_medical_records.py", line 546, in test_list_patient_medical_records_doctor_other_forbidden
+    response = await client.get(
+               ^^^^^^^^^^^^^^^^^
+    ...<2 lines>...
+    )
+    ^
+  File "C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\.venv\Lib\site-packages\httpx\_client.py", line 1768, in get
+    return await self.request(
+           ^^^^^^^^^^^^^^^^^^^
+    ...<9 lines>...
+    )
+    ^
+  File "C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\.venv\Lib\site-packages\httpx\_client.py", line 1540, in request
+    return await self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\.venv\Lib\site-packages\httpx\_client.py", line 1629, in send
+    response = await self._send_handling_auth(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<4 lines>...
+    )
+    ^
+  File "C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\.venv\Lib\site-packages\httpx\_client.py", line 1657, in _send_handling_auth
+    response = await self._send_handling_redirects(
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\.venv\Lib\site-packages\httpx\_client.py", line 1694, in _send_handling_redirects
+    response = await self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\.venv\Lib\site-packages\httpx\_client.py", line 1730, in _send_single_request
+    response = await transport.handle_async_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\.venv\Lib\site-packages\httpx\_transports\asgi.py", line 170, in handle_async_request
+    await self.app(scope, receive, send)
+  File "C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\.venv\Lib\site-packages\fastapi\applications.py", line 1054, in __call__
+    await super().__call__(scope, receive, send)
+  File "C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\.venv\Lib\site-packages\starlette\applications.py", line 123, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\.venv\Lib\site-packages\starlette\middleware\errors.py", line 186, in __call__
+    raise exc
+  File "C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\.venv\Lib\site-packages\starlette\middleware\errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\.venv\Lib\site-packages\starlette\middleware\base.py", line 189, in __call__
+    with collapse_excgroups():
+         ~~~~~~~~~~~~~~~~~~^^
+  File "C:\Python314\Lib\contextlib.py", line 162, in __exit__
+    self.gen.throw(value)
+    ~~~~~~~~~~~~~~^^^^^^^
+  File "C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\.venv\Lib\site-packages\starlette\_utils.py", line 93, in collapse_excgroups
+    raise exc
+  File "C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\.venv\Lib\site-packages\starlette\middleware\base.py", line 191, in __call__
+    response = await self.dispatch_func(request, call_next)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\app\services\auth\audit.py", line 116, in dispatch
+    response = await call_next(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\.venv\Lib\site-packages\starlette\middleware\base.py", line 165, in call_next
+    raise app_exc
+  File "C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\.venv\Lib\site-packages\starlette\middleware\base.py", line 151, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\.venv\Lib\site-packages\starlette\middleware\exceptions.py", line 65, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\.venv\Lib\site-packages\starlette\_exception_handler.py", line 64, in wrapped_app
+    raise exc
+  File "C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\.venv\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\.venv\Lib\site-packages\starlette\routing.py", line 756, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\.venv\Lib\site-packages\starlette\routing.py", line 776, in app
+    await route.handle(scope, receive, send)
+  File "C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\.venv\Lib\site-packages\starlette\routing.py", line 297, in handle
+    await self.app(scope, receive, send)
+  File "C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\.venv\Lib\site-packages\starlette\routing.py", line 77, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\.venv\Lib\site-packages\starlette\_exception_handler.py", line 64, in wrapped_app
+    raise exc
+  File "C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\.venv\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    await app(scope, receive, sender)
+  File "C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\.venv\Lib\site-packages\starlette\routing.py", line 72, in app
+    response = await func(request)
+               ^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\.venv\Lib\site-packages\fastapi\routing.py", line 278, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        dependant=dependant, values=values, is_coroutine=is_coroutine
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\.venv\Lib\site-packages\fastapi\routing.py", line 191, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\app\api\medical_records.py", line 246, in list_patient_medical_records
+    status_code=status.HTTP_403_FORBIDDEN,
+                ^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: 'NoneType' object has no attribute 'HTTP_403_FORBIDDEN'
+
+During handling of the above exception, another exception occurred:
+
+self = <test_medical_records.TestMedicalRecordsAPI object at 0x00000259FC91D250>
+client = <httpx.AsyncClient object at 0x00000259FCA5C590>
+another_doctor_user = <app.models.User object at 0x00000259FCA5D010>
+another_doctor_token = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIzYzBmODE1Ni0xOGNkLTQzOWMtOGY0ZS1hZWJhMGU2NDRkZGQiLCJlbWFpbCI6ImRvY3Rv...C5jb20iLCJyb2xlIjoiZG9jdG9yIiwiZXhwIjoxNzg3MjQ4OTk5LCJ0eXBlIjoiYWNjZXNzIn0.FSuvGQRpCh7FFAEjJGJSAXoIUW1O5LU0df8uoIWAPIQ'
+another_doctor = <app.models.Doctor object at 0x00000259FCA5DE80>
+test_patient = <app.models.Patient object at 0x00000259FCA5F230>
+test_medical_record = <app.models.MedicalRecord object at 0x00000259FCA5F4D0>
+
+    @pytest.mark.asyncio
+    async def test_list_patient_medical_records_doctor_other_forbidden(self, client, another_doctor_user, another_doctor_token, another_doctor, test_patient, test_medical_record):
+        """Test doctor cannot list records for patient they don't treat."""
+>       response = await client.get(
+            f"/api/v1/medical-records/patient/{test_patient.patient_id}/",
+            headers={"Authorization": f"Bearer {another_doctor_token}"},
+        )
+
+tests\test_medical_records.py:546: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+.venv\Lib\site-packages\httpx\_client.py:1768: in get
+    return await self.request(
+.venv\Lib\site-packages\httpx\_client.py:1540: in request
+    return await self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv\Lib\site-packages\httpx\_client.py:1629: in send
+    response = await self._send_handling_auth(
+.venv\Lib\site-packages\httpx\_client.py:1657: in _send_handling_auth
+    response = await self._send_handling_redirects(
+.venv\Lib\site-packages\httpx\_client.py:1694: in _send_handling_redirects
+    response = await self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv\Lib\site-packages\httpx\_client.py:1730: in _send_single_request
+    response = await transport.handle_async_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv\Lib\site-packages\httpx\_transports\asgi.py:170: in handle_async_request
+    await self.app(scope, receive, send)
+.venv\Lib\site-packages\fastapi\applications.py:1054: in __call__
+    await super().__call__(scope, receive, send)
+.venv\Lib\site-packages\starlette\applications.py:123: in __call__
+    await self.middleware_stack(scope, receive, send)
+.venv\Lib\site-packages\starlette\middleware\errors.py:186: in __call__
+    raise exc
+.venv\Lib\site-packages\starlette\middleware\errors.py:164: in __call__
+    await self.app(scope, receive, _send)
+.venv\Lib\site-packages\starlette\middleware\base.py:189: in __call__
+    with collapse_excgroups():
+         ^^^^^^^^^^^^^^^^^^^^
+C:\Python314\Lib\contextlib.py:162: in __exit__
+    self.gen.throw(value)
+.venv\Lib\site-packages\starlette\_utils.py:93: in collapse_excgroups
+    raise exc
+.venv\Lib\site-packages\starlette\middleware\base.py:191: in __call__
+    response = await self.dispatch_func(request, call_next)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app\services\auth\audit.py:116: in dispatch
+    response = await call_next(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^
+.venv\Lib\site-packages\starlette\middleware\base.py:165: in call_next
+    raise app_exc
+.venv\Lib\site-packages\starlette\middleware\base.py:151: in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+.venv\Lib\site-packages\starlette\middleware\exceptions.py:65: in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+.venv\Lib\site-packages\starlette\_exception_handler.py:64: in wrapped_app
+    raise exc
+.venv\Lib\site-packages\starlette\_exception_handler.py:53: in wrapped_app
+    await app(scope, receive, sender)
+.venv\Lib\site-packages\starlette\routing.py:756: in __call__
+    await self.middleware_stack(scope, receive, send)
+.venv\Lib\site-packages\starlette\routing.py:776: in app
+    await route.handle(scope, receive, send)
+.venv\Lib\site-packages\starlette\routing.py:297: in handle
+    await self.app(scope, receive, send)
+.venv\Lib\site-packages\starlette\routing.py:77: in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+.venv\Lib\site-packages\starlette\_exception_handler.py:64: in wrapped_app
+    raise exc
+.venv\Lib\site-packages\starlette\_exception_handler.py:53: in wrapped_app
+    await app(scope, receive, sender)
+.venv\Lib\site-packages\starlette\routing.py:72: in app
+    response = await func(request)
+               ^^^^^^^^^^^^^^^^^^^
+.venv\Lib\site-packages\fastapi\routing.py:278: in app
+    raw_response = await run_endpoint_function(
+.venv\Lib\site-packages\fastapi\routing.py:191: in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+patient_id = UUID('71eef124-a4d8-41ab-99c6-785ce6a09931'), page = 1
+page_size = 20, status = None
+db = <sqlalchemy.orm.session.AsyncSession object at 0x00000259FCB7D7F0>
+current_user = <app.models.User object at 0x00000259FCB2E060>
+
+    @router.get("/patient/{patient_id}/", response_model=MedicalRecordListResponse)
+    async def list_patient_medical_records(
+        patient_id: UUID,
+        page: int = Query(1, ge=1, description="Page number"),
+        page_size: int = Query(20, ge=1, le=100, description="Page size"),
+        status: Optional[str] = Query(None, description="Filter by status (draft/finalized/amended)"),
+        db: AsyncSession = Depends(get_db),
+        current_user: User = Depends(get_current_active_user),
+    ):
+        """List medical records for a patient with pagination and filters."""
+        # Verify patient exists
+        patient = await db.get(Patient, patient_id)
+        if not patient:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Patient not found",
+            )
+    
+        # RBAC check
+        if current_user.role == UserRole.PATIENT:
+            patient_result = await db.execute(
+                select(Patient).where(Patient.user_id == current_user.user_id)
+            )
+            current_patient = patient_result.scalar_one_or_none()
+            if not current_patient or current_patient.patient_id != patient_id:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Patients can only list their own medical records",
+                )
+        elif current_user.role == UserRole.DOCTOR:
+            # Doctors can list records for their patients
+            # Check if this doctor has any appointments with this patient
+            from app.models import Appointment
+            appt_result = await db.execute(
+                select(Appointment).where(
+                    and_(
+                        Appointment.patient_id == patient_id,
+                        Appointment.doctor_id.in_(
+                            select(Doctor.doctor_id).where(Doctor.user_id == current_user.user_id)
+                        )
+                    )
+                ).limit(1)
+            )
+            if not appt_result.scalar_one_or_none():
+                raise HTTPException(
+>                   status_code=status.HTTP_403_FORBIDDEN,
+                                ^^^^^^^^^^^^^^^^^^^^^^^^^
+                    detail="Doctors can only list records for their own patients",
+E                   AttributeError: 'NoneType' object has no attribute 'HTTP_403_FORBIDDEN'
+
+app\api\medical_records.py:246: AttributeError
+============================== warnings summary ===============================
+app\core\config.py:6
+  C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\app\core\config.py:6: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    class Settings(BaseSettings):
+
+.venv\Lib\site-packages\starlette\formparsers.py:12
+  C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\.venv\Lib\site-packages\starlette\formparsers.py:12: PendingDeprecationWarning: Please use `import python_multipart` instead.
+    import multipart
+
+app\services\auth\service.py:41
+  C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\app\services\auth\service.py:41: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    class UserResponse(BaseModel):
+
+.venv\Lib\site-packages\fastapi\routing.py:211: 54 warnings
+  C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\.venv\Lib\site-packages\fastapi\routing.py:211: DeprecationWarning: 'asyncio.iscoroutinefunction' is deprecated and slated for removal in Python 3.16; use inspect.iscoroutinefunction() instead
+    is_coroutine = asyncio.iscoroutinefunction(dependant.call)
+
+app\api\consent.py:30
+  C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\app\api\consent.py:30: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    class ConsentResponse(BaseModel):
+
+app\api\schemas\patient.py:40
+  C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\app\api\schemas\patient.py:40: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    class PatientResponse(PatientBase):
+
+app\api\schemas\doctor.py:34
+  C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\app\api\schemas\doctor.py:34: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    class DoctorResponse(DoctorBase):
+
+app\api\schemas\appointment.py:30
+  C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\app\api\schemas\appointment.py:30: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    class AppointmentResponse(AppointmentBase):
+
+app\api\schemas\medical_record.py:54
+  C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\app\api\schemas\medical_record.py:54: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.13/migration/
+    class MedicalRecordResponse(MedicalRecordBase):
+
+tests/test_medical_records.py: 16 warnings
+  C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\.venv\Lib\site-packages\sqlalchemy\sql\schema.py:3627: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+    return util.wrap_callable(lambda ctx: fn(), fn)  # type: ignore
+
+tests/test_medical_records.py::TestMedicalRecordsAPI::test_list_patient_medical_records_doctor_other_forbidden
+  C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\app\services\auth\service.py:74: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+    expire = datetime.utcnow() + timedelta(minutes=settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES)
+
+tests/test_medical_records.py::TestMedicalRecordsAPI::test_list_patient_medical_records_doctor_other_forbidden
+  C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\tests\test_medical_records.py:210: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+    scheduled_at=datetime.utcnow() + timedelta(days=1),
+
+tests/test_medical_records.py::TestMedicalRecordsAPI::test_list_patient_medical_records_doctor_other_forbidden
+  C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\.venv\Lib\site-packages\starlette\_utils.py:42: DeprecationWarning: 'asyncio.iscoroutinefunction' is deprecated and slated for removal in Python 3.16; use inspect.iscoroutinefunction() instead
+    return asyncio.iscoroutinefunction(obj) or (
+
+tests/test_medical_records.py::TestMedicalRecordsAPI::test_list_patient_medical_records_doctor_other_forbidden
+  C:\Users\User\Desktop\workspace\AI_Healthcare_Operating_System\AI_Healthcare_Operating_System\backend\.venv\Lib\site-packages\jose\jwt.py:311: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+    now = timegm(datetime.utcnow().utctimetuple())
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+FAILED tests/test_medical_records.py::TestMedicalRecordsAPI::test_list_patient_medical_records_doctor_other_forbidden
+======================= 1 failed, 82 warnings in 1.36s ========================

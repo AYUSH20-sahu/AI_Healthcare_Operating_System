@@ -7,11 +7,19 @@ All tables use UUID primary keys for distributed system compatibility.
 
 import uuid
 from datetime import datetime
-from typing import Optional, List
 from enum import Enum as PyEnum
+from typing import List, Optional
 
 from sqlalchemy import (
-    String, Text, DateTime, Date, Enum, ForeignKey, Index, JSON, Boolean
+    JSON,
+    Boolean,
+    Date,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Index,
+    String,
+    Text,
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
@@ -19,7 +27,6 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 class Base(DeclarativeBase):
     """Base class for all models."""
-    pass
 
 
 class UserRole(PyEnum):
@@ -118,28 +125,28 @@ class Patient(Base):
     patient_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
-    user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.user_id"), unique=True, index=True
     )
-    abha_address: Mapped[Optional[str]] = mapped_column(String(255), unique=True, index=True)
+    abha_address: Mapped[str | None] = mapped_column(String(255), unique=True, index=True)
     full_name: Mapped[str] = mapped_column(String(255), index=True)
     date_of_birth: Mapped[Date] = mapped_column(Date)
     gender: Mapped[str] = mapped_column(String(50))
-    phone: Mapped[Optional[str]] = mapped_column(String(50))
-    email: Mapped[Optional[str]] = mapped_column(String(255))
-    address: Mapped[Optional[str]] = mapped_column(Text)
-    emergency_contact_name: Mapped[Optional[str]] = mapped_column(String(255))
-    emergency_contact_phone: Mapped[Optional[str]] = mapped_column(String(50))
+    phone: Mapped[str | None] = mapped_column(String(50))
+    email: Mapped[str | None] = mapped_column(String(255))
+    address: Mapped[str | None] = mapped_column(Text)
+    emergency_contact_name: Mapped[str | None] = mapped_column(String(255))
+    emergency_contact_phone: Mapped[str | None] = mapped_column(String(50))
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationships
     user: Mapped[Optional["User"]] = relationship(back_populates="patient_profile")
-    appointments: Mapped[List["Appointment"]] = relationship(back_populates="patient")
-    medical_records: Mapped[List["MedicalRecord"]] = relationship(back_populates="patient")
-    prescriptions: Mapped[List["Prescription"]] = relationship(back_populates="patient")
-    voice_notes: Mapped[List["VoiceNote"]] = relationship(back_populates="patient")
-    consents: Mapped[List["Consent"]] = relationship(back_populates="patient")
+    appointments: Mapped[list["Appointment"]] = relationship(back_populates="patient")
+    medical_records: Mapped[list["MedicalRecord"]] = relationship(back_populates="patient")
+    prescriptions: Mapped[list["Prescription"]] = relationship(back_populates="patient")
+    voice_notes: Mapped[list["VoiceNote"]] = relationship(back_populates="patient")
+    consents: Mapped[list["Consent"]] = relationship(back_populates="patient")
 
 
 # FHIR: Practitioner + PractitionerRole
@@ -154,25 +161,25 @@ class Doctor(Base):
     doctor_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
-    user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.user_id"), unique=True, index=True
     )
     specialty: Mapped[str] = mapped_column(String(100), index=True)
     license_number: Mapped[str] = mapped_column(String(100), unique=True, index=True)
-    hospital_affiliation: Mapped[Optional[str]] = mapped_column(String(255))
+    hospital_affiliation: Mapped[str | None] = mapped_column(String(255))
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
     full_name: Mapped[str] = mapped_column(String(255), index=True)
-    phone: Mapped[Optional[str]] = mapped_column(String(50))
+    phone: Mapped[str | None] = mapped_column(String(50))
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationships
     user: Mapped[Optional["User"]] = relationship(back_populates="doctor_profile")
-    appointments: Mapped[List["Appointment"]] = relationship(back_populates="doctor")
-    medical_records: Mapped[List["MedicalRecord"]] = relationship(back_populates="doctor")
-    prescriptions: Mapped[List["Prescription"]] = relationship(back_populates="doctor")
-    voice_notes: Mapped[List["VoiceNote"]] = relationship(back_populates="doctor")
-    consents_given: Mapped[List["Consent"]] = relationship(back_populates="provider", foreign_keys="Consent.provider_id")
+    appointments: Mapped[list["Appointment"]] = relationship(back_populates="doctor")
+    medical_records: Mapped[list["MedicalRecord"]] = relationship(back_populates="doctor")
+    prescriptions: Mapped[list["Prescription"]] = relationship(back_populates="doctor")
+    voice_notes: Mapped[list["VoiceNote"]] = relationship(back_populates="doctor")
+    consents_given: Mapped[list["Consent"]] = relationship(back_populates="provider", foreign_keys="Consent.provider_id")
 
 
 # FHIR: Appointment
@@ -198,15 +205,15 @@ class Appointment(Base):
     status: Mapped[AppointmentStatus] = mapped_column(
         Enum(AppointmentStatus), default=AppointmentStatus.SCHEDULED, index=True
     )
-    notes: Mapped[Optional[str]] = mapped_column(Text)
+    notes: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationships
     patient: Mapped["Patient"] = relationship(back_populates="appointments")
     doctor: Mapped["Doctor"] = relationship(back_populates="appointments")
-    medical_records: Mapped[List["MedicalRecord"]] = relationship(back_populates="appointment")
-    voice_notes: Mapped[List["VoiceNote"]] = relationship(back_populates="appointment")
+    medical_records: Mapped[list["MedicalRecord"]] = relationship(back_populates="appointment")
+    voice_notes: Mapped[list["VoiceNote"]] = relationship(back_populates="appointment")
 
 
 # FHIR: Composition / ClinicalImpression / DiagnosticReport
@@ -229,7 +236,7 @@ class MedicalRecord(Base):
     doctor_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("doctors.doctor_id"), index=True
     )
-    appointment_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    appointment_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("appointments.appointment_id"), index=True
     )
     content: Mapped[dict] = mapped_column(JSON, default=dict)
@@ -238,13 +245,13 @@ class MedicalRecord(Base):
     )
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    finalized_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    finalized_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     # Relationships
     patient: Mapped["Patient"] = relationship(back_populates="medical_records")
     doctor: Mapped["Doctor"] = relationship(back_populates="medical_records")
     appointment: Mapped[Optional["Appointment"]] = relationship(back_populates="medical_records")
-    prescriptions: Mapped[List["Prescription"]] = relationship(back_populates="medical_record")
+    prescriptions: Mapped[list["Prescription"]] = relationship(back_populates="medical_record")
 
 
 # FHIR: MedicationRequest
@@ -260,7 +267,7 @@ class Prescription(Base):
     prescription_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
-    medical_record_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+    medical_record_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("medical_records.record_id"), index=True, nullable=True
     )
     patient_id: Mapped[uuid.UUID] = mapped_column(
@@ -269,13 +276,13 @@ class Prescription(Base):
     doctor_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("doctors.doctor_id"), index=True
     )
-    medications: Mapped[List[dict]] = mapped_column(JSON, default=list)
+    medications: Mapped[list[dict]] = mapped_column(JSON, default=list)
     status: Mapped[PrescriptionStatus] = mapped_column(
         Enum(PrescriptionStatus), default=PrescriptionStatus.DRAFT, index=True
     )
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    finalized_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    finalized_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     # Relationships
     medical_record: Mapped[Optional["MedicalRecord"]] = relationship(back_populates="prescriptions")
@@ -309,8 +316,8 @@ class VoiceNote(Base):
     file_name: Mapped[str] = mapped_column(String(255), comment="Original file name")
     content_type: Mapped[str] = mapped_column(String(100), comment="MIME type (e.g., audio/webm)")
     file_size: Mapped[int] = mapped_column(comment="File size in bytes")
-    duration_seconds: Mapped[Optional[int]] = mapped_column(comment="Audio duration in seconds")
-    transcription: Mapped[Optional[str]] = mapped_column(Text, nullable=True, comment="Transcribed text")
+    duration_seconds: Mapped[int | None] = mapped_column(comment="Audio duration in seconds")
+    transcription: Mapped[str | None] = mapped_column(Text, nullable=True, comment="Transcribed text")
     transcription_status: Mapped[str] = mapped_column(
         String(50), default="pending", comment="pending, processing, completed, failed"
     )
@@ -336,15 +343,15 @@ class AuditLog(Base):
     log_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
-    user_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), index=True)
+    user_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), index=True)
     action: Mapped[str] = mapped_column(String(100), index=True)
     resource_type: Mapped[str] = mapped_column(String(100), index=True)
-    resource_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), index=True)
+    resource_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), index=True)
     timestamp: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
     outcome: Mapped[AuditOutcome] = mapped_column(Enum(AuditOutcome), default=AuditOutcome.SUCCESS)
-    details: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
-    ip_address: Mapped[Optional[str]] = mapped_column(String(45))
-    user_agent: Mapped[Optional[str]] = mapped_column(Text)
+    details: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    ip_address: Mapped[str | None] = mapped_column(String(45))
+    user_agent: Mapped[str | None] = mapped_column(Text)
 
     # Indexes for common query patterns
     __table_args__ = (
@@ -377,7 +384,7 @@ class Consent(Base):
         Enum(ConsentScope), default=ConsentScope.FULL_ACCESS
     )
     granted_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
-    revoked_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, index=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

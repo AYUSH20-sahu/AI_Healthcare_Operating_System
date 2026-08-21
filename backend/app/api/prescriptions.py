@@ -1,26 +1,31 @@
 """Prescriptions API routes."""
 
-from typing import Optional, List
 from uuid import UUID
-from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select, func, and_
+from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database import get_db
-from app.models import Prescription, Patient, Doctor, User, UserRole, PrescriptionStatus, MedicalRecord
-from app.services.auth.service import get_current_active_user
 from app.api.schemas.prescription import (
-    PrescriptionCreate,
-    PrescriptionUpdate,
-    PrescriptionResponse,
-    PrescriptionListResponse,
+    InteractionCheckRequest,
     InteractionCheckResponse,
     InteractionWarning,
-    MedicationCreate,
-    InteractionCheckRequest,
+    PrescriptionCreate,
+    PrescriptionListResponse,
+    PrescriptionResponse,
+    PrescriptionUpdate,
 )
+from app.database import get_db
+from app.models import (
+    Doctor,
+    MedicalRecord,
+    Patient,
+    Prescription,
+    PrescriptionStatus,
+    User,
+    UserRole,
+)
+from app.services.auth.service import get_current_active_user
 
 router = APIRouter(prefix="/prescriptions", tags=["prescriptions"])
 
@@ -74,7 +79,7 @@ KNOWN_ALLERGIES = {
 }
 
 
-def check_interactions(prescription_medications: List[dict], patient_allergies: List[str]) -> List[InteractionWarning]:
+def check_interactions(prescription_medications: list[dict], patient_allergies: list[str]) -> list[InteractionWarning]:
     """
     Check drug interactions and allergies for a prescription.
     
@@ -310,7 +315,7 @@ async def list_patient_prescriptions(
     patient_id: UUID,
     page: int = Query(1, ge=1, description="Page number"),
     page_size: int = Query(20, ge=1, le=100, description="Page size"),
-    status_filter: Optional[str] = Query(None, description="Filter by status (draft/finalized/cancelled)"),
+    status_filter: str | None = Query(None, description="Filter by status (draft/finalized/cancelled)"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
