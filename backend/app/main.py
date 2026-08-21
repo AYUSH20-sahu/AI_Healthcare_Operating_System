@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 
 from app.core.config import settings
+from app.core.exceptions import register_exception_handlers
 from app.api import auth, consent, patients, doctors, appointments, medical_records, prescriptions
 from app.services.auth.audit import AuditLoggingMiddleware
 
@@ -12,6 +13,9 @@ app = FastAPI(
     redoc_url="/redoc",
     openapi_url="/openapi.json",
 )
+
+# Register exception handlers for standard error envelope
+register_exception_handlers(app)
 
 # Add audit logging middleware
 app.add_middleware(AuditLoggingMiddleware)

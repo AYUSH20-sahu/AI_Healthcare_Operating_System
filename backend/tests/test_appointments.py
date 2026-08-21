@@ -281,7 +281,9 @@ class TestAppointmentsAPI:
             headers={"Authorization": f"Bearer {admin_token}"},
         )
         assert response.status_code == 409
-        assert "conflicting" in response.json()["detail"].lower()
+        error_data = response.json()
+        assert "error" in error_data
+        assert "conflicting" in error_data["error"]["message"].lower()
 
     @pytest.mark.asyncio
     async def test_create_appointment_overlapping_rejected(self, client, admin_user, admin_token, test_patient, test_doctor, test_appointment):
