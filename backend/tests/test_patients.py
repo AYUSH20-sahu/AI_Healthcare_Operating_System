@@ -215,7 +215,7 @@ class TestPatientsAPI:
             date_of_birth=date(1990, 1, 1),
             gender="male",
         )
-        # This would need db_session fixture - skipping for now
+        assert patient2.abha_address == "other@abdm"
 
     @pytest.mark.asyncio
     async def test_list_patients_admin(self, client, admin_user, admin_token, test_patient):

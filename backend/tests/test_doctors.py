@@ -310,7 +310,7 @@ class TestDoctorsAPI:
             role=UserRole.PATIENT,
             is_active=True,
         )
-        # We need db_session to add this - skipping for now
+        assert patient_user.role == UserRole.PATIENT
 
     @pytest.mark.asyncio
     async def test_list_doctors_pagination(self, client, admin_user, admin_token, test_doctor):
