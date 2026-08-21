@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 
 from app.core.config import settings
-from app.api import auth, consent, patients, doctors, appointments
+from app.api import auth, consent, patients, doctors, appointments, medical_records
 from app.services.auth.audit import AuditLoggingMiddleware
 
 app = FastAPI(
@@ -21,6 +21,7 @@ app.include_router(consent.router, prefix="/api/v1")
 app.include_router(patients.router, prefix="/api/v1")
 app.include_router(doctors.router, prefix="/api/v1")
 app.include_router(appointments.router, prefix="/api/v1")
+app.include_router(medical_records.router, prefix="/api/v1")
 
 
 @app.get("/health")

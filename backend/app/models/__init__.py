@@ -41,16 +41,16 @@ class AppointmentStatus(PyEnum):
 
 class MedicalRecordStatus(PyEnum):
     """Medical record status values."""
-    DRAFT = "draft"
-    FINALIZED = "finalized"
-    AMENDED = "amended"
+    DRAFT = "DRAFT"
+    FINALIZED = "FINALIZED"
+    AMENDED = "AMENDED"
 
 
 class PrescriptionStatus(PyEnum):
     """Prescription status values."""
-    DRAFT = "draft"
-    FINALIZED = "finalized"
-    CANCELLED = "cancelled"
+    DRAFT = "DRAFT"
+    FINALIZED = "FINALIZED"
+    CANCELLED = "CANCELLED"
 
 
 class ConsentScope(PyEnum):
