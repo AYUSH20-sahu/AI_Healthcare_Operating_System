@@ -3,22 +3,22 @@
 Takes voice notes, transcribes them, and produces structured clinical note drafts.
 """
 
-from dataclasses import dataclass, field
-from typing import Any, Optional
 import json
 import logging
-import sys
 import os
+import sys
+from dataclasses import dataclass, field
+from typing import Any
 
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from orchestrator import AgentBase, TaskType
 from providers import (
-    get_llm_provider,
-    get_stt_provider,
     LLMMessage,
     TranscriptionResult,
+    get_llm_provider,
+    get_stt_provider,
 )
 
 logger = logging.getLogger(__name__)
@@ -44,7 +44,7 @@ class ScribeAgentResult:
     draft: ClinicalNoteDraft
     transcription: TranscriptionResult
     success: bool = True
-    error: Optional[str] = None
+    error: str | None = None
 
 
 class ScribeAgent(AgentBase):
@@ -60,8 +60,8 @@ class ScribeAgent(AgentBase):
     
     def __init__(
         self,
-        llm_provider_name: Optional[str] = None,
-        stt_provider_name: Optional[str] = None,
+        llm_provider_name: str | None = None,
+        stt_provider_name: str | None = None,
     ):
         self._llm_provider_name = llm_provider_name
         self._stt_provider_name = stt_provider_name
@@ -222,8 +222,8 @@ Please generate a structured clinical note in the specified JSON format."""
 
 # Register the agent with the global orchestrator
 def register_scribe_agent(
-    llm_provider_name: Optional[str] = None,
-    stt_provider_name: Optional[str] = None,
+    llm_provider_name: str | None = None,
+    stt_provider_name: str | None = None,
 ) -> ScribeAgent:
     """Create and register the scribe agent with the global orchestrator."""
     from orchestrator import get_orchestrator

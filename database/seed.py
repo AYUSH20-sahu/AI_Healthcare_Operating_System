@@ -13,14 +13,14 @@ Or: make seed (if Makefile exists)
 """
 
 import asyncio
-import uuid
 import json
-from datetime import datetime, timedelta, date
-from passlib.context import CryptContext
+import uuid
+from datetime import date, datetime, timedelta
 
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
-from sqlalchemy.orm import sessionmaker
+from passlib.context import CryptContext
 from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlalchemy.orm import sessionmaker
 
 # Import models (will be created in M7)
 # For now, we'll use raw SQL to insert data

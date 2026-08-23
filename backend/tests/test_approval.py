@@ -2,7 +2,6 @@
 
 import pytest
 import pytest_asyncio
-from uuid import uuid4
 from datetime import datetime, date
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession

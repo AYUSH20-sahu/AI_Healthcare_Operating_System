@@ -1,22 +1,22 @@
 """Tests for Orchestrator Service."""
 
 import asyncio
-import sys
 import os
+import sys
+
 import pytest
 import pytest_asyncio
-from unittest.mock import AsyncMock, MagicMock, patch
 
 # Add the ai-services directory to the path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from orchestrator import (
-    TaskType,
-    TaskStatus,
-    TaskRequest,
-    TaskResult,
     AgentBase,
     Orchestrator,
+    TaskRequest,
+    TaskResult,
+    TaskStatus,
+    TaskType,
     get_orchestrator,
 )
 

@@ -3,14 +3,15 @@
 Routes tasks to appropriate agents with timeout, retry, and fallback-to-human logic.
 """
 
-from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
-from enum import Enum
-from typing import Any, Callable, Optional
 import asyncio
 import logging
 import time
+from abc import ABC, abstractmethod
+from collections.abc import Callable
+from dataclasses import dataclass, field
+from enum import Enum
 from functools import wraps
+from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -49,8 +50,8 @@ class TaskResult:
     """Result of a task execution."""
     task_type: TaskType
     status: TaskStatus
-    result: Optional[Any] = None
-    error: Optional[str] = None
+    result: Any | None = None
+    error: str | None = None
     attempts: int = 0
     total_time_seconds: float = 0.0
     fallback_triggered: bool = False
@@ -63,12 +64,10 @@ class AgentBase(ABC):
     @abstractmethod
     def task_type(self) -> TaskType:
         """Return the task type this agent handles."""
-        pass
     
     @abstractmethod
     async def execute(self, payload: dict[str, Any]) -> Any:
         """Execute the agent's task."""
-        pass
 
 
 class Orchestrator:
@@ -91,7 +90,7 @@ class Orchestrator:
         self._agents[agent.task_type] = agent
         logger.info(f"Registered agent for task type: {agent.task_type.value}")
     
-    def get_agent(self, task_type: TaskType) -> Optional[AgentBase]:
+    def get_agent(self, task_type: TaskType) -> AgentBase | None:
         """Get the agent for a task type."""
         return self._agents.get(task_type)
     

@@ -7,9 +7,8 @@ status from draft to finalized — nothing in the system may bypass it.
 
 from uuid import UUID
 from datetime import datetime
-from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import and_, func, select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.schemas.approval import (
@@ -26,7 +25,6 @@ from app.models import (
     Doctor,
     MedicalRecord,
     MedicalRecordStatus,
-    Patient,
     Prescription,
     PrescriptionStatus,
     User,

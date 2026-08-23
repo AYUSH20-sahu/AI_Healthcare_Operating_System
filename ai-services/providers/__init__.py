@@ -1,18 +1,18 @@
 """Provider adapter interface for LLM, STT, and TTS services."""
 
+import json
+import logging
+import os
 from abc import ABC, abstractmethod
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, AsyncIterator, Optional
-import json
-import os
-import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Optional
 
 if TYPE_CHECKING:
-    from openai import AsyncOpenAI
     import google.generativeai as genai
     from groq import AsyncGroq
+    from openai import AsyncOpenAI
 
 logger = logging.getLogger(__name__)
 
@@ -56,17 +56,17 @@ class LLMResponse:
     """Response from LLM provider."""
     content: str
     model: str
-    usage: Optional[dict] = None
-    finish_reason: Optional[str] = None
+    usage: dict | None = None
+    finish_reason: str | None = None
 
 
 @dataclass
 class TranscriptionResult:
     """Result from STT provider."""
     text: str
-    language: Optional[str] = None
-    duration: Optional[float] = None
-    confidence: Optional[float] = None
+    language: str | None = None
+    duration: float | None = None
+    confidence: float | None = None
 
 
 @dataclass
@@ -75,7 +75,7 @@ class SynthesisResult:
     audio_data: bytes
     format: str  # mp3, wav, etc.
     sample_rate: int
-    duration: Optional[float] = None
+    duration: float | None = None
 
 
 class BaseProvider(ABC):
@@ -85,18 +85,15 @@ class BaseProvider(ABC):
     @abstractmethod
     def provider_type(self) -> ProviderType:
         """Return the provider type."""
-        pass
     
     @property
     @abstractmethod
     def name(self) -> str:
         """Return the provider name."""
-        pass
     
     @abstractmethod
     async def health_check(self) -> bool:
         """Check if provider is available."""
-        pass
 
 
 class LLMProviderBase(BaseProvider):
@@ -110,25 +107,23 @@ class LLMProviderBase(BaseProvider):
     async def generate(
         self,
         messages: list[LLMMessage],
-        model: Optional[str] = None,
+        model: str | None = None,
         temperature: float = 0.7,
-        max_tokens: Optional[int] = None,
+        max_tokens: int | None = None,
         **kwargs: Any,
     ) -> LLMResponse:
         """Generate a response from the LLM."""
-        pass
     
     @abstractmethod
     async def stream_generate(
         self,
         messages: list[LLMMessage],
-        model: Optional[str] = None,
+        model: str | None = None,
         temperature: float = 0.7,
-        max_tokens: Optional[int] = None,
+        max_tokens: int | None = None,
         **kwargs: Any,
     ) -> AsyncIterator[str]:
         """Stream generate a response from the LLM."""
-        pass
 
 
 class STTProviderBase(BaseProvider):
@@ -143,11 +138,10 @@ class STTProviderBase(BaseProvider):
         self,
         audio_data: bytes,
         format: str = "webm",
-        language: Optional[str] = None,
+        language: str | None = None,
         **kwargs: Any,
     ) -> TranscriptionResult:
         """Transcribe audio to text."""
-        pass
 
 
 class TTSProviderBase(BaseProvider):
@@ -161,13 +155,12 @@ class TTSProviderBase(BaseProvider):
     async def synthesize(
         self,
         text: str,
-        voice: Optional[str] = None,
+        voice: str | None = None,
         format: str = "mp3",
         sample_rate: int = 22050,
         **kwargs: Any,
     ) -> SynthesisResult:
         """Synthesize text to speech."""
-        pass
 
 
 class MockLLMProvider(LLMProviderBase):
@@ -183,9 +176,9 @@ class MockLLMProvider(LLMProviderBase):
     async def generate(
         self,
         messages: list[LLMMessage],
-        model: Optional[str] = None,
+        model: str | None = None,
         temperature: float = 0.7,
-        max_tokens: Optional[int] = None,
+        max_tokens: int | None = None,
         **kwargs: Any,
     ) -> LLMResponse:
         # Return a mock response based on the last user message
@@ -221,9 +214,9 @@ class MockLLMProvider(LLMProviderBase):
     async def stream_generate(
         self,
         messages: list[LLMMessage],
-        model: Optional[str] = None,
+        model: str | None = None,
         temperature: float = 0.7,
-        max_tokens: Optional[int] = None,
+        max_tokens: int | None = None,
         **kwargs: Any,
     ) -> AsyncIterator[str]:
         response = await self.generate(messages, model, temperature, max_tokens, **kwargs)
@@ -246,7 +239,7 @@ class MockSTTProvider(STTProviderBase):
         self,
         audio_data: bytes,
         format: str = "webm",
-        language: Optional[str] = None,
+        language: str | None = None,
         **kwargs: Any,
     ) -> TranscriptionResult:
         # Return mock transcription
@@ -271,7 +264,7 @@ class MockTTSProvider(TTSProviderBase):
     async def synthesize(
         self,
         text: str,
-        voice: Optional[str] = None,
+        voice: str | None = None,
         format: str = "mp3",
         sample_rate: int = 22050,
         **kwargs: Any,
@@ -293,14 +286,14 @@ class NVIDIALLMProvider(LLMProviderBase):
     
     def __init__(
         self,
-        api_key: Optional[str] = None,
-        base_url: Optional[str] = None,
-        default_model: Optional[str] = None,
+        api_key: str | None = None,
+        base_url: str | None = None,
+        default_model: str | None = None,
     ):
         self._api_key = api_key or os.getenv("NVIDIA_API_KEY")
         self._base_url = base_url or os.getenv("NVIDIA_BASE_URL", "https://integrate.api.nvidia.com/v1")
         self._default_model = default_model or os.getenv("NVIDIA_MODEL", "nvidia/nemotron-3-ultra-550b-a55b")
-        self._client: Optional["AsyncOpenAI"] = None
+        self._client: AsyncOpenAI | None = None
     
     @property
     def name(self) -> str:
@@ -335,9 +328,9 @@ class NVIDIALLMProvider(LLMProviderBase):
     async def generate(
         self,
         messages: list[LLMMessage],
-        model: Optional[str] = None,
+        model: str | None = None,
         temperature: float = 0.7,
-        max_tokens: Optional[int] = None,
+        max_tokens: int | None = None,
         **kwargs: Any,
     ) -> LLMResponse:
         client = await self._get_client()
@@ -367,9 +360,9 @@ class NVIDIALLMProvider(LLMProviderBase):
     async def stream_generate(
         self,
         messages: list[LLMMessage],
-        model: Optional[str] = None,
+        model: str | None = None,
         temperature: float = 0.7,
-        max_tokens: Optional[int] = None,
+        max_tokens: int | None = None,
         **kwargs: Any,
     ) -> AsyncIterator[str]:
         client = await self._get_client()
@@ -396,8 +389,8 @@ class GeminiLLMProvider(LLMProviderBase):
     
     def __init__(
         self,
-        api_key: Optional[str] = None,
-        default_model: Optional[str] = None,
+        api_key: str | None = None,
+        default_model: str | None = None,
     ):
         self._api_key = api_key or os.getenv("GEMINI_API_KEY")
         self._default_model = default_model or "gemini-1.5-flash"
@@ -430,9 +423,9 @@ class GeminiLLMProvider(LLMProviderBase):
     async def generate(
         self,
         messages: list[LLMMessage],
-        model: Optional[str] = None,
+        model: str | None = None,
         temperature: float = 0.7,
-        max_tokens: Optional[int] = None,
+        max_tokens: int | None = None,
         **kwargs: Any,
     ) -> LLMResponse:
         model_instance = await self._get_model()
@@ -471,9 +464,9 @@ class GeminiLLMProvider(LLMProviderBase):
     async def stream_generate(
         self,
         messages: list[LLMMessage],
-        model: Optional[str] = None,
+        model: str | None = None,
         temperature: float = 0.7,
-        max_tokens: Optional[int] = None,
+        max_tokens: int | None = None,
         **kwargs: Any,
     ) -> AsyncIterator[str]:
         model_instance = await self._get_model()
@@ -533,9 +526,9 @@ class FallbackLLMProvider(LLMProviderBase):
     async def generate(
         self,
         messages: list[LLMMessage],
-        model: Optional[str] = None,
+        model: str | None = None,
         temperature: float = 0.7,
-        max_tokens: Optional[int] = None,
+        max_tokens: int | None = None,
         **kwargs: Any,
     ) -> LLMResponse:
         # Try primary first
@@ -557,9 +550,9 @@ class FallbackLLMProvider(LLMProviderBase):
     async def stream_generate(
         self,
         messages: list[LLMMessage],
-        model: Optional[str] = None,
+        model: str | None = None,
         temperature: float = 0.7,
-        max_tokens: Optional[int] = None,
+        max_tokens: int | None = None,
         **kwargs: Any,
     ) -> AsyncIterator[str]:
         # Try primary first
@@ -586,12 +579,12 @@ class GroqSTTProvider(STTProviderBase):
     
     def __init__(
         self,
-        api_key: Optional[str] = None,
-        default_model: Optional[str] = None,
+        api_key: str | None = None,
+        default_model: str | None = None,
     ):
         self._api_key = api_key or os.getenv("GROQ_API_KEY")
         self._default_model = default_model or "whisper-large-v3-turbo"
-        self._client: Optional["AsyncGroq"] = None
+        self._client: AsyncGroq | None = None
     
     @property
     def name(self) -> str:
@@ -619,7 +612,7 @@ class GroqSTTProvider(STTProviderBase):
         self,
         audio_data: bytes,
         format: str = "webm",
-        language: Optional[str] = None,
+        language: str | None = None,
         **kwargs: Any,
     ) -> TranscriptionResult:
         client = await self._get_client()
@@ -652,9 +645,9 @@ class ProviderRegistry:
         self._llm_providers: dict[str, LLMProviderBase] = {}
         self._stt_providers: dict[str, STTProviderBase] = {}
         self._tts_providers: dict[str, TTSProviderBase] = {}
-        self._default_llm: Optional[str] = None
-        self._default_stt: Optional[str] = None
-        self._default_tts: Optional[str] = None
+        self._default_llm: str | None = None
+        self._default_stt: str | None = None
+        self._default_tts: str | None = None
     
     def register_llm(self, name: str, provider: LLMProviderBase, default: bool = False):
         """Register an LLM provider."""
@@ -674,7 +667,7 @@ class ProviderRegistry:
         if default or self._default_tts is None:
             self._default_tts = name
     
-    def get_llm(self, name: Optional[str] = None) -> LLMProviderBase:
+    def get_llm(self, name: str | None = None) -> LLMProviderBase:
         """Get an LLM provider by name."""
         name = name or self._default_llm
         if name is None:
@@ -683,7 +676,7 @@ class ProviderRegistry:
             raise ValueError(f"LLM provider '{name}' not found")
         return self._llm_providers[name]
     
-    def get_stt(self, name: Optional[str] = None) -> STTProviderBase:
+    def get_stt(self, name: str | None = None) -> STTProviderBase:
         """Get an STT provider by name."""
         name = name or self._default_stt
         if name is None:
@@ -692,7 +685,7 @@ class ProviderRegistry:
             raise ValueError(f"STT provider '{name}' not found")
         return self._stt_providers[name]
     
-    def get_tts(self, name: Optional[str] = None) -> TTSProviderBase:
+    def get_tts(self, name: str | None = None) -> TTSProviderBase:
         """Get a TTS provider by name."""
         name = name or self._default_tts
         if name is None:
@@ -765,16 +758,16 @@ def _configure_registry_from_env() -> None:
 _configure_registry_from_env()
 
 
-def get_llm_provider(name: Optional[str] = None) -> LLMProviderBase:
+def get_llm_provider(name: str | None = None) -> LLMProviderBase:
     """Get an LLM provider from the global registry."""
     return registry.get_llm(name)
 
 
-def get_stt_provider(name: Optional[str] = None) -> STTProviderBase:
+def get_stt_provider(name: str | None = None) -> STTProviderBase:
     """Get an STT provider from the global registry."""
     return registry.get_stt(name)
 
 
-def get_tts_provider(name: Optional[str] = None) -> TTSProviderBase:
+def get_tts_provider(name: str | None = None) -> TTSProviderBase:
     """Get a TTS provider from the global registry."""
     return registry.get_tts(name)

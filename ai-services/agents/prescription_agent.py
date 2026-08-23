@@ -4,20 +4,20 @@ Given a consultation's structured note, produces a draft prescription via the pr
 runs it through the check_interactions function, and attaches any warnings plus a confidence/basis field.
 """
 
-from dataclasses import dataclass, field
-from typing import Any, Optional
 import json
 import logging
-import sys
 import os
+import sys
+from dataclasses import dataclass, field
+from typing import Any
 
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from orchestrator import AgentBase, TaskType
 from providers import (
-    get_llm_provider,
     LLMMessage,
+    get_llm_provider,
 )
 
 logger = logging.getLogger(__name__)
@@ -32,7 +32,7 @@ class MedicationDraft:
     duration: str
     route: str = "oral"
     instructions: str = ""
-    quantity: Optional[int] = None
+    quantity: int | None = None
     refills: int = 0
 
 
@@ -43,7 +43,7 @@ class InteractionWarning:
     type: str  # interaction, allergy
     medication: str
     description: str
-    recommendation: Optional[str] = None
+    recommendation: str | None = None
 
 
 @dataclass
@@ -61,9 +61,9 @@ class PrescriptionDraft:
 @dataclass
 class PrescriptionAgentResult:
     """Result from the prescription agent."""
-    draft: Optional[PrescriptionDraft]
+    draft: PrescriptionDraft | None
     success: bool = True
-    error: Optional[str] = None
+    error: str | None = None
 
 
 class PrescriptionAgent(AgentBase):
@@ -80,7 +80,7 @@ class PrescriptionAgent(AgentBase):
     
     def __init__(
         self,
-        llm_provider_name: Optional[str] = None,
+        llm_provider_name: str | None = None,
     ):
         self._llm_provider_name = llm_provider_name
     
@@ -366,7 +366,7 @@ Please generate a structured prescription draft in the specified JSON format."""
 
 # Register the agent with the global orchestrator
 def register_prescription_agent(
-    llm_provider_name: Optional[str] = None,
+    llm_provider_name: str | None = None,
 ) -> PrescriptionAgent:
     """Create and register the prescription agent with the global orchestrator."""
     from orchestrator import get_orchestrator

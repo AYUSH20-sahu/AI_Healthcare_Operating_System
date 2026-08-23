@@ -3,7 +3,7 @@
 from datetime import datetime
 from uuid import UUID
 from typing import Optional, Literal
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field
 
 
 class MedicalRecordApprovalRequest(BaseModel):

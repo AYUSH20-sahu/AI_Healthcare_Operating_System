@@ -1,23 +1,23 @@
 """Tests for Doctor Copilot Scribe Agent."""
 
-import asyncio
 import json
+import os
+import sys
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
 import pytest_asyncio
-from unittest.mock import AsyncMock, MagicMock, patch
-import sys
-import os
 
 # Add the ai-services directory to the path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from agents.scribe_agent import (
-    ScribeAgent,
     ClinicalNoteDraft,
+    ScribeAgent,
     ScribeAgentResult,
     register_scribe_agent,
 )
-from orchestrator import TaskType, TaskRequest
+from orchestrator import TaskType
 from providers import TranscriptionResult
 
 
@@ -287,7 +287,6 @@ class TestRegisterScribeAgent:
 
 
 # Need to import json for the mock
-import json
 
 
 if __name__ == "__main__":

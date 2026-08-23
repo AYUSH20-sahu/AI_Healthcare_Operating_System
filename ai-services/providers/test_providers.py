@@ -2,30 +2,29 @@
 
 import os
 import sys
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
 import pytest_asyncio
-from unittest.mock import AsyncMock, MagicMock, patch
 
 # Add the ai-services directory to the path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from providers import (
-    ProviderType,
+    FallbackLLMProvider,
+    GeminiLLMProvider,
+    GroqSTTProvider,
     LLMMessage,
+    LLMProviderBase,
     LLMResponse,
-    TranscriptionResult,
-    SynthesisResult,
     MockLLMProvider,
     MockSTTProvider,
     MockTTSProvider,
     NVIDIALLMProvider,
-    GeminiLLMProvider,
-    FallbackLLMProvider,
-    GroqSTTProvider,
     ProviderRegistry,
-    LLMProviderBase,
-    STTProviderBase,
-    TTSProviderBase,
+    ProviderType,
+    SynthesisResult,
+    TranscriptionResult,
     get_llm_provider,
     get_stt_provider,
     get_tts_provider,
@@ -291,7 +290,7 @@ class TestIntegration:
     @pytest.mark.asyncio
     async def test_llm_generate_and_stream(self):
         """Test LLM generate and stream produce consistent results."""
-        from providers import MockLLMProvider, LLMMessage
+        from providers import LLMMessage, MockLLMProvider
         provider = MockLLMProvider()
         
         messages = [LLMMessage(role="user", content="Test")]
@@ -705,10 +704,11 @@ class TestProviderRegistryAutoConfig:
         }):
             # Need to re-import to trigger auto-config
             import importlib
+
             import providers
             importlib.reload(providers)
             
-            from providers import registry, FallbackLLMProvider
+            from providers import FallbackLLMProvider, registry
             
             # Should have fallback provider as default
             default_llm = registry.get_llm()
@@ -725,10 +725,11 @@ class TestProviderRegistryAutoConfig:
             "TTS_PROVIDER": "mock",
         }):
             import importlib
+
             import providers
             importlib.reload(providers)
             
-            from providers import registry, GeminiLLMProvider
+            from providers import GeminiLLMProvider, registry
             
             default_llm = registry.get_llm()
             assert isinstance(default_llm, GeminiLLMProvider)
@@ -743,10 +744,11 @@ class TestProviderRegistryAutoConfig:
             "TTS_PROVIDER": "mock",
         }):
             import importlib
+
             import providers
             importlib.reload(providers)
             
-            from providers import registry, GroqSTTProvider
+            from providers import GroqSTTProvider, registry
             
             default_stt = registry.get_stt()
             assert isinstance(default_stt, GroqSTTProvider)
