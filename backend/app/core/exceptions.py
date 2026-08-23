@@ -2,6 +2,7 @@
 
 from typing import Any
 
+from app.core.config import settings
 from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
@@ -142,7 +143,3 @@ def register_exception_handlers(app: FastAPI) -> None:
         return app.openapi_schema
     
     app.openapi = custom_openapi
-
-
-# Import settings for DEBUG flag
-from app.core.config import settings

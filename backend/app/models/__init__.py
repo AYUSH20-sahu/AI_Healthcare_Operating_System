@@ -8,7 +8,7 @@ All tables use UUID primary keys for distributed system compatibility.
 import uuid
 from datetime import datetime
 from enum import Enum as PyEnum
-from typing import List, Optional
+from typing import Optional
 
 from sqlalchemy import (
     JSON,

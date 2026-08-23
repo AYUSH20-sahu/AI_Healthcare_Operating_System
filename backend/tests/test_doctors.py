@@ -302,7 +302,7 @@ class TestDoctorsAPI:
         from uuid import uuid4
 
         from app.models import User, UserRole
-        patient_user = User(
+        User(
             user_id=uuid4(),
             email="patient@test.com",
             hashed_password=get_password_hash("patientpassword123"),

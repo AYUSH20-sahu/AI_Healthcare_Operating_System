@@ -208,7 +208,7 @@ class TestPatientsAPI:
         from uuid import uuid4
 
         from app.models import Patient
-        patient2 = Patient(
+        Patient(
             patient_id=uuid4(),
             abha_address="other@abdm",
             full_name="Other Patient",
