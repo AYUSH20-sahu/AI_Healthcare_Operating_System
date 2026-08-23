@@ -298,19 +298,7 @@ class TestDoctorsAPI:
     @pytest.mark.asyncio
     async def test_list_doctors_patient_forbidden(self, client, admin_user, admin_token):
         """Test patient cannot list doctors."""
-        # Create a patient user
-        from uuid import uuid4
-
-        from app.models import User, UserRole
-        patient_user = User(
-            user_id=uuid4(),
-            email="patient@test.com",
-            hashed_password=get_password_hash("patientpassword123"),
-            full_name="Test Patient",
-            role=UserRole.PATIENT,
-            is_active=True,
-        )
-        # We need db_session to add this - skipping for now
+        # TODO: add proper db_session-backed patient setup for this scenario
 
     @pytest.mark.asyncio
     async def test_list_doctors_pagination(self, client, admin_user, admin_token, test_doctor):

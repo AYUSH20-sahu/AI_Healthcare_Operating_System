@@ -204,18 +204,7 @@ class TestPatientsAPI:
     @pytest.mark.asyncio
     async def test_update_patient_duplicate_abha(self, client, admin_user, admin_token, test_patient):
         """Test updating patient with duplicate ABHA fails."""
-        # Create another patient first
-        from uuid import uuid4
-
-        from app.models import Patient
-        patient2 = Patient(
-            patient_id=uuid4(),
-            abha_address="other@abdm",
-            full_name="Other Patient",
-            date_of_birth=date(1990, 1, 1),
-            gender="male",
-        )
-        # This would need db_session fixture - skipping for now
+        # TODO: add proper db_session-backed second patient setup for this scenario
 
     @pytest.mark.asyncio
     async def test_list_patients_admin(self, client, admin_user, admin_token, test_patient):
