@@ -280,6 +280,7 @@ class Prescription(Base):
     status: Mapped[PrescriptionStatus] = mapped_column(
         Enum(PrescriptionStatus), default=PrescriptionStatus.DRAFT, index=True
     )
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     finalized_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

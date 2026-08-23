@@ -2,6 +2,7 @@ from fastapi import FastAPI
 
 from app.api import (
     appointments,
+    approval,
     auth,
     consent,
     doctors,
@@ -37,6 +38,7 @@ app.include_router(appointments.router, prefix="/api/v1")
 app.include_router(medical_records.router, prefix="/api/v1")
 app.include_router(prescriptions.router, prefix="/api/v1")
 app.include_router(voice_notes.router, prefix="/api/v1")
+app.include_router(approval.router, prefix="/api/v1")
 
 
 @app.get("/health")
