@@ -16,6 +16,8 @@ from app.api import (
 from app.core.config import settings
 from app.core.exceptions import register_exception_handlers
 from app.services.auth.audit import AuditLoggingMiddleware
+import app.services.scribe  # registers ScribeAgent on orchestrator
+import app.services.prescriptions  # registers PrescriptionDraftAgent on orchestrator
 
 app = FastAPI(
     title="AI-HOS Backend",

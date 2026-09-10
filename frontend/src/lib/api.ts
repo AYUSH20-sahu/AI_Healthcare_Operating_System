@@ -419,6 +419,38 @@ export const medicalRecordsApi = {
 };
 
 // Prescriptions API
+export interface PrescriptionDraftRequest {
+    patient_id: string;
+    doctor_id: string;
+    appointment_id?: string;
+    medical_record_id?: string;
+    consultation_text?: string;
+    assessment?: string;
+    icd10_code?: string;
+    suggested_medications?: Medication[];
+    patient_allergies?: string[];
+    current_medications?: string[];
+    notes?: string;
+}
+
+export interface PrescriptionDraftResponse {
+    prescription_id: string;
+    patient_id: string;
+    doctor_id: string;
+    appointment_id?: string;
+    medical_record_id?: string;
+    medications: Medication[];
+    status: string;
+    warnings: InteractionWarning[];
+    has_warnings: boolean;
+    confidence: number;
+    basis: string;
+    ai_metadata: AIMetadata;
+    notes?: string;
+    created_at: string;
+    updated_at: string;
+}
+
 export const prescriptionsApi = {
     list: (params?: {
         page?: number;
@@ -445,6 +477,9 @@ export const prescriptionsApi = {
     get: (prescriptionId: string) =>
         api.get<Prescription>(`/prescriptions/${prescriptionId}/`),
 
+    getAppointmentDraft: (appointmentId: string) =>
+        api.get<PrescriptionDraftResponse | null>(`/prescriptions/appointment/${appointmentId}/draft`),
+
     create: (data: {
         patient_id: string;
         doctor_id: string;
@@ -454,6 +489,9 @@ export const prescriptionsApi = {
     }) =>
         api.post<Prescription>('/prescriptions/', data),
 
+    draft: (data: PrescriptionDraftRequest) =>
+        api.post<PrescriptionDraftResponse>('/prescriptions/draft', data),
+
     update: (prescriptionId: string, data: {
         medications?: Medication[];
         notes?: string;
@@ -461,10 +499,20 @@ export const prescriptionsApi = {
     }) =>
         api.put<Prescription>(`/prescriptions/${prescriptionId}/`, data),
 
-    checkInteractions: (patientId: string, medications: Medication[]) =>
+    checkInteractions: (
+        patientId: string,
+        medications: Medication[],
+        patientAllergies?: string[],
+        currentMedications?: string[]
+    ) =>
         api.post<{ warnings: InteractionWarning[]; has_warnings: boolean }>(
             '/prescriptions/check-interactions/',
-            { patient_id: patientId, medications }
+            {
+                patient_id: patientId,
+                medications,
+                patient_allergies: patientAllergies,
+                current_medications: currentMedications,
+            }
         ),
 };
 

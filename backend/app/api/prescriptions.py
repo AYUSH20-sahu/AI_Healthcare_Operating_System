@@ -11,12 +11,15 @@ from app.api.schemas.prescription import (
     InteractionCheckResponse,
     InteractionWarning,
     PrescriptionCreate,
+    PrescriptionDraftRequest,
+    PrescriptionDraftResponse,
     PrescriptionListResponse,
     PrescriptionResponse,
     PrescriptionUpdate,
 )
 from app.database import get_db
 from app.models import (
+    Appointment,
     Doctor,
     MedicalRecord,
     Patient,
@@ -25,7 +28,9 @@ from app.models import (
     User,
     UserRole,
 )
+from app.services.auth.audit import audit_logger
 from app.services.auth.service import get_current_active_user
+from app.services.orchestrator import TaskRequest, TaskType, get_orchestrator
 
 router = APIRouter(prefix="/prescriptions", tags=["prescriptions"])
 
@@ -211,6 +216,154 @@ async def create_prescription(
     await db.commit()
     await db.refresh(prescription)
     return prescription
+
+
+@router.post("/draft", response_model=PrescriptionDraftResponse, status_code=status.HTTP_201_CREATED)
+async def draft_prescription(
+    draft_req: PrescriptionDraftRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Draft an AI-assisted prescription with automated interaction and allergy safety review.
+    
+    Operates via Orchestrator (TaskType.PRESCRIPTION_DRAFT).
+    Strict In-Memory Rule: Scribe/Prescription agent operates in-memory; only the Core API persists to PostgreSQL.
+    Draft Invariant: Prescriptions are created strictly with status = PrescriptionStatus.DRAFT.
+    """
+    if current_user.role not in [UserRole.DOCTOR, UserRole.ADMIN]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only doctors and administrators can draft prescriptions",
+        )
+    
+    # Verify patient exists
+    patient = await db.get(Patient, draft_req.patient_id)
+    if not patient:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Patient not found",
+        )
+    
+    # Verify doctor exists
+    doctor = await db.get(Doctor, draft_req.doctor_id)
+    if not doctor:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Doctor not found",
+        )
+    
+    # If doctor is creating, verify ownership
+    if current_user.role == UserRole.DOCTOR:
+        doctor_result = await db.execute(
+            select(Doctor).where(Doctor.user_id == current_user.user_id)
+        )
+        current_doctor = doctor_result.scalar_one_or_none()
+        if not current_doctor or current_doctor.doctor_id != draft_req.doctor_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Doctors can only draft prescriptions for themselves",
+            )
+            
+    # Verify medical record exists if specified
+    if draft_req.medical_record_id:
+        mr = await db.get(MedicalRecord, draft_req.medical_record_id)
+        if not mr:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Medical record not found",
+            )
+        if mr.patient_id != draft_req.patient_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Medical record does not belong to this patient",
+            )
+            
+    # Verify appointment exists if specified
+    if draft_req.appointment_id:
+        appt = await db.get(Appointment, draft_req.appointment_id)
+        if not appt:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Appointment not found",
+            )
+            
+    # Prepare payload for in-memory PrescriptionDraftAgent
+    agent_payload = {
+        "consultation_text": draft_req.consultation_text or "",
+        "assessment": draft_req.assessment or "",
+        "icd10_code": draft_req.icd10_code or "",
+        "suggested_medications": [m.model_dump() for m in draft_req.suggested_medications] if draft_req.suggested_medications else [],
+        "patient_allergies": draft_req.patient_allergies or [],
+        "current_medications": draft_req.current_medications or [],
+        "patient_name": f"{patient.first_name} {patient.last_name}",
+    }
+    
+    # Dispatch to orchestrator
+    orchestrator = get_orchestrator()
+    task_req = TaskRequest(
+        task_type=TaskType.PRESCRIPTION_DRAFT,
+        payload=agent_payload,
+        timeout_seconds=30.0,
+    )
+    task_result = await orchestrator.dispatch(task_req)
+    
+    agent_res = task_result.result
+    if not agent_res or not getattr(agent_res, "success", False):
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Prescription draft orchestration failed: {task_result.error or 'Unknown agent error'}",
+        )
+        
+    # Core API strictly persists the draft prescription with status = DRAFT
+    medications_data = agent_res.medications
+    prescription = Prescription(
+        patient_id=draft_req.patient_id,
+        doctor_id=draft_req.doctor_id,
+        medical_record_id=draft_req.medical_record_id,
+        medications=medications_data,
+        status=PrescriptionStatus.DRAFT,
+        notes=draft_req.notes,
+    )
+    db.add(prescription)
+    await db.commit()
+    await db.refresh(prescription)
+    
+    # Audit log
+    await audit_logger.log_event(
+        action="PRESCRIPTION_DRAFT_CREATED",
+        user_id=current_user.user_id,
+        resource_type="prescription",
+        resource_id=prescription.prescription_id,
+        details={
+            "patient_id": str(draft_req.patient_id),
+            "doctor_id": str(draft_req.doctor_id),
+            "appointment_id": str(draft_req.appointment_id) if draft_req.appointment_id else None,
+            "medical_record_id": str(draft_req.medical_record_id) if draft_req.medical_record_id else None,
+            "status": "DRAFT",
+            "medications_count": len(medications_data),
+            "warnings_count": len(agent_res.warnings),
+            "has_warnings": agent_res.has_warnings,
+            "confidence": agent_res.confidence,
+        },
+    )
+    
+    return PrescriptionDraftResponse(
+        prescription_id=prescription.prescription_id,
+        patient_id=prescription.patient_id,
+        doctor_id=prescription.doctor_id,
+        appointment_id=draft_req.appointment_id,
+        medical_record_id=prescription.medical_record_id,
+        medications=medications_data,
+        status="DRAFT",
+        warnings=agent_res.warnings,
+        has_warnings=agent_res.has_warnings,
+        confidence=agent_res.confidence,
+        basis=agent_res.basis,
+        ai_metadata=agent_res.ai_metadata,
+        notes=prescription.notes,
+        created_at=prescription.created_at,
+        updated_at=prescription.updated_at,
+    )
 
 
 @router.get("/{prescription_id}/", response_model=PrescriptionResponse)
@@ -407,6 +560,121 @@ async def list_patient_prescriptions(
     )
 
 
+@router.get("/appointment/{appointment_id}/draft", response_model=PrescriptionDraftResponse | None)
+async def get_appointment_draft_prescription(
+    appointment_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Retrieve active draft prescription for an appointment if one exists.
+    
+    Enables instant state restoration when clinician returns or refreshes.
+    """
+    appointment = await db.get(Appointment, appointment_id)
+    if not appointment:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Appointment not found",
+        )
+        
+    # RBAC check
+    if current_user.role == UserRole.PATIENT:
+        patient_result = await db.execute(
+            select(Patient).where(Patient.user_id == current_user.user_id)
+        )
+        patient = patient_result.scalar_one_or_none()
+        if not patient or appointment.patient_id != patient.patient_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Patients can only view prescriptions for their own appointments",
+            )
+    elif current_user.role == UserRole.DOCTOR:
+        doctor_result = await db.execute(
+            select(Doctor).where(Doctor.user_id == current_user.user_id)
+        )
+        doctor = doctor_result.scalar_one_or_none()
+        if not doctor or appointment.doctor_id != doctor.doctor_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Doctors can only view prescriptions for their own appointments",
+            )
+    elif current_user.role != UserRole.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Insufficient permissions to view prescriptions",
+        )
+        
+    # Find draft prescription linked either directly to medical records for this appointment or patient/doctor
+    query = (
+        select(Prescription)
+        .join(MedicalRecord, Prescription.medical_record_id == MedicalRecord.record_id)
+        .where(
+            and_(
+                MedicalRecord.appointment_id == appointment_id,
+                Prescription.status == PrescriptionStatus.DRAFT,
+            )
+        )
+        .order_by(Prescription.created_at.desc())
+        .limit(1)
+    )
+    result = await db.execute(query)
+    prescription = result.scalar_one_or_none()
+    
+    # If not found via medical record, search by patient and doctor
+    if not prescription:
+        alt_query = (
+            select(Prescription)
+            .where(
+                and_(
+                    Prescription.patient_id == appointment.patient_id,
+                    Prescription.doctor_id == appointment.doctor_id,
+                    Prescription.status == PrescriptionStatus.DRAFT,
+                )
+            )
+            .order_by(Prescription.created_at.desc())
+            .limit(1)
+        )
+        alt_res = await db.execute(alt_query)
+        prescription = alt_res.scalar_one_or_none()
+        
+    if not prescription:
+        return None
+        
+    from app.services.prescriptions.prescription_agent import prescription_agent
+    warnings_list = prescription_agent.check_safety(
+        medications=prescription.medications or [],
+        patient_allergies=[],
+    )
+    warning_dicts = [
+        {
+            "severity": w.severity,
+            "type": w.type,
+            "medication": w.medication,
+            "description": w.description,
+            "recommendation": w.recommendation,
+        }
+        for w in warnings_list
+    ]
+    
+    return PrescriptionDraftResponse(
+        prescription_id=prescription.prescription_id,
+        patient_id=prescription.patient_id,
+        doctor_id=prescription.doctor_id,
+        appointment_id=appointment_id,
+        medical_record_id=prescription.medical_record_id,
+        medications=prescription.medications or [],
+        status="DRAFT",
+        warnings=warning_dicts,
+        has_warnings=len(warning_dicts) > 0,
+        confidence=90,
+        basis="Restored draft prescription for appointment review.",
+        ai_metadata={"provider": "database", "model": "persisted-draft", "fallback_used": False},
+        notes=prescription.notes,
+        created_at=prescription.created_at,
+        updated_at=prescription.updated_at,
+    )
+
+
 @router.get("/appointment/{appointment_id}/", response_model=PrescriptionListResponse)
 async def list_appointment_prescriptions(
     appointment_id: UUID,
@@ -532,17 +800,47 @@ async def check_prescription_interactions(
                 detail="Doctors can only check interactions for their own patients",
             )
     
-    # Get patient allergies (stub - in reality would come from patient allergy records)
-    # For now, we'll use a static list or could be extended to fetch from a patient_allergies table
-    patient_allergies = []  # TODO: Fetch from patient allergy records
+    # Get patient allergies from request or patient record
+    patient_allergies = request.patient_allergies if request.patient_allergies is not None else []
+    current_medications = request.current_medications if request.current_medications is not None else []
     
-    # Convert MedicationCreate objects to dicts for check_interactions
+    # Convert MedicationCreate objects to dicts
     medications_dict = [med.model_dump() for med in medications]
     
-    # Check interactions
-    warnings = check_interactions(medications_dict, patient_allergies)
+    # Run comprehensive safety check from prescription agent
+    from app.services.prescriptions.prescription_agent import prescription_agent
+    safety_warnings = prescription_agent.check_safety(
+        medications=medications_dict,
+        patient_allergies=patient_allergies,
+        current_medications=current_medications,
+    )
+    
+    # Also run static table check for any additional pairs
+    static_warnings = check_interactions(medications_dict, patient_allergies)
+    
+    # Merge unique warnings
+    all_warnings: list[InteractionWarning] = []
+    seen_keys = set()
+    
+    for sw in safety_warnings:
+        key = (sw.type, sw.medication.lower())
+        if key not in seen_keys:
+            seen_keys.add(key)
+            all_warnings.append(InteractionWarning(
+                severity=sw.severity,
+                type=sw.type,
+                medication=sw.medication,
+                description=sw.description,
+                recommendation=sw.recommendation,
+            ))
+            
+    for stw in static_warnings:
+        key = (stw.type, stw.medication.lower())
+        if key not in seen_keys:
+            seen_keys.add(key)
+            all_warnings.append(stw)
     
     return InteractionCheckResponse(
-        warnings=warnings,
-        has_warnings=len(warnings) > 0
+        warnings=all_warnings,
+        has_warnings=len(all_warnings) > 0
     )

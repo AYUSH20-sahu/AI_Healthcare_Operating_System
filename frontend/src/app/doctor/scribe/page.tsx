@@ -947,11 +947,21 @@ export default function DoctorScribePage() {
                         </span>
                     </div>
 
-                    {clinicalBasis && (
-                        <div className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1.5 max-w-xl truncate" title={clinicalBasis}>
-                            <span className="font-semibold text-slate-700 dark:text-slate-300">💡 Clinical Basis:</span> {clinicalBasis}
-                        </div>
-                    )}
+                    <div className="flex items-center gap-3">
+                        {clinicalBasis && (
+                            <div className="text-[11px] text-slate-500 dark:text-slate-400 hidden xl:flex items-center gap-1.5 max-w-md truncate" title={clinicalBasis}>
+                                <span className="font-semibold text-slate-700 dark:text-slate-300">💡 Basis:</span> {clinicalBasis}
+                            </div>
+                        )}
+                        <Button
+                            size="sm"
+                            variant="primary"
+                            onClick={() => router.push(`/doctor/prescriptions?appointment_id=${selectedAppointmentId || ''}&patient_id=${patient?.patient_id || ''}`)}
+                            className="whitespace-nowrap shadow-sm text-xs"
+                        >
+                            💊 Draft Prescription (Safety Review) →
+                        </Button>
+                    </div>
                 </div>
             )}
 

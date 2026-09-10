@@ -73,6 +73,8 @@ class InteractionCheckRequest(BaseModel):
     """Schema for interaction check request."""
     patient_id: UUID = Field(..., description="Patient ID")
     medications: list[MedicationCreate] = Field(..., min_length=1, description="List of medications to check")
+    patient_allergies: list[str] | None = Field(None, description="Optional patient allergies")
+    current_medications: list[str] | None = Field(None, description="Optional current active medications")
 
 
 class InteractionWarning(BaseModel):
@@ -88,3 +90,39 @@ class InteractionCheckResponse(BaseModel):
     """Schema for interaction check response."""
     warnings: list[InteractionWarning]
     has_warnings: bool
+
+
+class PrescriptionDraftRequest(BaseModel):
+    """Schema for requesting AI-assisted prescription drafting with safety checks."""
+    patient_id: UUID = Field(..., description="Patient ID")
+    doctor_id: UUID = Field(..., description="Doctor ID")
+    appointment_id: UUID | None = Field(None, description="Optional appointment ID")
+    medical_record_id: UUID | None = Field(None, description="Optional medical record ID")
+    consultation_text: str | None = Field(None, description="Spoken transcript or consultation dialogue")
+    assessment: str | None = Field(None, description="Clinical assessment or diagnosis")
+    icd10_code: str | None = Field(None, description="Primary ICD-10 diagnostic code")
+    suggested_medications: list[MedicationCreate] | None = Field(None, description="Pre-identified medications from Scribe plan")
+    patient_allergies: list[str] | None = Field(None, description="List of patient allergies")
+    current_medications: list[str] | None = Field(None, description="List of patient's active baseline medications")
+    notes: str | None = Field(None, max_length=1000, description="Additional clinician directions")
+
+
+class PrescriptionDraftResponse(BaseModel):
+    """Schema returned after creating an AI prescription draft."""
+    prescription_id: UUID
+    patient_id: UUID
+    doctor_id: UUID
+    appointment_id: UUID | None = None
+    medical_record_id: UUID | None = None
+    medications: list[MedicationResponse]
+    status: str = "DRAFT"
+    warnings: list[InteractionWarning] = Field(default_factory=list)
+    has_warnings: bool = False
+    confidence: int = 90
+    basis: str = ""
+    ai_metadata: dict = Field(default_factory=dict)
+    notes: str | None = None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
