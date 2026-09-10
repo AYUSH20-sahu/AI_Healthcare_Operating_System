@@ -75,18 +75,17 @@ docker compose up
 - **Frontend** (Next.js + Tailwind): http://localhost:3000
 - **Backend** (FastAPI): http://localhost:8000
 - **API Docs** (OpenAPI): http://localhost:8000/docs
-- **PostgreSQL**: localhost:5432 (with healthcheck)
+- **PostgreSQL**: Managed Cloud PostgreSQL (Nhost)
 - **Redis**: localhost:6379 (with healthcheck)
 
 ### Docker Compose Services
-- `postgres` — PostgreSQL 16 with named volume `postgres_data`
 - `redis` — Redis 7 with persistence and named volume `redis_data`
 - `backend` — FastAPI with hot-reload (uvicorn --reload)
 - `frontend` — Next.js with hot-reload (npm run dev)
 
 ## Environment Variables
 
-Create `.env.local` from `.env.example` and configure:
+Create `.env` or `.env.local` and configure:
 
 ### Required API Keys
 ```bash
@@ -104,11 +103,11 @@ GROQ_API_KEY=your_groq_key
 # TTS Provider (M34 - stub for now)
 TTS_PROVIDER=mock
 
-# Database
-DATABASE_URL=postgresql://postgres:postgres@localhost:5432/ai_hos
+# Database (Nhost Managed PostgreSQL)
+DATABASE_URL=postgresql://postgres:@7HmkeZnqpfJSaB@icfbnbiumbflxblqcwdl.db.ap-south-1.nhost.run:5432/icfbnbiumbflxblqcwdl
 POSTGRES_USER=postgres
-POSTGRES_PASSWORD=postgres
-POSTGRES_DB=ai_hos
+POSTGRES_PASSWORD=@7HmkeZnqpfJSaB
+POSTGRES_DB=icfbnbiumbflxblqcwdl
 
 # Redis
 REDIS_URL=redis://localhost:6379/0

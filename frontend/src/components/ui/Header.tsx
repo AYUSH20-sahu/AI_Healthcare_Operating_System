@@ -3,9 +3,10 @@
 import React from 'react';
 import { ThemeToggle } from './ThemeToggle';
 import { Badge } from './Badge';
+import { useAuth } from '@/lib/auth';
 
 export interface HeaderProps {
-    currentRole?: 'doctor' | 'patient' | 'admin' | null;
+    currentRole?: 'doctor' | 'patient' | 'admin' | string | null;
     userName?: string;
     onLogout?: () => void;
     showNavLinks?: boolean;
@@ -17,6 +18,11 @@ export function Header({
     onLogout,
     showNavLinks = true,
 }: HeaderProps) {
+    const auth = useAuth();
+    const effectiveRole = currentRole !== undefined ? currentRole : (auth.user?.role || null);
+    const effectiveName = userName !== undefined ? userName : (auth.user?.full_name || auth.user?.email || null);
+    const effectiveLogout = onLogout || auth.logout;
+
     return (
         <header className="sticky top-0 z-30 w-full border-b border-slate-200/80 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
@@ -77,22 +83,22 @@ export function Header({
                 <div className="flex items-center gap-3">
                     <ThemeToggle />
 
-                    {currentRole ? (
+                    {effectiveRole ? (
                         <div className="flex items-center gap-3 pl-2 border-l border-slate-200 dark:border-slate-800">
                             <div className="text-right hidden sm:block">
                                 <p className="text-xs font-semibold text-slate-900 dark:text-slate-100">
-                                    {userName || 'Authenticated User'}
+                                    {effectiveName || 'Authenticated User'}
                                 </p>
                                 <span className="text-[10px] text-blue-600 dark:text-blue-400 uppercase font-mono tracking-wider">
-                                    {currentRole}
+                                    {effectiveRole}
                                 </span>
                             </div>
                             <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-300 font-semibold text-xs flex items-center justify-center border border-blue-200 dark:border-blue-500/30">
-                                {(userName || currentRole).charAt(0).toUpperCase()}
+                                {(effectiveName || effectiveRole).charAt(0).toUpperCase()}
                             </div>
-                            {onLogout && (
+                            {effectiveLogout && (
                                 <button
-                                    onClick={onLogout}
+                                    onClick={effectiveLogout}
                                     type="button"
                                     title="Sign out"
                                     className="p-1.5 text-slate-400 hover:text-rose-500 transition-colors rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"
@@ -111,6 +117,7 @@ export function Header({
                             Sign In
                         </a>
                     )}
+
                 </div>
             </div>
         </header>

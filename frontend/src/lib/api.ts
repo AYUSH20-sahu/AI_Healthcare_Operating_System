@@ -5,18 +5,59 @@
 
 const API_BASE = '/api/v1';
 
+export interface User {
+    user_id: string;
+    email: string;
+    full_name: string;
+    role: 'patient' | 'doctor' | 'admin' | 'nurse' | 'receptionist' | string;
+    is_active: boolean;
+    created_at: string;
+}
+
+export interface TokenResponse {
+    access_token: string;
+    refresh_token: string;
+    token_type: string;
+}
+
+export interface LoginRequest {
+    email: string;
+    password: string;
+}
+
+export interface SignupRequest {
+    email: string;
+    password: string;
+    full_name: string;
+    role?: string;
+}
+
 interface RequestOptions extends RequestInit {
     params?: Record<string, string | number | boolean | undefined>;
+    _retry?: boolean;
+}
+
+let isRefreshing = false;
+let refreshSubscribers: ((token: string) => void)[] = [];
+
+function subscribeTokenRefresh(cb: (token: string) => void) {
+    refreshSubscribers.push(cb);
+}
+
+function onTokenRefreshed(token: string) {
+    refreshSubscribers.forEach((cb) => cb(token));
+    refreshSubscribers = [];
 }
 
 async function request<T>(
     endpoint: string,
     options: RequestOptions = {}
 ): Promise<T> {
-    const { params, headers, ...fetchOptions } = options;
+    const { params, headers, _retry, ...fetchOptions } = options;
 
+    const baseOrigin = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
     // Build URL with query parameters
-    const url = new URL(`${API_BASE}${endpoint}`, window.location.origin);
+    const url = new URL(`${API_BASE}${endpoint}`, baseOrigin);
     if (params) {
         Object.entries(params).forEach(([key, value]) => {
             if (value !== undefined && value !== null) {
@@ -25,8 +66,8 @@ async function request<T>(
         });
     }
 
-    // Get auth token from localStorage
-    const token = localStorage.getItem('access_token');
+    // Get auth token from localStorage safely
+    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
 
     const defaultHeaders: HeadersInit = {
         'Content-Type': 'application/json',
@@ -39,9 +80,65 @@ async function request<T>(
         headers: defaultHeaders,
     });
 
+    // Handle 401 Unauthorized with token refresh if possible
+    if (response.status === 401 && !_retry && typeof window !== 'undefined') {
+        const refreshToken = localStorage.getItem('refresh_token');
+        const isAuthEndpoint = endpoint.includes('/auth/login') || endpoint.includes('/auth/refresh') || endpoint.includes('/auth/signup');
+
+        if (refreshToken && !isAuthEndpoint) {
+            if (!isRefreshing) {
+                isRefreshing = true;
+                try {
+                    const refreshUrl = new URL(`${API_BASE}/auth/refresh`, baseOrigin);
+                    refreshUrl.searchParams.append('refresh_token', refreshToken);
+
+                    const refreshRes = await fetch(refreshUrl.toString(), {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                    });
+
+                    if (refreshRes.ok) {
+                        const newTokens: TokenResponse = await refreshRes.json();
+                        localStorage.setItem('access_token', newTokens.access_token);
+                        localStorage.setItem('refresh_token', newTokens.refresh_token);
+                        isRefreshing = false;
+                        onTokenRefreshed(newTokens.access_token);
+                        // Retry original request
+                        return request<T>(endpoint, { ...options, _retry: true });
+                    } else {
+                        throw new Error('Refresh failed');
+                    }
+                } catch {
+                    isRefreshing = false;
+                    localStorage.removeItem('access_token');
+                    localStorage.removeItem('refresh_token');
+                    localStorage.removeItem('auth_user');
+                    window.dispatchEvent(new CustomEvent('aihos:auth_expired'));
+                }
+            } else {
+                // Wait for refreshing process
+                return new Promise<T>((resolve, reject) => {
+                    subscribeTokenRefresh(() => {
+                        request<T>(endpoint, { ...options, _retry: true })
+                            .then(resolve)
+                            .catch(reject);
+                    });
+                });
+            }
+        }
+    }
+
     if (!response.ok) {
         const error = await response.json().catch(() => ({}));
-        throw new Error(error.error?.message || `HTTP ${response.status}`);
+        let message = `HTTP ${response.status}`;
+        if (typeof error.detail === 'string') {
+            message = error.detail;
+        } else if (Array.isArray(error.detail)) {
+            message = error.detail.map((d: { msg?: string }) => d.msg || 'Validation error').join(', ');
+        } else if (error.error?.message) {
+            message = error.error.message;
+        }
+        throw new Error(message);
     }
 
     // Handle 204 No Content
@@ -56,8 +153,8 @@ export const api = {
     get: <T>(endpoint: string, params?: Record<string, string | number | boolean | undefined>) =>
         request<T>(endpoint, { method: 'GET', params }),
 
-    post: <T>(endpoint: string, data: unknown) =>
-        request<T>(endpoint, { method: 'POST', body: JSON.stringify(data) }),
+    post: <T>(endpoint: string, data?: unknown, params?: Record<string, string | number | boolean | undefined>) =>
+        request<T>(endpoint, { method: 'POST', body: data !== undefined ? JSON.stringify(data) : undefined, params }),
 
     put: <T>(endpoint: string, data: unknown) =>
         request<T>(endpoint, { method: 'PUT', body: JSON.stringify(data) }),
@@ -65,6 +162,22 @@ export const api = {
     delete: <T>(endpoint: string) =>
         request<T>(endpoint, { method: 'DELETE' }),
 };
+
+// Auth API
+export const authApi = {
+    login: (credentials: LoginRequest) =>
+        api.post<TokenResponse>('/auth/login', credentials),
+
+    signup: (data: SignupRequest) =>
+        api.post<User>('/auth/signup', data),
+
+    refresh: (refreshToken: string) =>
+        api.post<TokenResponse>('/auth/refresh', undefined, { refresh_token: refreshToken }),
+
+    me: () =>
+        api.get<User>('/auth/me'),
+};
+
 
 // Types matching backend schemas
 export interface Patient {
@@ -356,3 +469,50 @@ export interface InteractionWarning {
     description: string;
     recommendation?: string;
 }
+
+// Voice Notes API
+export interface VoiceNote {
+    voice_note_id: string;
+    appointment_id: string;
+    doctor_id: string;
+    patient_id: string;
+    file_path: string;
+    file_name: string;
+    content_type: string;
+    file_size: number;
+    duration_seconds?: number;
+    transcript?: string;
+    transcription_status: 'pending' | 'processing' | 'completed' | 'failed';
+    created_at: string;
+    updated_at: string;
+}
+
+export interface VoiceNoteUploadResponse {
+    voice_note_id: string;
+    message: string;
+}
+
+export interface VoiceNoteListResponse {
+    voice_notes: VoiceNote[];
+    total: number;
+    page: number;
+    page_size: number;
+    total_pages: number;
+}
+
+export const voiceNotesApi = {
+    upload: (formData: FormData) =>
+        api.post<VoiceNoteUploadResponse>('/voice-notes/upload/', formData),
+
+    get: (voiceNoteId: string) =>
+        api.get<VoiceNote>(`/voice-notes/${voiceNoteId}/`),
+
+    listByAppointment: (appointmentId: string, params?: { page?: number; page_size?: number }) =>
+        api.get<VoiceNoteListResponse>(`/voice-notes/appointment/${appointmentId}/`, params),
+
+    update: (voiceNoteId: string, data: { transcript?: string; transcription_status?: string }) =>
+        api.put<VoiceNote>(`/voice-notes/${voiceNoteId}/`, data),
+
+    delete: (voiceNoteId: string) =>
+        api.delete<void>(`/voice-notes/${voiceNoteId}/`),
+};

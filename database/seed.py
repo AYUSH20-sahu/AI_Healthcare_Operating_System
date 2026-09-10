@@ -37,7 +37,10 @@ if env_path.exists():
     from dotenv import load_dotenv
     load_dotenv(env_path)
 
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql+asyncpg://postgres:postgres@localhost:5432/ai_hos")
+DATABASE_URL = os.getenv(
+    "DATABASE_URL",
+    "postgresql+asyncpg://postgres:@7HmkeZnqpfJSaB@icfbnbiumbflxblqcwdl.db.ap-south-1.nhost.run:5432/icfbnbiumbflxblqcwdl"
+)
 
 # Ensure asyncpg driver
 if DATABASE_URL.startswith("postgresql://"):
@@ -69,6 +72,10 @@ async def seed_database():
                 return
 
             print(f"Found tables: {tables}")
+
+            # Seed users
+            users = await seed_users(session)
+            print(f"Seeded {len(users)} users")
 
             # Seed doctors
             doctors = await seed_doctors(session)
@@ -103,6 +110,45 @@ async def seed_database():
             raise
         finally:
             await engine.dispose()
+
+
+async def seed_users(session: AsyncSession):
+    """Seed test persona users for authentication."""
+    users_data = [
+        {
+            "user_id": uuid.uuid4(),
+            "email": "doctor@test.com",
+            "hashed_password": pwd_context.hash("doctorpassword123"),
+            "full_name": "Dr. Rajesh Sharma",
+            "role": "doctor",
+            "is_active": True,
+        },
+        {
+            "user_id": uuid.uuid4(),
+            "email": "patient@test.com",
+            "hashed_password": pwd_context.hash("patientpassword123"),
+            "full_name": "Amit Kumar",
+            "role": "patient",
+            "is_active": True,
+        },
+        {
+            "user_id": uuid.uuid4(),
+            "email": "admin@test.com",
+            "hashed_password": pwd_context.hash("adminpassword123"),
+            "full_name": "Institutional Admin",
+            "role": "admin",
+            "is_active": True,
+        },
+    ]
+
+    for user in users_data:
+        await session.execute(text("""
+            INSERT INTO users (user_id, email, hashed_password, full_name, role, is_active, created_at, updated_at)
+            VALUES (:user_id, :email, :hashed_password, :full_name, :role, :is_active, NOW(), NOW())
+            ON CONFLICT (email) DO NOTHING
+        """), user)
+
+    return users_data
 
 
 async def seed_doctors(session: AsyncSession):

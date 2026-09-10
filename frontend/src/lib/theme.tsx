@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
 
-type Theme = 'light' | 'dark' | 'system';
+export type Theme = 'light' | 'dark' | 'system';
 
 interface ThemeContextType {
     theme: Theme;
@@ -16,46 +16,59 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     const [theme, setThemeState] = useState<Theme>('system');
     const [resolvedTheme, setResolvedTheme] = useState<'light' | 'dark'>('dark');
 
-    useEffect(() => {
-        // Read stored theme preference from localStorage
-        const storedTheme = localStorage.getItem('ai_hos_theme') as Theme | null;
-        if (storedTheme && ['light', 'dark', 'system'].includes(storedTheme)) {
-            setThemeState(storedTheme);
-        }
-    }, []);
+    // Synchronize DOM with active theme
+    const applyToDom = (t: Theme): 'light' | 'dark' => {
+        if (typeof window === 'undefined') return 'dark';
 
-    useEffect(() => {
-        const root = document.documentElement;
         const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+        const isDark = t === 'system' ? mediaQuery.matches : t === 'dark';
+        const effective: 'light' | 'dark' = isDark ? 'dark' : 'light';
 
-        const applyTheme = () => {
-            const systemIsDark = mediaQuery.matches;
-            const effective = theme === 'system' ? (systemIsDark ? 'dark' : 'light') : theme;
+        const root = document.documentElement;
+        if (effective === 'dark') {
+            root.classList.add('dark');
+            root.setAttribute('data-theme', 'dark');
+            root.style.colorScheme = 'dark';
+        } else {
+            root.classList.remove('dark');
+            root.setAttribute('data-theme', 'light');
+            root.style.colorScheme = 'light';
+        }
 
-            setResolvedTheme(effective);
+        setResolvedTheme(effective);
+        return effective;
+    };
 
-            if (effective === 'dark') {
-                root.classList.add('dark');
-            } else {
-                root.classList.remove('dark');
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+
+        const storedTheme = localStorage.getItem('ai_hos_theme') as Theme | null;
+        const initialTheme: Theme =
+            storedTheme && ['light', 'dark', 'system'].includes(storedTheme)
+                ? storedTheme
+                : 'system';
+
+        setThemeState(initialTheme);
+        applyToDom(initialTheme);
+
+        const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+        const handleMediaChange = () => {
+            const currentStored = localStorage.getItem('ai_hos_theme') as Theme | null;
+            if (!currentStored || currentStored === 'system') {
+                applyToDom('system');
             }
         };
 
-        applyTheme();
-
-        const handleChange = () => {
-            if (theme === 'system') {
-                applyTheme();
-            }
-        };
-
-        mediaQuery.addEventListener('change', handleChange);
-        return () => mediaQuery.removeEventListener('change', handleChange);
-    }, [theme]);
+        mediaQuery.addEventListener('change', handleMediaChange);
+        return () => mediaQuery.removeEventListener('change', handleMediaChange);
+    }, []);
 
     const setTheme = (newTheme: Theme) => {
         setThemeState(newTheme);
-        localStorage.setItem('ai_hos_theme', newTheme);
+        if (typeof window !== 'undefined') {
+            localStorage.setItem('ai_hos_theme', newTheme);
+            applyToDom(newTheme);
+        }
     };
 
     return (

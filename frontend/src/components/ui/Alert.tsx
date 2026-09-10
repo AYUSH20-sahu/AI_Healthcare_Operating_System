@@ -6,12 +6,14 @@ export interface AlertProps extends Omit<React.HTMLAttributes<HTMLDivElement>, '
     variant?: 'info' | 'warning' | 'error' | 'success' | 'emergency';
     title?: React.ReactNode;
     icon?: React.ReactNode;
+    onClose?: () => void;
 }
 
 export function Alert({
     variant = 'info',
     title,
     icon,
+    onClose,
     children,
     className = '',
     ...props
@@ -59,14 +61,27 @@ export function Alert({
     return (
         <div
             role="alert"
-            className={`p-4 rounded-xl border flex items-start gap-3.5 text-xs ${variantStyles[variant]} ${className}`}
+            className={`p-4 rounded-xl border flex items-start gap-3.5 text-xs relative ${variantStyles[variant]} ${className}`}
             {...props}
         >
             <div className="mt-0.5">{icon || defaultIcons[variant]}</div>
-            <div className="flex-1 space-y-1">
+            <div className="flex-1 space-y-1 pr-4">
                 {title && <h5 className="font-semibold text-sm leading-tight">{title}</h5>}
                 <div className="leading-relaxed opacity-95">{children}</div>
             </div>
+            {onClose && (
+                <button
+                    type="button"
+                    onClick={onClose}
+                    className="absolute top-3.5 right-3.5 text-current opacity-60 hover:opacity-100 transition-opacity p-1 rounded-lg"
+                    aria-label="Close alert"
+                >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            )}
         </div>
     );
 }
+
