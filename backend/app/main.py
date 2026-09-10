@@ -48,7 +48,7 @@ async def startup_event():
     """Ensure database connection initialized and default test personas exist."""
     from app.database import AsyncSessionLocal, init_db
     from app.models import UserRole
-    from app.services.auth.service import UserCreate, create_user, get_user_by_email
+    from app.services.auth.service import UserCreate, create_user, get_password_hash, get_user_by_email
 
     try:
         init_db()
@@ -56,6 +56,7 @@ async def startup_event():
             ("doctor@test.com", "doctorpassword123", "Dr. Rajesh Sharma", "doctor"),
             ("patient@test.com", "patientpassword123", "Amit Kumar", "patient"),
             ("admin@test.com", "adminpassword123", "Institutional Admin", "admin"),
+            ("admin@aihos.org", "adminpassword123", "AI-HOS Lead Admin", "admin"),
         ]
         if AsyncSessionLocal:
             async with AsyncSessionLocal() as session:
@@ -72,6 +73,14 @@ async def startup_event():
                             ),
                             role=role,
                         )
+                        print(f"[AI-HOS Startup] Created persona: {email} ({role})")
+                    else:
+                        # Ensure credentials, role, and active status are freshly validated
+                        existing.hashed_password = get_password_hash(password)
+                        existing.role = UserRole(role)
+                        existing.is_active = True
+                        await session.commit()
+                        print(f"[AI-HOS Startup] Verified & updated persona: {email} ({role})")
     except Exception as e:
         print(f"[AI-HOS Startup] Notice: Test persona auto-seed check skipped or deferred: {e}")
 

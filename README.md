@@ -78,6 +78,21 @@ docker compose up
 - **PostgreSQL**: Managed Cloud PostgreSQL (Nhost)
 - **Redis**: localhost:6379 (with healthcheck)
 
+### Default User Credentials & Personas
+
+The system automatically provisions verified test personas on startup for local development and review:
+
+| Role | Email (User ID) | Password | Clearance & Access Route |
+| :--- | :--- | :--- | :--- |
+| **System Administrator** | `admin@test.com` <br> *(Alt: `admin@aihos.org`)* | `adminpassword123` | **Level 4 Clearance** — Admin Console (`/admin`), User & Clinician Provisioning (`/admin/users`), Immutable Audit Logs (`/admin/audit`) |
+| **Physician / Doctor** | `doctor@test.com` | `doctorpassword123` | **Clinical Clearance** — Doctor Cockpit (`/doctor`), Ambient Scribe (`/doctor/scribe`), Review Gate (`/doctor/review`) |
+| **Patient** | `patient@test.com` | `patientpassword123` | **Patient Portal** — Care Dashboard (`/patient`), Appointment Booking, PHR Viewer |
+
+> [!NOTE]
+> - Public registration (`/auth/register`) is strictly for Patients.
+> - Doctor, Nurse, and Staff accounts must be provisioned by an Administrator via `/admin/users`.
+> - Login (`/auth/login`) determines the user's role from their server-issued JWT and automatically routes them to the corresponding workspace.
+
 ### Docker Compose Services
 - `redis` — Redis 7 with persistence and named volume `redis_data`
 - `backend` — FastAPI with hot-reload (uvicorn --reload)
@@ -162,14 +177,14 @@ python -m pytest backend/tests/ ai-services/ -v
 
 ### Authentication
 ```bash
-# Login
+# Login (returns access_token and refresh_token)
 curl -X POST http://localhost:8000/api/v1/auth/login \
-  -H "Content-Type: application/x-www-form-urlencoded" \
-  -d "username=doctor@test.com&password=password123"
+  -H "Content-Type: application/json" \
+  -d '{"email": "admin@test.com", "password": "adminpassword123"}'
 
-# Use token
+# Access protected Admin API
 export TOKEN="your_access_token"
-curl -H "Authorization: Bearer $TOKEN" http://localhost:8000/api/v1/patients/
+curl -H "Authorization: Bearer $TOKEN" http://localhost:8000/api/v1/admin/users/
 ```
 
 ### Voice Note → Clinical Note (M18→M21)

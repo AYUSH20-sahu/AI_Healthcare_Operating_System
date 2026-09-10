@@ -518,6 +518,9 @@ export const voiceNotesApi = {
 
     delete: (voiceNoteId: string) =>
         api.delete<void>(`/voice-notes/${voiceNoteId}/`),
+
+    getAudioUrl: (voiceNoteId: string) =>
+        `${API_BASE}/voice-notes/${voiceNoteId}/audio`,
 };
 
 export interface AdminDoctorProfile {

@@ -16,6 +16,7 @@ from fastapi import (
     UploadFile,
     status,
 )
+from fastapi.responses import FileResponse
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -26,7 +27,16 @@ from app.api.schemas.voice_note import (
     VoiceNoteUploadResponse,
 )
 from app.database import get_db
-from app.models import Appointment, Doctor, Patient, User, UserRole, VoiceNote
+from app.models import (
+    Appointment,
+    AuditLog,
+    AuditOutcome,
+    Doctor,
+    Patient,
+    User,
+    UserRole,
+    VoiceNote,
+)
 from app.services.auth.service import get_current_active_user
 
 router = APIRouter(prefix="/voice-notes", tags=["voice-notes"])
@@ -38,18 +48,25 @@ STORAGE_DIR.mkdir(parents=True, exist_ok=True)
 # Allowed audio MIME types
 ALLOWED_CONTENT_TYPES = {
     "audio/webm",
+    "video/webm",
     "audio/mp3",
     "audio/wav",
     "audio/ogg",
     "audio/mpeg",
     "audio/x-wav",
+    "audio/mp4",
+    "audio/m4a",
+    "audio/x-m4a",
 }
+MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024  # 50 MB limit
 
 
 @router.post("/upload/", response_model=VoiceNoteUploadResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=VoiceNoteUploadResponse, status_code=status.HTTP_201_CREATED)
 async def upload_voice_note(
     appointment_id: UUID = Form(...),
     file: UploadFile = File(...),
+    duration_seconds: int | None = Form(None),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
@@ -93,10 +110,11 @@ async def upload_voice_note(
     doctor_id = doctor.doctor_id if doctor else appointment.doctor_id
     
     # Validate file type
-    if file.content_type not in ALLOWED_CONTENT_TYPES:
+    content_type = (file.content_type or "").lower()
+    if content_type not in ALLOWED_CONTENT_TYPES:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid file type. Allowed types: {', '.join(ALLOWED_CONTENT_TYPES)}",
+            detail=f"Invalid file type '{content_type}'. Allowed types: {', '.join(sorted(ALLOWED_CONTENT_TYPES))}",
         )
     
     # Generate unique file path
@@ -114,6 +132,23 @@ async def upload_voice_note(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to save file: {e!s}",
         )
+
+    # Validate file size
+    if file_size == 0:
+        if file_path.exists():
+            file_path.unlink()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Empty audio file received",
+        )
+
+    if file_size > MAX_FILE_SIZE_BYTES:
+        if file_path.exists():
+            file_path.unlink()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"File exceeds maximum allowed size of 50 MB (received {file_size} bytes)",
+        )
     
     # Create voice note record
     voice_note = VoiceNote(
@@ -122,18 +157,91 @@ async def upload_voice_note(
         patient_id=appointment.patient_id,
         file_path=str(file_path),
         file_name=file.filename or unique_filename,
-        content_type=file.content_type,
+        content_type=content_type,
         file_size=file_size,
-        duration_seconds=None,  # Could be extracted with ffprobe
+        duration_seconds=duration_seconds,
         transcription_status="pending",
     )
     db.add(voice_note)
+    await db.flush()
+
+    # Immutable Audit Log
+    audit_entry = AuditLog(
+        user_id=current_user.user_id,
+        action="UPLOAD_VOICE_NOTE",
+        resource_type="voice_notes",
+        resource_id=voice_note.voice_note_id,
+        outcome=AuditOutcome.SUCCESS,
+        details={
+            "appointment_id": str(appointment_id),
+            "file_name": voice_note.file_name,
+            "duration_seconds": duration_seconds,
+            "file_size": file_size,
+            "uploaded_by": str(current_user.user_id),
+        },
+    )
+    db.add(audit_entry)
     await db.commit()
     await db.refresh(voice_note)
     
     return VoiceNoteUploadResponse(
         voice_note_id=voice_note.voice_note_id,
         message="Voice note uploaded successfully",
+    )
+
+
+@router.get("/{voice_note_id}/audio")
+async def stream_voice_note_audio(
+    voice_note_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Stream audio file for in-browser playback."""
+    voice_note = await db.get(VoiceNote, voice_note_id)
+    if not voice_note:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Voice note not found",
+        )
+
+    # RBAC check
+    if current_user.role == UserRole.DOCTOR:
+        doctor_result = await db.execute(
+            select(Doctor).where(Doctor.user_id == current_user.user_id)
+        )
+        doctor = doctor_result.scalar_one_or_none()
+        if not doctor or voice_note.doctor_id != doctor.doctor_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Doctors can only access their own voice notes",
+            )
+    elif current_user.role == UserRole.PATIENT:
+        patient_result = await db.execute(
+            select(Patient).where(Patient.user_id == current_user.user_id)
+        )
+        patient = patient_result.scalar_one_or_none()
+        if not patient or voice_note.patient_id != patient.patient_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Patients can only access their own voice notes",
+            )
+    elif current_user.role != UserRole.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Insufficient permissions to access voice note audio",
+        )
+
+    file_path = Path(voice_note.file_path)
+    if not file_path.exists():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Audio file not found on storage",
+        )
+
+    return FileResponse(
+        path=str(file_path),
+        media_type=voice_note.content_type or "audio/webm",
+        filename=voice_note.file_name,
     )
 
 
