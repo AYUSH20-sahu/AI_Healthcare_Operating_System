@@ -56,6 +56,9 @@ class LLMResponse:
     """Response from LLM provider."""
     content: str
     model: str
+    provider: str = "mock"
+    fallback_used: bool = False
+    latency_ms: float = 0.0
     usage: dict | None = None
     finish_reason: str | None = None
 
@@ -536,12 +539,16 @@ class FallbackLLMProvider(LLMProviderBase):
             logger.info(f"Attempting generation with primary provider: {self._primary.name}")
             response = await self._primary.generate(messages, model, temperature, max_tokens, **kwargs)
             logger.info(f"Generation successful with primary provider: {self._primary.name}")
+            response.provider = self._primary.name
+            response.fallback_used = False
             return response
         except Exception as e:
             logger.warning(f"Primary provider {self._primary.name} failed: {e}. Falling back to {self._fallback.name}")
             try:
                 response = await self._fallback.generate(messages, model, temperature, max_tokens, **kwargs)
                 logger.info(f"Generation successful with fallback provider: {self._fallback.name}")
+                response.provider = self._fallback.name
+                response.fallback_used = True
                 return response
             except Exception as fallback_error:
                 logger.error(f"Fallback provider {self._fallback.name} also failed: {fallback_error}")

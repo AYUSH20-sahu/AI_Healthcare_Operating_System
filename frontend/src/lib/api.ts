@@ -571,4 +571,93 @@ export const adminUsersApi = {
 
     resetPassword: (userId: string, newPassword: string) =>
         api.post<{ message: string }>(`/admin/users/${userId}/reset-password`, { new_password: newPassword }),
+};
+
+export interface AIMetadata {
+    provider: string;
+    model: string;
+    fallback_used: boolean;
+    latency_ms: number;
+    confidence: number;
+    tokens?: { prompt_tokens?: number; completion_tokens?: number; total_tokens?: number } | null;
+}
+
+export interface CopilotAnalysisRequest {
+    transcription?: string;
+    patient_id?: string;
+    patient_name?: string;
+    appointment_id?: string;
+    vitals?: Record<string, any>;
+    allergies?: any[];
+    chief_complaint?: string;
+    language?: string;
+}
+
+export interface CopilotAnalysisData {
+    soap: {
+        subjective: {
+            chief_complaint: string;
+            history_of_present_illness: string;
+            review_of_systems?: string;
+        };
+        objective: {
+            vitals_reviewed: string;
+            physical_exam: string;
+        };
+        assessment: {
+            primary_diagnosis: string;
+            icd10_code: string;
+            differentials: string[];
+            ai_confidence: number;
+            clinical_rationale: string;
+        };
+        plan: {
+            medications: Array<{
+                name: string;
+                dosage: string;
+                frequency: string;
+                duration: string;
+                instructions?: string;
+            }>;
+            diagnostics_ordered: string[];
+            counseling: string;
+            follow_up: string;
+        };
+    };
+    icd10_codes: string[];
+    medications: Array<{
+        name: string;
+        dosage: string;
+        frequency: string;
+        duration: string;
+        instructions?: string;
+    }>;
+    diagnostics_ordered: string[];
+    confidence: number;
+}
+
+export interface CopilotAnalysisResponse {
+    success: boolean;
+    status: 'completed' | 'fallback_to_human' | 'failed' | string;
+    task_id: string;
+    data: CopilotAnalysisData | null;
+    ai_metadata: AIMetadata;
+    requires_human_fallback: boolean;
+    fallback_reason: string | null;
+}
+
+export interface AIProviderHealthResponse {
+    active_llm: string;
+    active_stt: string;
+    llm_providers: string[];
+    stt_providers: string[];
+    failover_ready: boolean;
+}
+
+export const copilotApi = {
+    analyze: (data: CopilotAnalysisRequest) =>
+        api.post<CopilotAnalysisResponse>('/copilot/analyze', data),
+
+    getProviders: () =>
+        api.get<AIProviderHealthResponse>('/copilot/providers'),
 };

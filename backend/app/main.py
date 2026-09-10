@@ -11,6 +11,7 @@ from app.api import (
     prescriptions,
     voice_notes,
     admin_users,
+    copilot,
 )
 from app.core.config import settings
 from app.core.exceptions import register_exception_handlers
@@ -41,6 +42,7 @@ app.include_router(prescriptions.router, prefix="/api/v1")
 app.include_router(voice_notes.router, prefix="/api/v1")
 app.include_router(approval.router, prefix="/api/v1")
 app.include_router(admin_users.router, prefix="/api/v1")
+app.include_router(copilot.router, prefix="/api/v1")
 
 
 @app.on_event("startup")

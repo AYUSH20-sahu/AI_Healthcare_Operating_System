@@ -27,7 +27,7 @@ export interface SoapNoteData {
             dosage: string;
             frequency: string;
             duration: string;
-            instructions: string;
+            instructions?: string;
         }[];
         diagnostics_ordered: string[];
         counseling: string;
@@ -35,8 +35,14 @@ export interface SoapNoteData {
     };
 }
 
-interface SoapExtractionPreviewProps {
+export interface SoapExtractionPreviewProps {
     soapData: SoapNoteData | null;
+    aiMetadata?: {
+        provider?: string;
+        model?: string;
+        fallback_used?: boolean;
+        latency_ms?: number;
+    } | null;
     isGenerating?: boolean;
     onCommitToEhr?: (data: SoapNoteData) => void;
     onRegenerate?: () => void;
@@ -45,6 +51,7 @@ interface SoapExtractionPreviewProps {
 
 export function SoapExtractionPreview({
     soapData,
+    aiMetadata,
     isGenerating = false,
     onCommitToEhr,
     onRegenerate,
@@ -114,7 +121,18 @@ export function SoapExtractionPreview({
                     </div>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                    {aiMetadata?.fallback_used ? (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800 shadow-sm" title={`Primary provider experienced high latency or timeout. Served via ${aiMetadata.provider} fallback.`}>
+                            <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                            ⚡ Failover Mesh ({aiMetadata.provider}) {aiMetadata.latency_ms ? `• ${aiMetadata.latency_ms}ms` : ''}
+                        </span>
+                    ) : aiMetadata?.provider ? (
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800 shadow-sm" title={`Primary model: ${aiMetadata.model || 'nvidia/nemotron-3-ultra-550b-a55b'}`}>
+                            <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                            ✨ {aiMetadata.provider.toUpperCase()} Primary {aiMetadata.latency_ms ? `• ${aiMetadata.latency_ms}ms` : ''}
+                        </span>
+                    ) : null}
                     <AIConfidenceBadge
                         confidence={editableSoap.assessment.ai_confidence}
                         basis={editableSoap.assessment.clinical_rationale}

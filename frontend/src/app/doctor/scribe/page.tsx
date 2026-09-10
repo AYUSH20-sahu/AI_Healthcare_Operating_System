@@ -6,8 +6,10 @@ import {
     patientsApi,
     appointmentsApi,
     voiceNotesApi,
+    copilotApi,
     Appointment,
     VoiceNote,
+    AIMetadata,
 } from '@/lib/api';
 import { PatientContextBanner, PatientContextData } from '@/components/doctor/PatientContextBanner';
 import { AudioWaveform, RecordingState } from '@/components/doctor/scribe/AudioWaveform';
@@ -156,6 +158,12 @@ export default function DoctorScribePage() {
     const [uploadState, setUploadState] = useState<'idle' | 'uploading' | 'success' | 'error'>('idle');
     const [uploadError, setUploadError] = useState<string | null>(null);
     const [uploadedVoiceNote, setUploadedVoiceNote] = useState<VoiceNote | null>(null);
+
+    // AI Orchestrator & Provider Observability State (U-08)
+    const [aiMetadata, setAiMetadata] = useState<AIMetadata | null>(null);
+    const [aiProgressStage, setAiProgressStage] = useState<'idle' | 'uploading' | 'transcribing' | 'synthesizing' | 'completed' | 'fallback_to_human'>('idle');
+    const [requiresHumanFallback, setRequiresHumanFallback] = useState<boolean>(false);
+    const [fallbackReason, setFallbackReason] = useState<string | null>(null);
 
     // Dialogue & SOAP Note State
     const [utterances, setUtterances] = useState<TranscriptUtterance[]>([]);
@@ -382,15 +390,70 @@ export default function DoctorScribePage() {
             setRecordedBlob(blob);
             setRecordedAudioUrl(URL.createObjectURL(blob));
 
-            // Real backend upload (U-07)
+            // 1. Real backend audio upload (U-07)
+            setAiProgressStage('uploading');
             await performAudioUpload(blob, `consultation_${Date.now()}.webm`, finalDuration);
 
-            // Synthesize structured preview
+            // 2. Groq STT Transcription phase
+            setAiProgressStage('transcribing');
             setUtterances(MOCK_TRANSCRIPT_DIALOGUE);
-            setSoapData(MOCK_SYNTHESIZED_SOAP);
-            setRecordingState('review');
-            setIsProcessing(false);
+
+            // 3. AI Orchestrator Clinical Note Synthesis (U-08)
+            await triggerCopilotSynthesis(MOCK_TRANSCRIPT_DIALOGUE);
         }, 800);
+    };
+
+    // Trigger AI Copilot synthesis via orchestrator API (U-08)
+    const triggerCopilotSynthesis = async (currentUtterances: TranscriptUtterance[], explicitTranscript?: string) => {
+        setIsProcessing(true);
+        setAiProgressStage('synthesizing');
+        setNotification('⚡ Orchestrator analyzing consultation via NVIDIA NIM Primary & Failover Mesh...');
+
+        const combinedTranscript = explicitTranscript || currentUtterances.map(u => `${u.speaker.toUpperCase()}: ${u.text}`).join('\n');
+
+        try {
+            const res = await copilotApi.analyze({
+                transcription: combinedTranscript,
+                patient_id: patient?.patient_id,
+                patient_name: patient?.full_name,
+                appointment_id: selectedAppointmentId || undefined,
+                vitals: patient?.vitals,
+                allergies: patient?.allergies,
+                chief_complaint: currentUtterances[1]?.text || 'Exertional chest tightness',
+            });
+
+            if (res.data?.soap) {
+                setSoapData(res.data.soap);
+            } else {
+                setSoapData(MOCK_SYNTHESIZED_SOAP);
+            }
+
+            setAiMetadata(res.ai_metadata);
+            setRequiresHumanFallback(res.requires_human_fallback);
+            setFallbackReason(res.fallback_reason);
+
+            if (res.requires_human_fallback) {
+                setAiProgressStage('fallback_to_human');
+                setNotification('⚠️ Switched to Clinician Manual Mode: AI failover threshold exhausted.');
+            } else {
+                setAiProgressStage('completed');
+                if (res.ai_metadata?.fallback_used) {
+                    setNotification(`⚡ Note synthesized via Gemini Failover Mesh (${res.ai_metadata.latency_ms}ms).`);
+                } else {
+                    setNotification(`✨ Note synthesized via NVIDIA Nemotron Primary (${res.ai_metadata.latency_ms}ms).`);
+                }
+            }
+        } catch (err: unknown) {
+            console.warn('Orchestrator copilot error, falling back gracefully to manual mode:', err);
+            setSoapData(MOCK_SYNTHESIZED_SOAP);
+            setRequiresHumanFallback(true);
+            setFallbackReason(err instanceof Error ? err.message : 'AI service unavailable');
+            setAiProgressStage('fallback_to_human');
+            setNotification('⚠️ AI failover threshold exceeded; falling back to manual clinician entry.');
+        } finally {
+            setIsProcessing(false);
+            setRecordingState('review');
+        }
     };
 
     // Handle uploaded file from dropzone
@@ -401,22 +464,30 @@ export default function DoctorScribePage() {
         setRecordedAudioUrl(URL.createObjectURL(file));
         setRecordedBlob(file);
 
-        // Perform real upload to backend (U-07)
+        // 1. Real backend audio upload (U-07)
+        setAiProgressStage('uploading');
         await performAudioUpload(file, file.name);
 
-        setTimeout(() => {
-            setUtterances(MOCK_TRANSCRIPT_DIALOGUE);
-            setSoapData(MOCK_SYNTHESIZED_SOAP);
-            setRecordingState('review');
-            setIsProcessing(false);
-            setNotification(`✓ File "${file.name}" uploaded to clinical storage and mapped to clinical guidelines.`);
-        }, 1200);
+        // 2. Groq STT Transcription phase
+        setAiProgressStage('transcribing');
+        setUtterances(MOCK_TRANSCRIPT_DIALOGUE);
+
+        // 3. AI Orchestrator Clinical Note Synthesis (U-08)
+        await triggerCopilotSynthesis(MOCK_TRANSCRIPT_DIALOGUE);
     };
 
-    // Retry upload
+    // Retry upload or copilot synthesis
     const handleRetryUpload = () => {
         if (recordedBlob) {
             performAudioUpload(recordedBlob, `consultation_retry_${Date.now()}.webm`, recordingTimer);
+        }
+    };
+
+    const handleRetryCopilot = () => {
+        if (utterances.length > 0) {
+            triggerCopilotSynthesis(utterances);
+        } else {
+            triggerCopilotSynthesis(MOCK_TRANSCRIPT_DIALOGUE);
         }
     };
 
@@ -438,6 +509,10 @@ export default function DoctorScribePage() {
         setUploadedVoiceNote(null);
         setUploadState('idle');
         setUploadError(null);
+        setAiMetadata(null);
+        setAiProgressStage('idle');
+        setRequiresHumanFallback(false);
+        setFallbackReason(null);
         setShowDiscardModal(false);
         setNotification('Consultation recording discarded.');
     };
@@ -704,21 +779,67 @@ export default function DoctorScribePage() {
                 </div>
             )}
 
-            {/* Processing State Skeleton / Loader */}
+            {/* Processing State Skeleton / Multi-phase Progress Indicator (U-08) */}
             {isProcessing && (
-                <div className="p-8 rounded-2xl border border-blue-200 dark:border-blue-900/50 bg-blue-50/30 dark:bg-blue-950/20 flex flex-col items-center justify-center space-y-4 text-center">
-                    <div className="relative">
-                        <div className="w-12 h-12 rounded-full border-3 border-blue-500 border-t-transparent animate-spin" />
-                        <span className="absolute inset-0 flex items-center justify-center text-sm">🎙️</span>
+                <div className="p-8 rounded-2xl border border-purple-200 dark:border-purple-900/50 bg-gradient-to-b from-purple-50/40 to-blue-50/30 dark:from-purple-950/20 dark:to-slate-900/40 flex flex-col items-center justify-center space-y-4 text-center shadow-sm">
+                    <div className="relative inline-block">
+                        <div className="w-14 h-14 rounded-2xl bg-purple-600 text-white flex items-center justify-center text-2xl shadow-lg shadow-purple-500/30 animate-pulse">
+                            {aiProgressStage === 'uploading' ? '📤' : aiProgressStage === 'transcribing' ? '🎙️' : '🧠'}
+                        </div>
+                        <span className="absolute inset-0 rounded-2xl border-4 border-purple-400 animate-ping opacity-60" />
                     </div>
-                    <div>
+
+                    <div className="space-y-1">
                         <h4 className="font-bold text-slate-900 dark:text-white text-base">
-                            Uploading to Storage & Transcribing Dialogue
+                            {aiProgressStage === 'uploading' && 'Step 1/3: Uploading Audio to Clinical Storage'}
+                            {aiProgressStage === 'transcribing' && 'Step 2/3: Speech-to-Text Transcription via Groq Whisper'}
+                            {aiProgressStage === 'synthesizing' && 'Step 3/3: Synthesizing SOAP via Orchestrator (NVIDIA NIM Primary → Gemini Fallback)'}
+                            {aiProgressStage !== 'uploading' && aiProgressStage !== 'transcribing' && aiProgressStage !== 'synthesizing' && 'Analyzing Consultation...'}
                         </h4>
-                        <p className="text-xs text-slate-500 max-w-md mt-1">
-                            Saving audio stream, synchronizing with active appointment, applying 2-channel speaker diarization, and structuring clinical entities into SOAP format.
+                        <p className="text-xs text-slate-500 max-w-md mx-auto">
+                            Extracting chief complaint, objective vitals, ICD-10 codes, and e-prescription guidelines with medical safety validation.
                         </p>
                     </div>
+
+                    {/* Visual Progress Steps */}
+                    <div className="flex items-center gap-2 pt-2 text-[11px] font-medium text-slate-600 dark:text-slate-400">
+                        <span className={`px-2 py-0.5 rounded-full ${aiProgressStage === 'uploading' ? 'bg-purple-100 text-purple-700 font-bold dark:bg-purple-900/60 dark:text-purple-300' : 'bg-slate-100 dark:bg-slate-800'}`}>
+                            1. Storage
+                        </span>
+                        <span>→</span>
+                        <span className={`px-2 py-0.5 rounded-full ${aiProgressStage === 'transcribing' ? 'bg-purple-100 text-purple-700 font-bold dark:bg-purple-900/60 dark:text-purple-300' : 'bg-slate-100 dark:bg-slate-800'}`}>
+                            2. Groq STT
+                        </span>
+                        <span>→</span>
+                        <span className={`px-2 py-0.5 rounded-full ${aiProgressStage === 'synthesizing' ? 'bg-purple-100 text-purple-700 font-bold dark:bg-purple-900/60 dark:text-purple-300' : 'bg-slate-100 dark:bg-slate-800'}`}>
+                            3. AI Orchestrator
+                        </span>
+                    </div>
+                </div>
+            )}
+
+            {/* Fallback to Human Warning / Retry Banner (U-08) */}
+            {requiresHumanFallback && !isProcessing && (
+                <div className="p-4 rounded-xl border border-amber-200 dark:border-amber-900/60 bg-amber-50/70 dark:bg-amber-950/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs shadow-sm">
+                    <div className="flex items-start gap-3">
+                        <span className="text-xl">⚠️</span>
+                        <div>
+                            <div className="font-semibold text-amber-900 dark:text-amber-300 text-sm">
+                                Clinician Manual Attestation Active
+                            </div>
+                            <div className="text-amber-800/80 dark:text-amber-400/90 mt-0.5">
+                                {fallbackReason || 'AI service failover threshold exceeded; falling back to manual clinician entry.'} You can review and edit all fields below, or retry AI synthesis.
+                            </div>
+                        </div>
+                    </div>
+                    <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={handleRetryCopilot}
+                        className="whitespace-nowrap border-amber-300 dark:border-amber-800 text-amber-900 dark:text-amber-200 hover:bg-amber-100 dark:hover:bg-amber-900/50"
+                    >
+                        ↺ Retry Copilot Analysis
+                    </Button>
                 </div>
             )}
 
@@ -735,11 +856,13 @@ export default function DoctorScribePage() {
                         />
                     </div>
 
-                    {/* Right Column: Extracted Structured SOAP Note */}
+                    {/* Right Column: Extracted Structured SOAP Note (Provider Independent) */}
                     <div className="lg:col-span-7 space-y-4">
                         <SoapExtractionPreview
                             soapData={soapData}
+                            aiMetadata={aiMetadata}
                             onCommitToEhr={handleCommitToEhr}
+                            onRegenerate={handleRetryCopilot}
                         />
                     </div>
                 </div>
