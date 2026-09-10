@@ -362,3 +362,26 @@ async def list_medical_records(
         page_size=page_size,
         total_pages=total_pages,
     )
+
+
+@router.get("/appointment/{appointment_id}/draft", response_model=MedicalRecordResponse | None)
+async def get_appointment_draft_record(
+    appointment_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Retrieve the latest draft medical record for an appointment to support reload and workspace restoration."""
+    query = (
+        select(MedicalRecord)
+        .where(
+            and_(
+                MedicalRecord.appointment_id == appointment_id,
+                MedicalRecord.status == MedicalRecordStatus.DRAFT,
+            )
+        )
+        .order_by(MedicalRecord.created_at.desc())
+        .limit(1)
+    )
+    result = await db.execute(query)
+    record = result.scalar_one_or_none()
+    return record

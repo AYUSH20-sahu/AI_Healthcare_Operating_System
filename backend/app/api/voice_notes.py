@@ -26,18 +26,24 @@ from app.api.schemas.voice_note import (
     VoiceNoteUpdate,
     VoiceNoteUploadResponse,
 )
+from app.api.schemas.scribe import ScribeProcessRequest, ScribeDraftResponse
 from app.database import get_db
 from app.models import (
     Appointment,
     AuditLog,
     AuditOutcome,
     Doctor,
+    MedicalRecord,
+    MedicalRecordStatus,
     Patient,
     User,
     UserRole,
     VoiceNote,
 )
+from app.services.auth.audit import log_audit_event
 from app.services.auth.service import get_current_active_user
+from app.services.orchestrator import TaskRequest, TaskType, get_orchestrator
+from app.services.scribe.scribe_agent import scribe_agent
 
 router = APIRouter(prefix="/voice-notes", tags=["voice-notes"])
 
@@ -441,3 +447,158 @@ async def delete_voice_note(
     # Delete from database
     await db.delete(voice_note)
     await db.commit()
+
+
+@router.post("/{voice_note_id}/scribe", response_model=ScribeDraftResponse, status_code=status.HTTP_201_CREATED)
+async def process_voice_note_scribe(
+    voice_note_id: UUID,
+    request_data: ScribeProcessRequest | None = None,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Process a voice note through the Ambient Scribe pipeline.
+    
+    Voice note -> STT -> structured note generation -> orchestrator -> Core API -> draft medical record.
+    Security rule: Agent cannot directly write PostgreSQL. The Core API explicitly creates and persists
+    the MedicalRecord with status = MedicalRecordStatus.DRAFT.
+    """
+    if current_user.role not in [UserRole.DOCTOR, UserRole.ADMIN]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only doctors and administrators can execute ambient scribe drafting",
+        )
+
+    voice_note = await db.get(VoiceNote, voice_note_id)
+    if not voice_note:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Voice note not found",
+        )
+
+    # RBAC check: doctor ownership
+    doctor = None
+    if current_user.role == UserRole.DOCTOR:
+        doctor_result = await db.execute(
+            select(Doctor).where(Doctor.user_id == current_user.user_id)
+        )
+        doctor = doctor_result.scalar_one_or_none()
+        if not doctor or voice_note.doctor_id != doctor.doctor_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Doctors can only transcribe and scribe their own consultation notes",
+            )
+
+    # Read audio bytes if file exists
+    audio_bytes = None
+    try:
+        f_path = Path(voice_note.file_path)
+        if f_path.exists():
+            audio_bytes = f_path.read_bytes()
+    except Exception:
+        audio_bytes = None
+
+    # Retrieve patient context
+    patient = await db.get(Patient, voice_note.patient_id)
+    patient_name = patient.full_name if patient else (request_data.patient_name if request_data else "Patient")
+
+    # Prepare payload for in-memory agent execution
+    content_ext = voice_note.content_type.split("/")[-1] if voice_note.content_type else "webm"
+    agent_payload = {
+        "audio_data": audio_bytes,
+        "audio_format": content_ext,
+        "transcription": voice_note.transcription or "",
+        "patient_name": patient_name,
+        "vitals": request_data.vitals if request_data else {},
+        "allergies": request_data.allergies if request_data else [],
+        "chief_complaint": request_data.chief_complaint if request_data else None,
+    }
+
+    # Execute orchestrator task
+    orchestrator = get_orchestrator()
+    task_request = TaskRequest(
+        task_type=TaskType.SCRIBE,
+        payload=agent_payload,
+        metadata={
+            "voice_note_id": str(voice_note.voice_note_id),
+            "appointment_id": str(voice_note.appointment_id),
+            "doctor_id": str(voice_note.doctor_id),
+            "patient_id": str(voice_note.patient_id),
+        },
+        timeout_seconds=30.0,
+        max_retries=2,
+    )
+
+    task_result = await orchestrator.execute_task(task_request)
+
+    if not task_result.result:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Scribe pipeline failed: {task_result.error}",
+        )
+
+    scribe_res = task_result.result
+    draft_note = scribe_res.draft
+
+    # Update voice note transcription
+    voice_note.transcription = scribe_res.transcription
+    voice_note.transcription_status = "completed"
+
+    # Core API explicitly persists the MedicalRecord to PostgreSQL with DRAFT status
+    # Agent is strictly forbidden from direct database writes
+    record_content = {
+        "subjective": draft_note.subjective,
+        "objective": draft_note.objective,
+        "assessment": draft_note.assessment,
+        "plan": draft_note.plan,
+        "ai_confidence": scribe_res.confidence,
+        "clinical_basis": scribe_res.basis,
+        "transcription": scribe_res.transcription,
+        "ai_metadata": scribe_res.ai_metadata,
+    }
+
+    medical_record = MedicalRecord(
+        patient_id=voice_note.patient_id,
+        doctor_id=voice_note.doctor_id,
+        appointment_id=voice_note.appointment_id,
+        content=record_content,
+        status=MedicalRecordStatus.DRAFT,  # Strictly DRAFT
+    )
+    db.add(medical_record)
+    await db.commit()
+    await db.refresh(medical_record)
+    await db.refresh(voice_note)
+
+    # Audit logging
+    await log_audit_event(
+        db=db,
+        user_id=current_user.user_id,
+        action="SCRIBE_DRAFT_CREATED",
+        resource_type="medical_record",
+        resource_id=str(medical_record.record_id),
+        details={
+            "voice_note_id": str(voice_note.voice_note_id),
+            "appointment_id": str(voice_note.appointment_id),
+            "confidence": scribe_res.confidence,
+            "status": "draft",
+        },
+    )
+
+    return ScribeDraftResponse(
+        success=True,
+        medical_record_id=medical_record.record_id,
+        appointment_id=medical_record.appointment_id,
+        patient_id=medical_record.patient_id,
+        doctor_id=medical_record.doctor_id,
+        status="draft",
+        soap_note={
+            "subjective": draft_note.subjective,
+            "objective": draft_note.objective,
+            "assessment": draft_note.assessment,
+            "plan": draft_note.plan,
+        },
+        confidence=scribe_res.confidence,
+        basis=scribe_res.basis,
+        transcription=scribe_res.transcription,
+        ai_metadata=scribe_res.ai_metadata,
+        created_at=medical_record.created_at,
+    )

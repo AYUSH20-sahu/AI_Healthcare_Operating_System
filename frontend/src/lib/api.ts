@@ -413,6 +413,9 @@ export const medicalRecordsApi = {
         status?: string;
     }) =>
         api.put<MedicalRecord>(`/medical-records/${recordId}/`, data),
+
+    getAppointmentDraft: (appointmentId: string) =>
+        api.get<MedicalRecord | null>(`/medical-records/appointment/${appointmentId}/draft`),
 };
 
 // Prescriptions API
@@ -521,7 +524,63 @@ export const voiceNotesApi = {
 
     getAudioUrl: (voiceNoteId: string) =>
         `${API_BASE}/voice-notes/${voiceNoteId}/audio`,
+
+    processScribe: (voiceNoteId: string, data?: ScribeProcessRequest) =>
+        api.post<ScribeDraftResponse>(`/voice-notes/${voiceNoteId}/scribe`, data || {}),
 };
+
+export interface ScribeProcessRequest {
+    patient_id?: string;
+    appointment_id?: string;
+    patient_name?: string;
+    vitals?: Record<string, any>;
+    allergies?: any[];
+    chief_complaint?: string;
+}
+
+export interface ScribeDraftResponse {
+    success: boolean;
+    medical_record_id: string;
+    appointment_id: string;
+    patient_id: string;
+    doctor_id: string;
+    status: string;
+    soap_note: {
+        subjective: {
+            chief_complaint: string;
+            history_of_present_illness: string;
+            review_of_systems?: string;
+        };
+        objective: {
+            vitals_reviewed: string;
+            physical_exam: string;
+        };
+        assessment: {
+            primary_diagnosis: string;
+            icd10_code: string;
+            differentials: string[];
+            ai_confidence: number;
+            clinical_rationale: string;
+        };
+        plan: {
+            medications: Array<{
+                name: string;
+                dosage: string;
+                frequency: string;
+                duration: string;
+                instructions?: string;
+            }>;
+            diagnostics_ordered: string[];
+            counseling: string;
+            follow_up: string;
+        };
+    };
+    confidence: number;
+    basis: string;
+    transcription: string;
+    ai_metadata: AIMetadata;
+    created_at: string;
+}
 
 export interface AdminDoctorProfile {
     doctor_id: string;

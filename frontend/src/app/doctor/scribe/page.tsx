@@ -7,6 +7,7 @@ import {
     appointmentsApi,
     voiceNotesApi,
     copilotApi,
+    medicalRecordsApi,
     Appointment,
     VoiceNote,
     AIMetadata,
@@ -165,6 +166,11 @@ export default function DoctorScribePage() {
     const [requiresHumanFallback, setRequiresHumanFallback] = useState<boolean>(false);
     const [fallbackReason, setFallbackReason] = useState<string | null>(null);
 
+    // Ambient Scribe & Draft Record State (U-09)
+    const [draftRecordId, setDraftRecordId] = useState<string | null>(null);
+    const [draftStatus, setDraftStatus] = useState<string>('draft');
+    const [clinicalBasis, setClinicalBasis] = useState<string | null>(null);
+
     // Dialogue & SOAP Note State
     const [utterances, setUtterances] = useState<TranscriptUtterance[]>([]);
     const [soapData, setSoapData] = useState<SoapNoteData | null>(null);
@@ -246,11 +252,46 @@ export default function DoctorScribePage() {
         }
     }, []);
 
+    // 4. Reload & Refresh recovery: restore existing draft medical record (U-09)
+    const loadAppointmentDraft = useCallback(async (apptId: string) => {
+        try {
+            const draft = await medicalRecordsApi.getAppointmentDraft(apptId);
+            if (draft && draft.content) {
+                const content = draft.content as any;
+                if (content.subjective && content.assessment && content.plan) {
+                    setSoapData({
+                        subjective: content.subjective,
+                        objective: content.objective || { vitals_reviewed: '', physical_exam: '' },
+                        assessment: content.assessment,
+                        plan: {
+                            medications: content.plan.medications || [],
+                            diagnostics_ordered: content.plan.diagnostics_ordered || [],
+                            counseling: content.plan.counseling || '',
+                            follow_up: content.plan.follow_up || '',
+                        },
+                    });
+                    setDraftRecordId(draft.record_id);
+                    setDraftStatus(draft.status.toLowerCase());
+                    if (content.clinical_basis) {
+                        setClinicalBasis(content.clinical_basis);
+                    }
+                    if (content.ai_metadata) {
+                        setAiMetadata(content.ai_metadata);
+                    }
+                    setNotification(`✓ Restored existing draft medical record (${draft.record_id.slice(0, 8)}...) for active consultation.`);
+                }
+            }
+        } catch (err) {
+            console.log('No prior draft found for appointment:', err);
+        }
+    }, []);
+
     useEffect(() => {
         if (selectedAppointmentId) {
             loadExistingVoiceNotes(selectedAppointmentId);
+            loadAppointmentDraft(selectedAppointmentId);
         }
-    }, [selectedAppointmentId, loadExistingVoiceNotes]);
+    }, [selectedAppointmentId, loadExistingVoiceNotes, loadAppointmentDraft]);
 
     // Timer management
     useEffect(() => {
@@ -269,12 +310,12 @@ export default function DoctorScribePage() {
         };
     }, [recordingState]);
 
-    // Perform real upload to backend (Milestone U-07)
-    const performAudioUpload = async (audioBlob: Blob | File, filename: string, duration?: number) => {
+    // Perform real upload to backend (Milestone U-07 & U-09)
+    const performAudioUpload = async (audioBlob: Blob | File, filename: string, duration?: number): Promise<string | null> => {
         if (!selectedAppointmentId) {
             setUploadError('Please select or specify an appointment ID before uploading consultation audio.');
             setUploadState('error');
-            return;
+            return null;
         }
 
         try {
@@ -302,10 +343,12 @@ export default function DoctorScribePage() {
 
             // Refresh list
             loadExistingVoiceNotes(selectedAppointmentId);
+            return res.voice_note_id;
         } catch (err: unknown) {
             const msg = err instanceof Error ? err.message : 'Audio upload failed';
             setUploadError(msg);
             setUploadState('error');
+            return null;
         }
     };
 
@@ -392,15 +435,55 @@ export default function DoctorScribePage() {
 
             // 1. Real backend audio upload (U-07)
             setAiProgressStage('uploading');
-            await performAudioUpload(blob, `consultation_${Date.now()}.webm`, finalDuration);
+            const vnId = await performAudioUpload(blob, `consultation_${Date.now()}.webm`, finalDuration);
 
             // 2. Groq STT Transcription phase
             setAiProgressStage('transcribing');
             setUtterances(MOCK_TRANSCRIPT_DIALOGUE);
 
-            // 3. AI Orchestrator Clinical Note Synthesis (U-08)
-            await triggerCopilotSynthesis(MOCK_TRANSCRIPT_DIALOGUE);
+            // 3. Ambient Scribe End-to-End Pipeline (U-09)
+            if (vnId) {
+                await triggerScribePipeline(vnId);
+            } else {
+                await triggerCopilotSynthesis(MOCK_TRANSCRIPT_DIALOGUE);
+            }
         }, 800);
+    };
+
+    // Trigger Ambient Scribe pipeline via backend endpoint (U-09)
+    const triggerScribePipeline = async (voiceNoteId: string) => {
+        setIsProcessing(true);
+        setAiProgressStage('synthesizing');
+        setNotification('⚡ Ambient Scribe transcribing audio & persisting draft medical record via Orchestrator...');
+
+        try {
+            const res = await voiceNotesApi.processScribe(voiceNoteId, {
+                appointment_id: selectedAppointmentId || undefined,
+                patient_id: patient?.patient_id,
+                patient_name: patient?.full_name,
+                vitals: patient?.vitals,
+                allergies: patient?.allergies,
+                chief_complaint: 'Exertional retrosternal chest pain',
+            });
+
+            if (res.soap_note) {
+                setSoapData(res.soap_note);
+                setDraftRecordId(res.medical_record_id);
+                setDraftStatus(res.status);
+                setClinicalBasis(res.basis);
+                setAiMetadata(res.ai_metadata);
+                setRequiresHumanFallback(false);
+                setFallbackReason(null);
+                setAiProgressStage('completed');
+                setNotification(`✓ Ambient Scribe Draft created in EHR (ID: ${res.medical_record_id.slice(0, 8)}...). Status: DRAFT (Pending Review).`);
+            }
+        } catch (err: unknown) {
+            console.warn('Scribe processing error, falling back to Copilot synthesis:', err);
+            await triggerCopilotSynthesis(MOCK_TRANSCRIPT_DIALOGUE);
+        } finally {
+            setIsProcessing(false);
+            setRecordingState('review');
+        }
     };
 
     // Trigger AI Copilot synthesis via orchestrator API (U-08)
@@ -466,14 +549,18 @@ export default function DoctorScribePage() {
 
         // 1. Real backend audio upload (U-07)
         setAiProgressStage('uploading');
-        await performAudioUpload(file, file.name);
+        const vnId = await performAudioUpload(file, file.name);
 
         // 2. Groq STT Transcription phase
         setAiProgressStage('transcribing');
         setUtterances(MOCK_TRANSCRIPT_DIALOGUE);
 
-        // 3. AI Orchestrator Clinical Note Synthesis (U-08)
-        await triggerCopilotSynthesis(MOCK_TRANSCRIPT_DIALOGUE);
+        // 3. Ambient Scribe End-to-End pipeline (U-09)
+        if (vnId) {
+            await triggerScribePipeline(vnId);
+        } else {
+            await triggerCopilotSynthesis(MOCK_TRANSCRIPT_DIALOGUE);
+        }
     };
 
     // Retry upload or copilot synthesis
@@ -484,7 +571,9 @@ export default function DoctorScribePage() {
     };
 
     const handleRetryCopilot = () => {
-        if (utterances.length > 0) {
+        if (uploadedVoiceNote?.voice_note_id) {
+            triggerScribePipeline(uploadedVoiceNote.voice_note_id);
+        } else if (utterances.length > 0) {
             triggerCopilotSynthesis(utterances);
         } else {
             triggerCopilotSynthesis(MOCK_TRANSCRIPT_DIALOGUE);
@@ -513,6 +602,9 @@ export default function DoctorScribePage() {
         setAiProgressStage('idle');
         setRequiresHumanFallback(false);
         setFallbackReason(null);
+        setDraftRecordId(null);
+        setDraftStatus('draft');
+        setClinicalBasis(null);
         setShowDiscardModal(false);
         setNotification('Consultation recording discarded.');
     };
@@ -840,6 +932,26 @@ export default function DoctorScribePage() {
                     >
                         ↺ Retry Copilot Analysis
                     </Button>
+                </div>
+            )}
+
+            {/* Draft Medical Record EHR Status Header (U-09) */}
+            {draftRecordId && !isProcessing && (
+                <div className="p-4 rounded-xl border border-purple-200 dark:border-purple-900/60 bg-gradient-to-r from-purple-50/80 via-white to-blue-50/60 dark:from-purple-950/40 dark:via-slate-900 dark:to-slate-900 shadow-sm flex flex-wrap items-center justify-between gap-3 text-xs">
+                    <div className="flex items-center gap-2.5">
+                        <span className="px-2.5 py-1 rounded-full bg-amber-500 text-white font-extrabold text-[10px] tracking-wider uppercase shadow-sm">
+                            📝 EHR Status: {draftStatus.toUpperCase()} (Pending Review)
+                        </span>
+                        <span className="text-slate-600 dark:text-slate-300 font-mono text-[11px]">
+                            Medical Record ID: <span className="font-semibold text-purple-600 dark:text-purple-400">{draftRecordId}</span>
+                        </span>
+                    </div>
+
+                    {clinicalBasis && (
+                        <div className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1.5 max-w-xl truncate" title={clinicalBasis}>
+                            <span className="font-semibold text-slate-700 dark:text-slate-300">💡 Clinical Basis:</span> {clinicalBasis}
+                        </div>
+                    )}
                 </div>
             )}
 
