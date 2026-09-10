@@ -159,6 +159,9 @@ export const api = {
     put: <T>(endpoint: string, data: unknown) =>
         request<T>(endpoint, { method: 'PUT', body: JSON.stringify(data) }),
 
+    patch: <T>(endpoint: string, data?: unknown) =>
+        request<T>(endpoint, { method: 'PATCH', body: data !== undefined ? JSON.stringify(data) : undefined }),
+
     delete: <T>(endpoint: string) =>
         request<T>(endpoint, { method: 'DELETE' }),
 };
@@ -516,3 +519,53 @@ export const voiceNotesApi = {
     delete: (voiceNoteId: string) =>
         api.delete<void>(`/voice-notes/${voiceNoteId}/`),
 };
+
+export interface AdminDoctorProfile {
+    doctor_id: string;
+    specialty: string;
+    license_number: string;
+    hospital_affiliation?: string;
+    phone?: string;
+}
+
+export interface AdminUser {
+    user_id: string;
+    email: string;
+    full_name: string;
+    role: string;
+    is_active: boolean;
+    created_at: string;
+    doctor_profile?: AdminDoctorProfile;
+}
+
+export interface AdminUserListResponse {
+    users: AdminUser[];
+    total: number;
+    limit: number;
+    offset: number;
+}
+
+export interface ProvisionUserRequest {
+    email: string;
+    password: string;
+    full_name: string;
+    role: 'doctor' | 'nurse' | 'receptionist' | 'admin' | 'patient';
+    specialty?: string;
+    license_number?: string;
+    hospital_affiliation?: string;
+    phone?: string;
+}
+
+export const adminUsersApi = {
+    list: (params?: { role?: string; is_active?: boolean; search?: string; limit?: number; offset?: number }) =>
+        api.get<AdminUserListResponse>('/admin/users/', params),
+
+    provision: (data: ProvisionUserRequest) =>
+        api.post<AdminUser>('/admin/users/', data),
+
+    toggleStatus: (userId: string, isActive: boolean) =>
+        api.patch<AdminUser>(`/admin/users/${userId}/status`, { is_active: isActive }),
+
+    resetPassword: (userId: string, newPassword: string) =>
+        api.post<{ message: string }>(`/admin/users/${userId}/reset-password`, { new_password: newPassword }),
+};

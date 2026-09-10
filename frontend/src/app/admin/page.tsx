@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import Link from 'next/link';
 import { useAuth } from '@/lib/auth';
 import { Button, Card, CardContent, Badge } from '@/components/ui';
 
@@ -46,19 +47,24 @@ export default function AdminPage() {
                     </CardContent>
                 </Card>
 
-                <Card className="glass-panel hover:border-cyan-500/40 transition-colors">
-                    <CardContent className="pt-6">
-                        <div className="w-10 h-10 rounded-xl bg-cyan-500/10 text-cyan-500 flex items-center justify-center mb-3">
-                            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
-                            </svg>
-                        </div>
-                        <h3 className="font-semibold text-slate-900 dark:text-white text-base">User Management</h3>
-                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                            Manage clinician profiles, credential verifications, role clearances, and patient federations.
-                        </p>
-                    </CardContent>
-                </Card>
+                <Link href="/admin/users" className="block">
+                    <Card className="glass-panel hover:border-cyan-500/40 transition-colors h-full">
+                        <CardContent className="pt-6">
+                            <div className="w-10 h-10 rounded-xl bg-cyan-500/10 text-cyan-500 flex items-center justify-center mb-3">
+                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                                </svg>
+                            </div>
+                            <div className="flex items-center justify-between">
+                                <h3 className="font-semibold text-slate-900 dark:text-white text-base">User Management & Provisioning</h3>
+                                <span className="text-xs text-cyan-500 font-medium hover:underline">Access Console →</span>
+                            </div>
+                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                                Authoritatively provision doctors and operational staff, manage RBAC permissions, and toggle access states.
+                            </p>
+                        </CardContent>
+                    </Card>
+                </Link>
 
                 <Card className="glass-panel hover:border-emerald-500/40 transition-colors">
                     <CardContent className="pt-6">

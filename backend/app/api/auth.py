@@ -5,7 +5,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models import User
+from app.models import AuditLog, AuditOutcome, Patient, User, UserRole
 from app.services.auth.service import (
     Token,
     UserCreate,
@@ -23,7 +23,7 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 @router.post("/signup", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 async def signup(user_data: UserCreate, db: AsyncSession = Depends(get_db)):
-    """Register a new user."""
+    """Register a new patient user. Strictly enforces PATIENT role."""
     # Check if user already exists
     existing_user = await db.execute(
         select(User).where(User.email == user_data.email)
@@ -34,7 +34,29 @@ async def signup(user_data: UserCreate, db: AsyncSession = Depends(get_db)):
             detail="Email already registered",
         )
     
-    user = await create_user(db, user_data)
+    # Public registration strictly creates PATIENT accounts only
+    user = await create_user(db, user_data, role=UserRole.PATIENT.value)
+
+    # Automatically create associated Patient profile
+    patient_profile = Patient(
+        user_id=user.user_id,
+        full_name=user.full_name,
+        email=user.email,
+    )
+    db.add(patient_profile)
+
+    # Immutable Audit Log
+    audit = AuditLog(
+        user_id=user.user_id,
+        action="PUBLIC_USER_REGISTRATION",
+        resource_type="users",
+        resource_id=user.user_id,
+        outcome=AuditOutcome.SUCCESS,
+        details={"role": UserRole.PATIENT.value, "email": user.email},
+    )
+    db.add(audit)
+    await db.commit()
+    await db.refresh(user)
     return user
 
 

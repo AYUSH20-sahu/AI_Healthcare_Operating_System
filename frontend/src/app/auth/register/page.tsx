@@ -9,7 +9,6 @@ import {
     CardContent,
     Button,
     Input,
-    Select,
     Checkbox,
     Alert,
     ThemeToggle,
@@ -21,7 +20,6 @@ export default function RegisterPage() {
 
     const [fullName, setFullName] = useState('');
     const [email, setEmail] = useState('');
-    const [role, setRole] = useState<'patient' | 'doctor'>('patient');
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
     const [termsAccepted, setTermsAccepted] = useState(false);
@@ -54,18 +52,14 @@ export default function RegisterPage() {
 
         try {
             setSubmitting(true);
-            const user = await signup({
+            await signup({
                 full_name: fullName.trim(),
                 email: email.trim(),
                 password,
-                role,
+                role: 'patient',
             });
 
-            if (user.role === 'doctor') {
-                router.push('/doctor');
-            } else {
-                router.push('/patient');
-            }
+            router.push('/patient');
         } catch (err: unknown) {
             const message = err instanceof Error ? err.message : 'Registration failed. Please try again.';
             setError(message);
@@ -91,11 +85,11 @@ export default function RegisterPage() {
                             </svg>
                         </div>
                         <span className="text-xl font-bold tracking-tight text-slate-900 dark:text-white">
-                            AI-HOS Registration
+                            AI-HOS Patient Registration
                         </span>
                     </Link>
                     <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400">
-                        Create an institutional clinician account or patient care profile
+                        Create your secure patient health account. Clinicians and staff are provisioned by hospital administrators.
                     </p>
                 </div>
 
@@ -109,7 +103,6 @@ export default function RegisterPage() {
                     </Alert>
                 )}
 
-
                 <Card className="glass-panel border-slate-200 dark:border-slate-800 shadow-xl">
                     <CardContent className="pt-6">
                         <form onSubmit={handleSubmit} className="space-y-4">
@@ -117,7 +110,7 @@ export default function RegisterPage() {
                                 id="fullName"
                                 label="Full Legal Name"
                                 required
-                                placeholder="Dr. Jane Doe or John Smith"
+                                placeholder="e.g. John Doe"
                                 value={fullName}
                                 onChange={(e) => setFullName(e.target.value)}
                                 disabled={submitting}
@@ -125,24 +118,12 @@ export default function RegisterPage() {
 
                             <Input
                                 id="email"
-                                label="Institutional or Contact Email"
+                                label="Email Address"
                                 type="email"
                                 required
-                                placeholder="name@hospital.org"
+                                placeholder="name@example.com"
                                 value={email}
                                 onChange={(e) => setEmail(e.target.value)}
-                                disabled={submitting}
-                            />
-
-                            <Select
-                                id="role"
-                                label="Primary System Role"
-                                value={role}
-                                onChange={(e) => setRole(e.target.value as 'patient' | 'doctor')}
-                                options={[
-                                    { value: 'patient', label: 'Patient — Symptom intake, appointments, records' },
-                                    { value: 'doctor', label: 'Physician / Clinician — Scribe, review gate, prescriptions' },
-                                ]}
                                 disabled={submitting}
                             />
 
@@ -186,7 +167,7 @@ export default function RegisterPage() {
                                 className="w-full justify-center shadow-lg shadow-blue-500/25 mt-3"
                                 isLoading={submitting}
                             >
-                                Register Account
+                                Create Patient Account
                             </Button>
                         </form>
                     </CardContent>

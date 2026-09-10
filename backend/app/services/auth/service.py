@@ -105,19 +105,28 @@ async def authenticate_user(db: AsyncSession, email: str, password: str) -> User
     user = await get_user_by_email(db, email)
     if not user:
         return None
+    if not user.is_active:
+        return None
     if not verify_password(password, user.hashed_password):
         return None
     return user
 
 
-async def create_user(db: AsyncSession, user_data: UserCreate) -> User:
-    """Create a new user."""
+async def create_user(db: AsyncSession, user_data: UserCreate, role: str = "patient") -> User:
+    """Create a new user. Public registration always forces patient role."""
+    from app.models import UserRole
+    # Enforce safe role conversion, default to patient
+    try:
+        user_role = UserRole(role)
+    except (ValueError, KeyError):
+        user_role = UserRole.PATIENT
+
     hashed_password = get_password_hash(user_data.password)
     user = User(
         email=user_data.email,
         hashed_password=hashed_password,
         full_name=user_data.full_name,
-        role=user_data.role,
+        role=user_role,
         is_active=True,
     )
     db.add(user)

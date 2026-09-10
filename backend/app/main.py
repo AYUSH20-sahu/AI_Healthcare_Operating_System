@@ -10,6 +10,7 @@ from app.api import (
     patients,
     prescriptions,
     voice_notes,
+    admin_users,
 )
 from app.core.config import settings
 from app.core.exceptions import register_exception_handlers
@@ -39,6 +40,7 @@ app.include_router(medical_records.router, prefix="/api/v1")
 app.include_router(prescriptions.router, prefix="/api/v1")
 app.include_router(voice_notes.router, prefix="/api/v1")
 app.include_router(approval.router, prefix="/api/v1")
+app.include_router(admin_users.router, prefix="/api/v1")
 
 
 @app.on_event("startup")
@@ -68,6 +70,7 @@ async def startup_event():
                                 full_name=name,
                                 role=role,
                             ),
+                            role=role,
                         )
     except Exception as e:
         print(f"[AI-HOS Startup] Notice: Test persona auto-seed check skipped or deferred: {e}")
