@@ -767,4 +767,156 @@ export const copilotApi = {
 
     getProviders: () =>
         api.get<AIProviderHealthResponse>('/copilot/providers'),
-};
+};
+
+// Approval Gate API (M23 / U-11)
+export interface MedicalRecordApprovalRequest {
+    action: 'approve' | 'reject' | 'request_changes';
+    reviewer_notes?: string;
+    rejection_reason?: string;
+    edited_content?: Record<string, any>;
+}
+
+export interface MedicalRecordApprovalResponse {
+    record_id: string;
+    status: string;
+    action: string;
+    reviewer_id: string;
+    reviewed_at: string;
+    finalized_at?: string | null;
+    reviewer_notes?: string | null;
+    rejection_reason?: string | null;
+    message: string;
+}
+
+export interface PrescriptionApprovalRequest {
+    action: 'approve' | 'reject' | 'request_changes';
+    reviewer_notes?: string;
+    rejection_reason?: string;
+    edited_medications?: Medication[];
+}
+
+export interface PrescriptionApprovalResponse {
+    prescription_id: string;
+    status: string;
+    action: string;
+    reviewer_id: string;
+    reviewed_at: string;
+    finalized_at?: string | null;
+    reviewer_notes?: string | null;
+    rejection_reason?: string | null;
+    message: string;
+}
+
+export interface DraftItem {
+    record_id?: string;
+    prescription_id?: string;
+    patient_id: string;
+    patient_name?: string;
+    doctor_id: string;
+    appointment_id?: string | null;
+    medical_record_id?: string | null;
+    chief_complaint?: string | null;
+    assessment?: string | null;
+    confidence?: number | null;
+    basis?: string | null;
+    medications?: Medication[];
+    notes?: string | null;
+    content?: Record<string, any>;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface DraftListResponse {
+    medical_records: DraftItem[];
+    prescriptions: DraftItem[];
+    total: number;
+    page: number;
+    page_size: number;
+    total_pages: number;
+}
+
+export const approvalApi = {
+    listDrafts: (params?: { page?: number; page_size?: number }) =>
+        api.get<DraftListResponse>('/approval/drafts', params),
+
+    reviewMedicalRecord: (recordId: string, data: MedicalRecordApprovalRequest) =>
+        api.post<MedicalRecordApprovalResponse>(`/approval/medical-records/${recordId}/review`, data),
+
+    reviewPrescription: (prescriptionId: string, data: PrescriptionApprovalRequest) =>
+        api.post<PrescriptionApprovalResponse>(`/approval/prescriptions/${prescriptionId}/review`, data),
+
+    getMedicalRecord: (recordId: string) =>
+        api.get<MedicalRecord>(`/approval/medical-records/${recordId}`),
+
+    getPrescription: (prescriptionId: string) =>
+        api.get<Prescription>(`/approval/prescriptions/${prescriptionId}`),
+};
+
+// Patient Portal API (Milestone U-12)
+export interface PatientSelfUpdate {
+    full_name?: string;
+    phone?: string;
+    address?: string;
+    emergency_contact_name?: string;
+    emergency_contact_phone?: string;
+    abha_address?: string;
+}
+
+export interface PatientPortalAppointmentItem {
+    appointment_id: string;
+    doctor_id: string;
+    doctor_name: string;
+    doctor_specialty?: string | null;
+    hospital_affiliation?: string | null;
+    scheduled_at: string;
+    duration_minutes: number;
+    status: string;
+    reason?: string | null;
+    meeting_link?: string | null;
+}
+
+export interface PatientPortalRecordItem {
+    record_id: string;
+    doctor_id: string;
+    doctor_name: string;
+    appointment_id?: string | null;
+    status: string;
+    chief_complaint?: string | null;
+    assessment?: string | null;
+    plan?: string | null;
+    content?: Record<string, any> | null;
+    finalized_at?: string | null;
+    created_at: string;
+}
+
+export interface PatientPortalPrescriptionItem {
+    prescription_id: string;
+    doctor_id: string;
+    doctor_name: string;
+    medical_record_id?: string | null;
+    status: string;
+    medications: Medication[];
+    notes?: string | null;
+    finalized_at?: string | null;
+    created_at: string;
+}
+
+export interface PatientPortalDashboardResponse {
+    patient: Patient;
+    upcoming_appointments_count: number;
+    finalized_records_count: number;
+    active_prescriptions_count: number;
+    next_appointment?: PatientPortalAppointmentItem | null;
+    recent_prescriptions: PatientPortalPrescriptionItem[];
+}
+
+export const patientPortalApi = {
+    getProfile: () => api.get<Patient>('/patients/me'),
+    updateProfile: (data: PatientSelfUpdate) => api.put<Patient>('/patients/me', data),
+    getDashboard: () => api.get<PatientPortalDashboardResponse>('/patients/me/dashboard'),
+    getAppointments: () => api.get<PatientPortalAppointmentItem[]>('/patients/me/appointments'),
+    getRecords: () => api.get<PatientPortalRecordItem[]>('/patients/me/records'),
+    getPrescriptions: () => api.get<PatientPortalPrescriptionItem[]>('/patients/me/prescriptions'),
+    cancelAppointment: (appointmentId: string) => api.delete<void>(`/appointments/${appointmentId}/`),
+};

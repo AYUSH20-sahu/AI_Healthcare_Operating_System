@@ -678,7 +678,7 @@ export default function DoctorPrescriptionsPage() {
                                 variant="primary"
                                 onClick={() => {
                                     saveDraft();
-                                    router.push('/doctor');
+                                    router.push(`/doctor/approvals?type=prescription${prescriptionId ? `&id=${prescriptionId}` : ''}`);
                                 }}
                             >
                                 ⚖️ Submit to Doctor Approval Gate

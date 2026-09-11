@@ -609,10 +609,13 @@ export default function DoctorScribePage() {
         setNotification('Consultation recording discarded.');
     };
 
-    // Commit SOAP to Patient EHR
+    // Commit SOAP to Patient EHR (Routes to Gate M23 Approval)
     const handleCommitToEhr = (data: SoapNoteData) => {
-        alert(`SOAP Note attested by physician and committed to ${patient?.full_name}'s immutable medical record!`);
-        router.push('/doctor');
+        if (draftRecordId) {
+            router.push(`/doctor/approvals?type=medical_record&id=${draftRecordId}`);
+        } else {
+            router.push('/doctor/approvals');
+        }
     };
 
     return (

@@ -30,6 +30,7 @@ from app.models import (
     User,
     UserRole,
 )
+from app.services.auth.audit import audit_logger
 from app.services.auth.service import get_current_active_user
 
 router = APIRouter(prefix="/approval", tags=["approval"])
@@ -161,11 +162,11 @@ async def review_medical_record(
             detail="Medical record not found",
         )
     
-    # Verify record is in draft status
+    # Verify record is in draft status (Duplicate approval protection)
     if record.status != MedicalRecordStatus.DRAFT:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Cannot review record with status: {record.status.value}",
+            detail=f"Cannot review record with status: {record.status.value}. Already finalized or closed",
         )
     
     # RBAC check
@@ -203,20 +204,38 @@ async def review_medical_record(
             detail="Reviewer doctor profile not found",
         )
     
+    finalized_at = None
+    existing_content = record.content or {}
+
     # Process the action
     if approval.action == "approve":
+        if approval.edited_content:
+            existing_content = {**existing_content, **approval.edited_content}
         record.status = MedicalRecordStatus.FINALIZED
+        finalized_at = datetime.utcnow()
+        record.finalized_at = finalized_at
+        existing_content["approved_by"] = str(reviewer_doctor.doctor_id)
+        existing_content["approved_at"] = finalized_at.isoformat()
         message = "Medical record approved and finalized"
+        audit_action = "MEDICAL_RECORD_APPROVED"
+
     elif approval.action == "reject":
         record.status = MedicalRecordStatus.AMENDED
+        reason = approval.rejection_reason or approval.reviewer_notes or "Rejected by physician"
+        existing_content["rejection_reason"] = reason
+        existing_content["rejected_by"] = str(reviewer_doctor.doctor_id)
+        existing_content["rejected_at"] = datetime.utcnow().isoformat()
         message = "Medical record rejected"
+        audit_action = "MEDICAL_RECORD_REJECTED"
+
     elif approval.action == "request_changes":
         # Update content with edits if provided
         if approval.edited_content:
-            existing_content = record.content or {}
-            record.content = {**existing_content, **approval.edited_content}
+            existing_content = {**existing_content, **approval.edited_content}
         record.status = MedicalRecordStatus.DRAFT  # Stays draft
         message = "Changes requested on medical record"
+        audit_action = "MEDICAL_RECORD_CHANGES_REQUESTED"
+
     else:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -225,22 +244,38 @@ async def review_medical_record(
     
     # Add reviewer notes to content if provided
     if approval.reviewer_notes:
-        existing_content = record.content or {}
         existing_content["reviewer_notes"] = approval.reviewer_notes
         existing_content["reviewed_by"] = str(reviewer_doctor.doctor_id)
         existing_content["reviewed_at"] = datetime.utcnow().isoformat()
-        record.content = existing_content
     
+    record.content = existing_content
     await db.commit()
     await db.refresh(record)
     
+    # Audit log
+    await audit_logger.log_event(
+        action=audit_action,
+        user_id=current_user.user_id,
+        resource_type="medical_record",
+        resource_id=record.record_id,
+        details={
+            "action": approval.action,
+            "status": record.status.value,
+            "reviewer_doctor_id": str(reviewer_doctor.doctor_id),
+            "rejection_reason": approval.rejection_reason,
+            "has_reviewer_notes": bool(approval.reviewer_notes),
+        },
+    )
+
     return MedicalRecordApprovalResponse(
         record_id=record.record_id,
         status=record.status.value,
         action=approval.action,
         reviewer_id=reviewer_doctor.doctor_id,
         reviewed_at=record.updated_at,
+        finalized_at=finalized_at,
         reviewer_notes=approval.reviewer_notes,
+        rejection_reason=approval.rejection_reason,
         message=message,
     )
 
@@ -267,11 +302,11 @@ async def review_prescription(
             detail="Prescription not found",
         )
     
-    # Verify prescription is in draft status
+    # Verify prescription is in draft status (Duplicate approval protection)
     if prescription.status != PrescriptionStatus.DRAFT:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Cannot review prescription with status: {prescription.status.value}",
+            detail=f"Cannot review prescription with status: {prescription.status.value}. Already finalized or closed",
         )
     
     # RBAC check
@@ -310,18 +345,28 @@ async def review_prescription(
     
     # Process the action
     if approval.action == "approve":
+        if approval.edited_medications:
+            prescription.medications = approval.edited_medications
         prescription.status = PrescriptionStatus.FINALIZED
         prescription.finalized_at = datetime.utcnow()
         message = "Prescription approved and finalized"
+        audit_action = "PRESCRIPTION_APPROVED"
+
     elif approval.action == "reject":
         prescription.status = PrescriptionStatus.CANCELLED
+        reason = approval.rejection_reason or approval.reviewer_notes or "Rejected by physician"
+        prescription.notes = (prescription.notes or "") + f"\n\n[Rejection Reason]: {reason}"
         message = "Prescription rejected"
+        audit_action = "PRESCRIPTION_REJECTED"
+
     elif approval.action == "request_changes":
         # Update medications with edits if provided
         if approval.edited_medications:
             prescription.medications = approval.edited_medications
         prescription.status = PrescriptionStatus.DRAFT  # Stays draft
         message = "Changes requested on prescription"
+        audit_action = "PRESCRIPTION_CHANGES_REQUESTED"
+
     else:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -335,13 +380,30 @@ async def review_prescription(
     await db.commit()
     await db.refresh(prescription)
     
+    # Audit log
+    await audit_logger.log_event(
+        action=audit_action,
+        user_id=current_user.user_id,
+        resource_type="prescription",
+        resource_id=prescription.prescription_id,
+        details={
+            "action": approval.action,
+            "status": prescription.status.value,
+            "reviewer_doctor_id": str(reviewer_doctor.doctor_id),
+            "rejection_reason": approval.rejection_reason,
+            "has_reviewer_notes": bool(approval.reviewer_notes),
+        },
+    )
+
     return PrescriptionApprovalResponse(
         prescription_id=prescription.prescription_id,
         status=prescription.status.value,
         action=approval.action,
         reviewer_id=reviewer_doctor.doctor_id,
         reviewed_at=prescription.updated_at,
+        finalized_at=prescription.finalized_at,
         reviewer_notes=approval.reviewer_notes,
+        rejection_reason=approval.rejection_reason,
         message=message,
     )
 
