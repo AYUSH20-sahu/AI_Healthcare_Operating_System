@@ -17,8 +17,14 @@ def init_db():
     if "localhost" not in settings.DATABASE_URL and "127.0.0.1" not in settings.DATABASE_URL:
         connect_args["ssl"] = True
 
+    url = settings.DATABASE_URL
+    if url.startswith("postgres://"):
+        url = url.replace("postgres://", "postgresql+asyncpg://", 1)
+    elif url.startswith("postgresql://") and not url.startswith("postgresql+asyncpg://"):
+        url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
+
     engine = create_async_engine(
-        settings.DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://"),
+        url,
         connect_args=connect_args,
         echo=False,
     )

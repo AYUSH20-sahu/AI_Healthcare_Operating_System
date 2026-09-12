@@ -31,11 +31,17 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 import os
 from pathlib import Path
 
-# Load .env.local from project root (parent of database/)
-env_path = Path(__file__).parent.parent / ".env.local"
-if env_path.exists():
+# Load .env.local or .env from project root (parent of database/)
+env_local = Path(__file__).parent.parent / ".env.local"
+env_file = Path(__file__).parent.parent / ".env"
+try:
     from dotenv import load_dotenv
-    load_dotenv(env_path)
+    if env_local.exists():
+        load_dotenv(env_local)
+    elif env_file.exists():
+        load_dotenv(env_file)
+except ImportError:
+    pass
 
 DATABASE_URL = os.getenv(
     "DATABASE_URL",

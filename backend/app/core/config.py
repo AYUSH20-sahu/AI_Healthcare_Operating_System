@@ -60,9 +60,11 @@ class Settings(BaseSettings):
     def validate_database_url(cls, v):
         if not v or not str(v).strip():
             return "postgresql+asyncpg://postgres:postgres@localhost:5432/ai_hos"
-        # Convert plain postgresql:// to postgresql+asyncpg:// if needed for async engine
+        # Convert plain postgres:// or postgresql:// to postgresql+asyncpg:// for async engine
         v_str = str(v).strip()
-        if v_str.startswith("postgresql://") and not v_str.startswith("postgresql+asyncpg://"):
+        if v_str.startswith("postgres://"):
+            return v_str.replace("postgres://", "postgresql+asyncpg://", 1)
+        elif v_str.startswith("postgresql://") and not v_str.startswith("postgresql+asyncpg://"):
             return v_str.replace("postgresql://", "postgresql+asyncpg://", 1)
         return v_str
 

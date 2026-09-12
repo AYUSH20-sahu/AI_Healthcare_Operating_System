@@ -8,11 +8,30 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
 
+from pathlib import Path
+
+# Load .env / .env.local
+root_dir = Path(__file__).resolve().parent.parent
+env_local = root_dir / ".env.local"
+env_file = root_dir / ".env"
+try:
+    from dotenv import load_dotenv
+    if env_local.exists():
+        load_dotenv(env_local)
+    elif env_file.exists():
+        load_dotenv(env_file)
+except ImportError:
+    pass
+
 # Database connection via environment variable
 DB_URL = os.getenv(
     "DATABASE_URL",
     "postgresql+asyncpg://postgres:postgres@localhost:5432/ai_hos"
 )
+if DB_URL.startswith("postgres://"):
+    DB_URL = DB_URL.replace("postgres://", "postgresql+asyncpg://", 1)
+elif DB_URL.startswith("postgresql://") and not DB_URL.startswith("postgresql+asyncpg://"):
+    DB_URL = DB_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
 
 ADMIN_EMAIL = os.getenv("ADMIN_EMAIL", "admin@test.com")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "adminpassword123")
@@ -28,8 +47,12 @@ def check_hash(password: str, hashed: str) -> bool:
 
 
 async def main():
-    print(f"[Admin Setup] Connecting to PostgreSQL...")
-    engine = create_async_engine(DB_URL, echo=False)
+    print(f"[Admin Setup] Connecting to PostgreSQL at {DB_URL.split('@')[-1] if '@' in DB_URL else 'localhost'}...")
+    connect_args = {}
+    if "localhost" not in DB_URL and "127.0.0.1" not in DB_URL:
+        connect_args["ssl"] = True
+
+    engine = create_async_engine(DB_URL, connect_args=connect_args, echo=False)
     async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
     from app.models import User, UserRole

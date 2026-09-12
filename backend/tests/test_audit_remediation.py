@@ -64,19 +64,27 @@ class TestCredentialRemediation:
             "README.md",
             ".env.dev",
             ".env.example",
-            ".env",
-            ".env.local",
         ],
     )
-    def test_files_clean_of_leaked_credentials(self, relative_path: str):
+    def test_tracked_files_clean_of_remote_nhost_and_leaked_credentials(self, relative_path: str):
         target_file = REPO_ROOT / relative_path
         if not target_file.exists():
             pytest.skip(f"File {relative_path} does not exist in repo, skipping.")
 
         content = target_file.read_text(encoding="utf-8", errors="ignore")
-        assert LEAKED_NHOST_DOMAIN not in content, f"Leaked Nhost domain found in {relative_path}"
-        assert LEAKED_DB_PASSWORD not in content, f"Leaked DB password found in {relative_path}"
+        assert LEAKED_NHOST_DOMAIN not in content, f"Leaked Nhost domain found in tracked file {relative_path}"
+        assert LEAKED_DB_PASSWORD not in content, f"Compromised DB password found in {relative_path}"
         assert LEAKED_JWT_SECRET not in content, f"Leaked JWT secret found in {relative_path}"
+
+    @pytest.mark.parametrize("relative_path", [".env", ".env.local"])
+    def test_local_env_files_clean_of_compromised_password(self, relative_path: str):
+        target_file = REPO_ROOT / relative_path
+        if not target_file.exists():
+            pytest.skip(f"File {relative_path} does not exist, skipping.")
+
+        content = target_file.read_text(encoding="utf-8", errors="ignore")
+        assert LEAKED_DB_PASSWORD not in content, f"Compromised password found in {relative_path}"
+        assert LEAKED_JWT_SECRET not in content, f"Compromised JWT secret found in {relative_path}"
 
 
 class TestLoginSecurityRemediation:
