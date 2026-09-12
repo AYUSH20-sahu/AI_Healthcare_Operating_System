@@ -149,6 +149,18 @@ async def update_doctor(
     return doctor
 
 
+@router.get("/specialties", response_model=list[str])
+async def get_specialties(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Retrieve distinct specialties available across all registered doctors."""
+    stmt = select(Doctor.specialty).distinct().order_by(Doctor.specialty)
+    res = await db.execute(stmt)
+    specialties = [s for s in res.scalars().all() if s]
+    return specialties
+
+
 @router.get("/", response_model=DoctorListResponse)
 async def list_doctors(
     page: int = Query(1, ge=1, description="Page number"),
@@ -157,8 +169,8 @@ async def list_doctors(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
-    """List doctors with pagination and optional specialty filter. Admin and doctors can list."""
-    if current_user.role not in (UserRole.ADMIN, UserRole.DOCTOR):
+    """List doctors with pagination and optional specialty filter. Accessible to patients, doctors, and admins."""
+    if current_user.role not in (UserRole.ADMIN, UserRole.DOCTOR, UserRole.PATIENT):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Insufficient permissions to list doctors",
@@ -168,20 +180,20 @@ async def list_doctors(
     query = select(Doctor)
     count_query = select(func.count(Doctor.doctor_id))
 
-    if specialty:
-        query = query.where(Doctor.specialty.ilike(f"%{specialty}%"))
-        count_query = count_query.where(Doctor.specialty.ilike(f"%{specialty}%"))
+    if specialty and specialty.strip() and specialty.lower() != "all":
+        query = query.where(Doctor.specialty.ilike(f"%{specialty.strip()}%"))
+        count_query = count_query.where(Doctor.specialty.ilike(f"%{specialty.strip()}%"))
 
     # Get total count
     total_result = await db.execute(count_query)
     total = total_result.scalar()
 
     # Apply pagination
-    query = query.offset((page - 1) * page_size).limit(page_size)
+    query = query.order_by(Doctor.full_name).offset((page - 1) * page_size).limit(page_size)
     result = await db.execute(query)
     doctors = result.scalars().all()
 
-    total_pages = (total + page_size - 1) // page_size
+    total_pages = (total + page_size - 1) // page_size if total else 0
 
     return DoctorListResponse(
         doctors=doctors,

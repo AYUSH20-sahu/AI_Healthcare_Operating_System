@@ -1,6 +1,4 @@
-"""Appointments API routes."""
-
-from datetime import datetime, timedelta
+from datetime import date, datetime, time, timedelta
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -12,9 +10,20 @@ from app.api.schemas.appointment import (
     AppointmentListResponse,
     AppointmentResponse,
     AppointmentUpdate,
+    DoctorAvailabilityResponse,
+    PatientAppointmentBookRequest,
+    TimeSlotItem,
 )
 from app.database import get_db
-from app.models import Appointment, AppointmentStatus, Doctor, Patient, User, UserRole
+from app.models import (
+    Appointment,
+    AppointmentStatus,
+    Doctor,
+    IntakeSession,
+    Patient,
+    User,
+    UserRole,
+)
 from app.services.auth.service import get_current_active_user
 
 router = APIRouter(prefix="/appointments", tags=["appointments"])
@@ -57,6 +66,183 @@ async def check_slot_conflict(
     return None
 
 
+@router.get("/availability", response_model=DoctorAvailabilityResponse)
+async def get_doctor_availability(
+    doctor_id: UUID = Query(..., description="Target doctor ID"),
+    date_str: str = Query(..., description="Target date in YYYY-MM-DD format"),
+    duration_minutes: int = Query(30, ge=15, le=120, description="Slot duration in minutes"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Calculate and return daily consultation time slots for a doctor, highlighting open vs booked slots."""
+    doctor = await db.get(Doctor, doctor_id)
+    if not doctor:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Doctor not found.")
+
+    try:
+        target_date = datetime.strptime(date_str, "%Y-%m-%d").date()
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid date format. Use YYYY-MM-DD.")
+
+    # Retrieve all non-cancelled appointments for this doctor on target date
+    start_of_day = datetime.combine(target_date, time(0, 0, 0))
+    end_of_day = datetime.combine(target_date, time(23, 59, 59))
+
+    query = select(Appointment).where(
+        and_(
+            Appointment.doctor_id == doctor_id,
+            Appointment.scheduled_at >= start_of_day,
+            Appointment.scheduled_at <= end_of_day,
+            Appointment.status != AppointmentStatus.CANCELLED,
+        )
+    )
+    result = await db.execute(query)
+    booked_appointments = result.scalars().all()
+
+    slots: list[TimeSlotItem] = []
+    now_utc = datetime.utcnow()
+
+    # Clinic hours: 9am - 1pm, 2pm - 5pm
+    clinic_hours = [
+        (9, 0, 13, 0),
+        (14, 0, 17, 0),
+    ]
+
+    for start_h, start_m, end_h, end_m in clinic_hours:
+        slot_dt = datetime.combine(target_date, time(start_h, start_m))
+        session_end_dt = datetime.combine(target_date, time(end_h, end_m))
+
+        while slot_dt + timedelta(minutes=duration_minutes) <= session_end_dt:
+            slot_end = slot_dt + timedelta(minutes=duration_minutes)
+            slot_time_str = slot_dt.strftime("%I:%M %p")
+
+            # Check if in the past
+            is_past = slot_dt < now_utc
+
+            # Check conflict
+            conflict = None
+            for appt in booked_appointments:
+                appt_end = appt.scheduled_at + timedelta(minutes=appt.duration_minutes)
+                if slot_dt < appt_end and slot_end > appt.scheduled_at:
+                    conflict = appt
+                    break
+
+            if is_past:
+                is_available = False
+                conflict_reason = "Past"
+            elif conflict:
+                is_available = False
+                conflict_reason = "Booked"
+            else:
+                is_available = True
+                conflict_reason = None
+
+            slots.append(
+                TimeSlotItem(
+                    slot_time=slot_time_str,
+                    start_time=slot_dt,
+                    end_time=slot_end,
+                    duration_minutes=duration_minutes,
+                    is_available=is_available,
+                    conflict_reason=conflict_reason,
+                )
+            )
+
+            slot_dt = slot_end
+
+    available_count = sum(1 for s in slots if s.is_available)
+
+    return DoctorAvailabilityResponse(
+        doctor_id=doctor.doctor_id,
+        doctor_name=doctor.full_name,
+        specialty=doctor.specialty,
+        hospital_affiliation=doctor.hospital_affiliation,
+        date=date_str,
+        total_slots=len(slots),
+        available_slots_count=available_count,
+        slots=slots,
+    )
+
+
+@router.post("/book", response_model=AppointmentResponse, status_code=status.HTTP_201_CREATED)
+async def book_patient_appointment(
+    payload: PatientAppointmentBookRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Patient-facing appointment booking endpoint with automatic profile resolution and conflict locking."""
+    # Resolve patient
+    if current_user.role == UserRole.PATIENT:
+        p_res = await db.execute(select(Patient).where(Patient.user_id == current_user.user_id))
+        patient = p_res.scalar_one_or_none()
+        if not patient:
+            patient = Patient(
+                user_id=current_user.user_id,
+                full_name=current_user.full_name or "Patient",
+                email=current_user.email,
+                date_of_birth=date(1995, 1, 1),
+                gender="Not Specified",
+            )
+            db.add(patient)
+            await db.commit()
+            await db.refresh(patient)
+    elif current_user.role in (UserRole.ADMIN, UserRole.DOCTOR):
+        p_res = await db.execute(select(Patient).limit(1))
+        patient = p_res.scalar_one_or_none()
+        if not patient:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No patient found in system.")
+    else:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Unauthorized role.")
+
+    doctor = await db.get(Doctor, payload.doctor_id)
+    if not doctor:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Doctor not found.")
+
+    # Check for slot conflict
+    conflicting = await check_slot_conflict(
+        db,
+        payload.doctor_id,
+        payload.scheduled_at,
+        payload.duration_minutes,
+    )
+    if conflicting:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This appointment slot is no longer available. Please select another time slot.",
+        )
+
+    # Contextual notes, linking intake session if available
+    notes_text = payload.reason or ""
+    if payload.intake_session_id:
+        intake_res = await db.execute(
+            select(IntakeSession).where(IntakeSession.session_id == payload.intake_session_id)
+        )
+        intake = intake_res.scalar_one_or_none()
+        if intake and intake.structured_symptoms:
+            struct = intake.structured_symptoms
+            cc = struct.get("chief_complaint") or ""
+            notes_text = f"[AI Intake]: {cc}. " + (notes_text if notes_text else "")
+
+    appointment = Appointment(
+        patient_id=patient.patient_id,
+        doctor_id=doctor.doctor_id,
+        scheduled_at=payload.scheduled_at,
+        duration_minutes=payload.duration_minutes,
+        status=AppointmentStatus.SCHEDULED,
+        notes=notes_text.strip() or None,
+    )
+    db.add(appointment)
+    await db.flush()
+
+    # Assign room and meeting link
+    appointment.telehealth_room_id = f"telehealth-{str(appointment.appointment_id)[:8]}"
+    appointment.meeting_link = f"/doctor/consultations/{appointment.appointment_id}"
+
+    await db.commit()
+    await db.refresh(appointment)
+    return appointment
+
+
 @router.post("/", response_model=AppointmentResponse, status_code=status.HTTP_201_CREATED)
 async def create_appointment(
     appointment_data: AppointmentCreate,
@@ -64,6 +250,16 @@ async def create_appointment(
     current_user: User = Depends(get_current_active_user),
 ):
     """Create a new appointment. Validates no double-booking for the doctor."""
+    # RBAC check: patients can only book for themselves
+    if current_user.role == UserRole.PATIENT:
+        p_res = await db.execute(select(Patient).where(Patient.user_id == current_user.user_id))
+        caller_patient = p_res.scalar_one_or_none()
+        if not caller_patient or caller_patient.patient_id != appointment_data.patient_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Patients can only book appointments for themselves.",
+            )
+
     # Verify patient exists
     patient = await db.get(Patient, appointment_data.patient_id)
     if not patient:
@@ -95,6 +291,10 @@ async def create_appointment(
         )
     
     appointment = Appointment(**appointment_data.model_dump())
+    if not appointment.meeting_link:
+        appointment.telehealth_room_id = f"telehealth-{str(appointment.appointment_id)[:8]}"
+        appointment.meeting_link = f"/doctor/consultations/{appointment.appointment_id}"
+
     db.add(appointment)
     await db.commit()
     await db.refresh(appointment)

@@ -125,8 +125,58 @@ export default function PatientDashboardPage() {
                 </Link>
             </div>
 
+            {/* Quick Health Actions Bar (U-16) */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <Link href="/patient/reports" className="block group">
+                    <Card className="hover:border-blue-500/50 transition-all border border-slate-200 dark:border-slate-800 bg-gradient-to-r from-blue-50/50 to-indigo-50/30 dark:from-slate-900 dark:to-slate-800/80 shadow-sm">
+                        <CardContent className="p-4 flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-xl bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400 flex items-center justify-center text-lg">
+                                    📁
+                                </div>
+                                <div>
+                                    <h4 className="text-sm font-bold text-slate-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                                        Medical Reports & Lab Scans
+                                    </h4>
+                                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                                        Upload and archive lab documents, scans, and diagnostic PDFs
+                                    </p>
+                                </div>
+                            </div>
+                            <span className="text-xs font-semibold text-blue-600 dark:text-blue-400">
+                                Upload →
+                            </span>
+                        </CardContent>
+                    </Card>
+                </Link>
+
+                <Link href="/patient/reminders" className="block group">
+                    <Card className="hover:border-purple-500/50 transition-all border border-slate-200 dark:border-slate-800 bg-gradient-to-r from-purple-50/50 to-pink-50/30 dark:from-slate-900 dark:to-slate-800/80 shadow-sm">
+                        <CardContent className="p-4 flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-xl bg-purple-100 dark:bg-purple-900/50 text-purple-600 dark:text-purple-400 flex items-center justify-center text-lg">
+                                    ⏰
+                                </div>
+                                <div>
+                                    <h4 className="text-sm font-bold text-slate-900 dark:text-white group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">
+                                        Medicine Reminders
+                                    </h4>
+                                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                                        Configure daily dosage times and adherence schedules
+                                    </p>
+                                </div>
+                            </div>
+                            <span className="text-xs font-semibold text-purple-600 dark:text-purple-400">
+                                Schedule →
+                            </span>
+                        </CardContent>
+                    </Card>
+                </Link>
+            </div>
+
             {/* Next Appointment Spotlight & Active Medication Timeline */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
                 {/* Next Appointment Spotlight (7 Cols) */}
                 <div className="lg:col-span-7 space-y-4">
                     <div className="flex items-center justify-between">

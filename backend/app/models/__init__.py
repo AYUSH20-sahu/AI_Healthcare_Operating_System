@@ -156,6 +156,8 @@ class Patient(Base):
     voice_notes: Mapped[list["VoiceNote"]] = relationship(back_populates="patient")
     consents: Mapped[list["Consent"]] = relationship(back_populates="patient")
     intake_sessions: Mapped[list["IntakeSession"]] = relationship(back_populates="patient")
+    reports: Mapped[list["PatientReport"]] = relationship(back_populates="patient", cascade="all, delete-orphan")
+    medicine_reminders: Mapped[list["MedicineReminder"]] = relationship(back_populates="patient", cascade="all, delete-orphan")
 
 
 # FHIR: Practitioner + PractitionerRole
@@ -441,3 +443,62 @@ class IntakeSession(Base):
     __table_args__ = (
         Index("ix_intake_sessions_patient_status", "patient_id", "status"),
     )
+
+
+# FHIR: DiagnosticReport / DocumentReference (Patient Uploaded Medical Report)
+class PatientReport(Base):
+    """Medical document or laboratory/imaging report uploaded by or for a patient."""
+    __tablename__ = "patient_reports"
+
+    report_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    patient_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("patients.patient_id"), index=True
+    )
+    title: Mapped[str] = mapped_column(String(255), index=True)
+    report_type: Mapped[str] = mapped_column(String(100), default="other", index=True)  # lab, imaging, prescription, discharge, other
+    file_name: Mapped[str] = mapped_column(String(255))
+    file_path: Mapped[str] = mapped_column(String(1024))
+    file_size_bytes: Mapped[int] = mapped_column(Integer)
+    mime_type: Mapped[str] = mapped_column(String(100))
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    patient: Mapped["Patient"] = relationship(back_populates="reports")
+
+    __table_args__ = (
+        Index("ix_patient_reports_patient_created", "patient_id", "created_at"),
+    )
+
+
+# FHIR: MedicationStatement / CarePlan (Patient Medicine Reminder & Adherence Schedule)
+class MedicineReminder(Base):
+    """Patient scheduled medicine reminder and dosage schedule."""
+    __tablename__ = "medicine_reminders"
+
+    reminder_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    patient_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("patients.patient_id"), index=True
+    )
+    medication_name: Mapped[str] = mapped_column(String(255), index=True)
+    dosage: Mapped[str] = mapped_column(String(100))  # e.g., "500mg", "1 tablet"
+    frequency: Mapped[str] = mapped_column(String(100))  # e.g., "Once daily", "Twice daily"
+    times_of_day: Mapped[list[str]] = mapped_column(JSON, default=list)  # e.g., ["08:00", "20:00"]
+    instructions: Mapped[str | None] = mapped_column(Text, nullable=True)  # e.g., "Take after meals with water"
+    start_date: Mapped[Date | None] = mapped_column(Date, nullable=True)
+    end_date: Mapped[Date | None] = mapped_column(Date, nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    patient: Mapped["Patient"] = relationship(back_populates="medicine_reminders")
+
+    __table_args__ = (
+        Index("ix_medicine_reminders_patient_active", "patient_id", "is_active"),
+    )

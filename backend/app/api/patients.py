@@ -1,7 +1,14 @@
+import logging
+import os
+import shutil
+import uuid
 from datetime import date, datetime
+from pathlib import Path
+from typing import List, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
+from fastapi.responses import FileResponse
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -16,11 +23,32 @@ from app.api.schemas.patient import (
     PatientPortalRecordItem,
     PatientPortalPrescriptionItem,
 )
+from app.api.schemas.patient_tools import (
+    PatientReportResponse,
+    PatientReportListResponse,
+    MedicineReminderCreateRequest,
+    MedicineReminderUpdateRequest,
+    MedicineReminderResponse,
+    MedicineReminderListResponse,
+)
 from app.database import get_db
-from app.models import Patient, User, UserRole
+from app.models import Patient, PatientReport, MedicineReminder, User, UserRole
 from app.services.auth.service import get_current_active_user
 
+logger = logging.getLogger(__name__)
+
+# Constants for U-16 Report Management
+ALLOWED_REPORT_MIME_TYPES = {
+    "application/pdf",
+    "image/png",
+    "image/jpeg",
+    "image/webp",
+}
+MAX_REPORT_FILE_SIZE_BYTES = 10 * 1024 * 1024  # 10 Megabytes
+BASE_REPORTS_DIR = Path("uploads/reports")
+
 router = APIRouter(prefix="/patients", tags=["patients"])
+
 
 
 @router.post("/", response_model=PatientResponse, status_code=status.HTTP_201_CREATED)
@@ -319,6 +347,335 @@ async def get_my_patient_prescriptions(
         )
         for rx, doc in results
     ]
+
+
+# =============================================================================
+# Milestone U-16: Patient Medical Reports Endpoints
+# =============================================================================
+
+@router.post("/me/reports", response_model=PatientReportResponse, status_code=status.HTTP_201_CREATED)
+async def upload_patient_report(
+    file: UploadFile = File(...),
+    title: str = Form(...),
+    report_type: str = Form("other"),
+    notes: Optional[str] = Form(None),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Securely upload a medical report for the authenticated patient with MIME and size validation."""
+    patient = await _get_or_create_patient_profile(db, current_user)
+
+    # 1. MIME Validation
+    content_type = file.content_type or "application/octet-stream"
+    if content_type not in ALLOWED_REPORT_MIME_TYPES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unsupported file format '{content_type}'. Allowed types: PDF, PNG, JPEG, WebP.",
+        )
+
+    # 2. Size Validation
+    file_bytes = await file.read()
+    file_size = len(file_bytes)
+    if file_size > MAX_REPORT_FILE_SIZE_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"File size exceeds maximum allowed limit of 10 MB ({file_size / (1024*1024):.2f} MB uploaded).",
+        )
+    if file_size == 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Uploaded file is empty.",
+        )
+
+    # 3. Secure isolated directory: uploads/reports/{patient_id}/
+    patient_dir = BASE_REPORTS_DIR / str(patient.patient_id)
+    patient_dir.mkdir(parents=True, exist_ok=True)
+
+    safe_filename = os.path.basename(file.filename or "medical_report")
+    unique_filename = f"{uuid.uuid4().hex[:12]}_{safe_filename}"
+    file_target_path = patient_dir / unique_filename
+
+    with open(file_target_path, "wb") as f:
+        f.write(file_bytes)
+
+    # 4. Save metadata in DB
+    report = PatientReport(
+        patient_id=patient.patient_id,
+        title=title.strip() if title else safe_filename,
+        report_type=report_type.lower().strip() if report_type else "other",
+        file_name=safe_filename,
+        file_path=str(file_target_path.resolve()),
+        file_size_bytes=file_size,
+        mime_type=content_type,
+        notes=notes.strip() if notes else None,
+    )
+    db.add(report)
+    await db.commit()
+    await db.refresh(report)
+
+    logger.info(
+        "Uploaded patient report %s (%s, %d bytes) for patient %s",
+        report.report_id,
+        report.file_name,
+        report.file_size_bytes,
+        patient.patient_id,
+    )
+    return report
+
+
+@router.get("/me/reports", response_model=PatientReportListResponse)
+async def list_my_patient_reports(
+    report_type: Optional[str] = Query(None, description="Filter by report category (lab, imaging, prescription, discharge, other)"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """List all medical reports uploaded by or for the authenticated patient."""
+    patient = await _get_or_create_patient_profile(db, current_user)
+    query = select(PatientReport).where(PatientReport.patient_id == patient.patient_id)
+    if report_type:
+        query = query.where(PatientReport.report_type == report_type.lower().strip())
+    query = query.order_by(PatientReport.created_at.desc())
+
+    result = await db.execute(query)
+    reports = list(result.scalars().all())
+    return PatientReportListResponse(reports=reports, total=len(reports))
+
+
+@router.get("/me/reports/{report_id}", response_model=PatientReportResponse)
+async def get_my_patient_report(
+    report_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Retrieve metadata of a specific medical report for the authenticated patient."""
+    patient = await _get_or_create_patient_profile(db, current_user)
+    report = await db.get(PatientReport, report_id)
+    if not report:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Medical report not found",
+        )
+    if report.patient_id != patient.patient_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied: You cannot access another patient's medical report",
+        )
+    return report
+
+
+@router.get("/me/reports/{report_id}/download")
+async def download_my_patient_report(
+    report_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Stream download authenticated patient's medical report file."""
+    patient = await _get_or_create_patient_profile(db, current_user)
+    report = await db.get(PatientReport, report_id)
+    if not report:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Medical report not found",
+        )
+    if report.patient_id != patient.patient_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied: You cannot download another patient's medical report",
+        )
+
+    file_path = Path(report.file_path)
+    if not file_path.exists():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Report file does not exist on storage",
+        )
+
+    return FileResponse(
+        path=str(file_path),
+        filename=report.file_name,
+        media_type=report.mime_type,
+    )
+
+
+@router.delete("/me/reports/{report_id}")
+async def delete_my_patient_report(
+    report_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Delete a medical report and remove its file from disk storage."""
+    patient = await _get_or_create_patient_profile(db, current_user)
+    report = await db.get(PatientReport, report_id)
+    if not report:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Medical report not found",
+        )
+    if report.patient_id != patient.patient_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied: You cannot delete another patient's medical report",
+        )
+
+    # Attempt physical unlinking
+    try:
+        file_path = Path(report.file_path)
+        if file_path.exists():
+            file_path.unlink()
+    except Exception as exc:
+        logger.warning("Could not delete report file %s: %s", report.file_path, exc)
+
+    await db.delete(report)
+    await db.commit()
+    return {"detail": "Medical report deleted successfully", "report_id": str(report_id)}
+
+
+# =============================================================================
+# Milestone U-16: Patient Medicine Reminders Endpoints
+# =============================================================================
+
+@router.get("/me/reminders", response_model=MedicineReminderListResponse)
+async def list_my_medicine_reminders(
+    active_only: Optional[bool] = Query(None, description="Filter for active reminders only"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """List medicine reminders for the authenticated patient."""
+    patient = await _get_or_create_patient_profile(db, current_user)
+    query = select(MedicineReminder).where(MedicineReminder.patient_id == patient.patient_id)
+    if active_only is not None:
+        query = query.where(MedicineReminder.is_active == active_only)
+    query = query.order_by(MedicineReminder.created_at.desc())
+
+    result = await db.execute(query)
+    reminders = list(result.scalars().all())
+    return MedicineReminderListResponse(reminders=reminders, total=len(reminders))
+
+
+@router.post("/me/reminders", response_model=MedicineReminderResponse, status_code=status.HTTP_201_CREATED)
+async def create_my_medicine_reminder(
+    reminder_data: MedicineReminderCreateRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Create a new medicine reminder and register schedule dispatch stub."""
+    patient = await _get_or_create_patient_profile(db, current_user)
+
+    reminder = MedicineReminder(
+        patient_id=patient.patient_id,
+        medication_name=reminder_data.medication_name.strip(),
+        dosage=reminder_data.dosage.strip(),
+        frequency=reminder_data.frequency.strip(),
+        times_of_day=reminder_data.times_of_day,
+        instructions=reminder_data.instructions.strip() if reminder_data.instructions else None,
+        start_date=reminder_data.start_date,
+        end_date=reminder_data.end_date,
+        is_active=reminder_data.is_active,
+    )
+    db.add(reminder)
+    await db.commit()
+    await db.refresh(reminder)
+
+    # Master prompt strict rule: Transparent logging of scheduler dispatch stub
+    logger.info(
+        "[Scheduler Stub] Scheduled reminder job for %s at %s for patient %s (delivery channel: simulated scheduler stub; external SMS/Push delivery pending)",
+        reminder.medication_name,
+        reminder.times_of_day,
+        patient.patient_id,
+    )
+
+    return reminder
+
+
+@router.put("/me/reminders/{reminder_id}", response_model=MedicineReminderResponse)
+async def update_my_medicine_reminder(
+    reminder_id: UUID,
+    update_data: MedicineReminderUpdateRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Update or toggle active status of a medicine reminder."""
+    patient = await _get_or_create_patient_profile(db, current_user)
+    reminder = await db.get(MedicineReminder, reminder_id)
+    if not reminder:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Medicine reminder not found",
+        )
+    if reminder.patient_id != patient.patient_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied: You cannot update another patient's medicine reminder",
+        )
+
+    data = update_data.model_dump(exclude_unset=True)
+    for field, val in data.items():
+        if field in ("medication_name", "dosage", "frequency", "instructions") and isinstance(val, str):
+            setattr(reminder, field, val.strip())
+        else:
+            setattr(reminder, field, val)
+
+    await db.commit()
+    await db.refresh(reminder)
+
+    logger.info(
+        "[Scheduler Stub] Updated reminder schedule for %s (active=%s, times=%s)",
+        reminder.medication_name,
+        reminder.is_active,
+        reminder.times_of_day,
+    )
+    return reminder
+
+
+@router.delete("/me/reminders/{reminder_id}")
+async def delete_my_medicine_reminder(
+    reminder_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Delete a medicine reminder."""
+    patient = await _get_or_create_patient_profile(db, current_user)
+    reminder = await db.get(MedicineReminder, reminder_id)
+    if not reminder:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Medicine reminder not found",
+        )
+    if reminder.patient_id != patient.patient_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied: You cannot delete another patient's medicine reminder",
+        )
+
+    await db.delete(reminder)
+    await db.commit()
+
+    logger.info("[Scheduler Stub] Cancelled reminder job for %s", reminder.medication_name)
+    return {"detail": "Medicine reminder deleted successfully", "reminder_id": str(reminder_id)}
+
+
+@router.get("/{patient_id}/reports", response_model=PatientReportListResponse)
+async def list_patient_reports_for_provider(
+    patient_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Allow healthcare providers (Doctors and Admins) to view a patient's medical reports."""
+    if current_user.role not in (UserRole.DOCTOR, UserRole.ADMIN):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only doctors and admins can view patient reports via provider endpoint",
+        )
+    patient = await db.get(Patient, patient_id)
+    if not patient:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Patient not found",
+        )
+    query = select(PatientReport).where(PatientReport.patient_id == patient_id).order_by(PatientReport.created_at.desc())
+    result = await db.execute(query)
+    reports = list(result.scalars().all())
+    return PatientReportListResponse(reports=reports, total=len(reports))
 
 
 @router.get("/{patient_id}/", response_model=PatientResponse)

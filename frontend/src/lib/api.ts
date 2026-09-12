@@ -69,8 +69,9 @@ async function request<T>(
     // Get auth token from localStorage safely
     const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
 
+    const isFormData = typeof FormData !== 'undefined' && fetchOptions.body instanceof FormData;
     const defaultHeaders: HeadersInit = {
-        'Content-Type': 'application/json',
+        ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...headers,
     };
@@ -153,8 +154,14 @@ export const api = {
     get: <T>(endpoint: string, params?: Record<string, string | number | boolean | undefined>) =>
         request<T>(endpoint, { method: 'GET', params }),
 
-    post: <T>(endpoint: string, data?: unknown, params?: Record<string, string | number | boolean | undefined>) =>
-        request<T>(endpoint, { method: 'POST', body: data !== undefined ? JSON.stringify(data) : undefined, params }),
+    post: <T>(endpoint: string, data?: unknown, params?: Record<string, string | number | boolean | undefined>) => {
+        const isFormData = typeof FormData !== 'undefined' && data instanceof FormData;
+        return request<T>(endpoint, {
+            method: 'POST',
+            body: isFormData ? (data as FormData) : data !== undefined ? JSON.stringify(data) : undefined,
+            params,
+        });
+    },
 
     put: <T>(endpoint: string, data: unknown) =>
         request<T>(endpoint, { method: 'PUT', body: JSON.stringify(data) }),
@@ -1072,4 +1079,154 @@ export const telehealthApi = {
         api.post<TelehealthActionResponse>(`/telehealth/rooms/${appointmentId}/start`, {}),
     endRoom: (appointmentId: string) =>
         api.post<TelehealthActionResponse>(`/telehealth/rooms/${appointmentId}/end`, {}),
-};
+};
+
+// =============================================================================
+// Appointment Availability & Booking API (Milestone U-15 / M28)
+// =============================================================================
+
+export interface TimeSlotItem {
+    slot_time: string;
+    start_time: string;
+    end_time: string;
+    duration_minutes: number;
+    is_available: boolean;
+    conflict_reason?: string | null;
+}
+
+export interface DoctorAvailabilityResponse {
+    doctor_id: string;
+    doctor_name: string;
+    specialty: string;
+    hospital_affiliation?: string | null;
+    date: string;
+    total_slots: number;
+    available_slots_count: number;
+    slots: TimeSlotItem[];
+}
+
+export interface PatientAppointmentBookRequest {
+    doctor_id: string;
+    scheduled_at: string;
+    duration_minutes?: number;
+    reason?: string | null;
+    intake_session_id?: string | null;
+}
+
+export const appointmentBookingApi = {
+    getSpecialties: () =>
+        api.get<string[]>('/doctors/specialties'),
+    getDoctors: (specialty?: string, page: number = 1, pageSize: number = 50) =>
+        api.get<DoctorListResponse>('/doctors', {
+            params: {
+                page,
+                page_size: pageSize,
+                ...(specialty && specialty !== 'All' ? { specialty } : {}),
+            },
+        }),
+    getAvailability: (doctorId: string, dateStr: string, durationMinutes: number = 30) =>
+        api.get<DoctorAvailabilityResponse>('/appointments/availability', {
+            params: {
+                doctor_id: doctorId,
+                date_str: dateStr,
+                duration_minutes: durationMinutes,
+            },
+        }),
+    bookAppointment: (data: PatientAppointmentBookRequest) =>
+        api.post<Appointment>('/appointments/book', data),
+};
+
+// =============================================================================
+// Milestone U-16: Patient Reports & Medicine Reminders
+// =============================================================================
+
+export interface PatientReportItem {
+    report_id: string;
+    patient_id: string;
+    title: string;
+    report_type: 'lab' | 'imaging' | 'prescription' | 'discharge' | 'other' | string;
+    file_name: string;
+    file_size_bytes: number;
+    mime_type: string;
+    notes?: string | null;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface PatientReportListResponse {
+    reports: PatientReportItem[];
+    total: number;
+}
+
+export interface MedicineReminderItem {
+    reminder_id: string;
+    patient_id: string;
+    medication_name: string;
+    dosage: string;
+    frequency: string;
+    times_of_day: string[];
+    instructions?: string | null;
+    start_date?: string | null;
+    end_date?: string | null;
+    is_active: boolean;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface MedicineReminderListResponse {
+    reminders: MedicineReminderItem[];
+    total: number;
+}
+
+export interface MedicineReminderCreatePayload {
+    medication_name: string;
+    dosage: string;
+    frequency: string;
+    times_of_day: string[];
+    instructions?: string | null;
+    start_date?: string | null;
+    end_date?: string | null;
+    is_active?: boolean;
+}
+
+export interface MedicineReminderUpdatePayload {
+    medication_name?: string;
+    dosage?: string;
+    frequency?: string;
+    times_of_day?: string[];
+    instructions?: string | null;
+    start_date?: string | null;
+    end_date?: string | null;
+    is_active?: boolean;
+}
+
+export const patientReportsApi = {
+    list: (reportType?: string) =>
+        api.get<PatientReportListResponse>('/patients/me/reports', {
+            params: reportType && reportType !== 'all' ? { report_type: reportType } : undefined,
+        }),
+    get: (reportId: string) =>
+        api.get<PatientReportItem>(`/patients/me/reports/${reportId}`),
+    upload: (formData: FormData) =>
+        api.post<PatientReportItem>('/patients/me/reports', formData),
+    delete: (reportId: string) =>
+        api.delete<{ detail: string; report_id: string }>(`/patients/me/reports/${reportId}`),
+    getDownloadUrl: (reportId: string) =>
+        `/api/v1/patients/me/reports/${reportId}/download`,
+};
+
+export const patientRemindersApi = {
+    list: (activeOnly?: boolean) =>
+        api.get<MedicineReminderListResponse>('/patients/me/reminders', {
+            params: activeOnly !== undefined ? { active_only: activeOnly } : undefined,
+        }),
+    create: (data: MedicineReminderCreatePayload) =>
+        api.post<MedicineReminderItem>('/patients/me/reminders', data),
+    update: (reminderId: string, data: MedicineReminderUpdatePayload) =>
+        api.put<MedicineReminderItem>(`/patients/me/reminders/${reminderId}`, data),
+    toggleActive: (reminderId: string, isActive: boolean) =>
+        api.put<MedicineReminderItem>(`/patients/me/reminders/${reminderId}`, { is_active: isActive }),
+    delete: (reminderId: string) =>
+        api.delete<{ detail: string; reminder_id: string }>(`/patients/me/reminders/${reminderId}`),
+};
+

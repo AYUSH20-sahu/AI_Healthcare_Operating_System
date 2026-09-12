@@ -81,8 +81,8 @@ export default function PatientAppointmentsPage() {
                 </div>
 
                 <div className="flex items-center gap-3">
-                    <Link href="/patient/intake">
-                        <Button variant="primary" size="sm">
+                    <Link href="/patient/appointments/book">
+                        <Button variant="primary" size="sm" className="bg-indigo-600 hover:bg-indigo-700 text-white">
                             + Book New Consultation
                         </Button>
                     </Link>
