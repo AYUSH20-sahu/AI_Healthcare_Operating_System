@@ -11,6 +11,7 @@ from app.api import (
     prescriptions,
     voice_notes,
     admin_users,
+    admin_operations,
     copilot,
     intake,
     telehealth,
@@ -47,6 +48,7 @@ app.include_router(prescriptions.router, prefix="/api/v1")
 app.include_router(voice_notes.router, prefix="/api/v1")
 app.include_router(approval.router, prefix="/api/v1")
 app.include_router(admin_users.router, prefix="/api/v1")
+app.include_router(admin_operations.router, prefix="/api/v1")
 app.include_router(copilot.router, prefix="/api/v1")
 app.include_router(intake.router, prefix="/api/v1")
 app.include_router(telehealth.router, prefix="/api/v1")

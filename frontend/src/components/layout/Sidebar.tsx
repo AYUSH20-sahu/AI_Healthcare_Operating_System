@@ -221,7 +221,7 @@ export function Sidebar({
                 section: 'Operations & Governance',
                 items: [
                     {
-                        name: 'Operations Center',
+                        name: 'Operations Console',
                         href: '/admin',
                         icon: (
                             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -230,7 +230,29 @@ export function Sidebar({
                         ),
                     },
                     {
-                        name: 'User Clearances',
+                        name: 'Live Clinic Queue',
+                        href: '/admin/queue',
+                        badge: 'Live',
+                        badgeVariant: 'purple',
+                        icon: (
+                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                        ),
+                    },
+                    {
+                        name: 'Doctor Availability',
+                        href: '/admin/availability',
+                        badge: 'Capacity',
+                        badgeVariant: 'primary',
+                        icon: (
+                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                            </svg>
+                        ),
+                    },
+                    {
+                        name: 'User & Role Clearances',
                         href: '/admin/users',
                         icon: (
                             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -249,6 +271,7 @@ export function Sidebar({
                             </svg>
                         ),
                     },
+
                     {
                         name: 'Agent Mesh Monitor',
                         href: '/admin/agents',

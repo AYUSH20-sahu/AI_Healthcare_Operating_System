@@ -356,3 +356,144 @@ async def reset_user_password(
     await db.commit()
 
     return {"message": f"Password reset successfully for {user.email}"}
+
+
+class UserRoleChangeRequest(BaseModel):
+    """Schema for updating a user's organizational role."""
+    new_role: str = Field(..., description="Target role: doctor, nurse, receptionist, admin, patient")
+    specialty: Optional[str] = Field(None, description="Required if promoted to doctor and no profile exists")
+    license_number: Optional[str] = Field(None, description="Required if promoted to doctor and no profile exists")
+
+
+@router.patch("/{user_id}/role", response_model=AdminUserResponse)
+async def update_user_role(
+    user_id: uuid.UUID,
+    role_data: UserRoleChangeRequest,
+    db: AsyncSession = Depends(get_db),
+    current_admin: User = Depends(require_admin),
+):
+    """Assign or change a user's role with full audit trail.
+    
+    Admins cannot demote their own account to prevent lockout.
+    Promoting a user to DOCTOR initializes a doctor profile if needed.
+    """
+    try:
+        assigned_role = UserRole(role_data.new_role.lower())
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid role: '{role_data.new_role}'. Allowed: doctor, nurse, receptionist, admin, patient",
+        )
+
+    if user_id == current_admin.user_id and assigned_role != UserRole.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Administrators cannot demote their own account",
+        )
+
+    result = await db.execute(select(User).where(User.user_id == user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+
+    old_role = user.role.value if hasattr(user.role, "value") else str(user.role)
+    user.role = assigned_role
+
+    doc_summary = None
+    if assigned_role == UserRole.DOCTOR:
+        doc_res = await db.execute(select(Doctor).where(Doctor.user_id == user.user_id))
+        doc = doc_res.scalar_one_or_none()
+        if not doc:
+            # Create doctor profile
+            doc = Doctor(
+                user_id=user.user_id,
+                email=user.email,
+                full_name=user.full_name,
+                specialty=role_data.specialty or "General Medicine",
+                license_number=role_data.license_number or f"LIC-{uuid.uuid4().hex[:8].upper()}",
+                hospital_affiliation="AI-HOS Central Health",
+            )
+            db.add(doc)
+            await db.flush()
+        doc_summary = DoctorProfileSummary(
+            doctor_id=doc.doctor_id,
+            specialty=doc.specialty,
+            license_number=doc.license_number,
+            hospital_affiliation=doc.hospital_affiliation,
+            phone=doc.phone,
+        )
+
+    audit_entry = AuditLog(
+        user_id=current_admin.user_id,
+        action="ADMIN_CHANGE_USER_ROLE",
+        resource_type="users",
+        resource_id=user.user_id,
+        outcome=AuditOutcome.SUCCESS,
+        details={
+            "target_email": user.email,
+            "old_role": old_role,
+            "new_role": assigned_role.value,
+            "changed_by_admin": str(current_admin.user_id),
+        },
+    )
+    db.add(audit_entry)
+    await db.commit()
+    await db.refresh(user)
+
+    return AdminUserResponse(
+        user_id=user.user_id,
+        email=user.email,
+        full_name=user.full_name,
+        role=user.role.value if hasattr(user.role, "value") else str(user.role),
+        is_active=user.is_active,
+        created_at=user.created_at,
+        doctor_profile=doc_summary,
+    )
+
+
+@router.delete("/{user_id}")
+async def deactivate_or_delete_user(
+    user_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_admin: User = Depends(require_admin),
+):
+    """Deactivate or remove a user account.
+    
+    Prevents self-deletion by administrators.
+    """
+    if user_id == current_admin.user_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Administrators cannot delete their own account",
+        )
+
+    result = await db.execute(select(User).where(User.user_id == user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found",
+        )
+
+    # Soft deactivate to maintain referential integrity in audits & medical records
+    user.is_active = False
+
+    audit_entry = AuditLog(
+        user_id=current_admin.user_id,
+        action="ADMIN_DEACTIVATE_USER",
+        resource_type="users",
+        resource_id=user.user_id,
+        outcome=AuditOutcome.SUCCESS,
+        details={
+            "target_email": user.email,
+            "deactivated_by_admin": str(current_admin.user_id),
+        },
+    )
+    db.add(audit_entry)
+    await db.commit()
+
+    return {"detail": "User account deactivated successfully", "user_id": str(user_id)}
+

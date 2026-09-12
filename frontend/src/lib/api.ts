@@ -683,9 +683,20 @@ export const adminUsersApi = {
     toggleStatus: (userId: string, isActive: boolean) =>
         api.patch<AdminUser>(`/admin/users/${userId}/status`, { is_active: isActive }),
 
+    updateRole: (userId: string, newRole: string, specialty?: string, licenseNumber?: string) =>
+        api.patch<AdminUser>(`/admin/users/${userId}/role`, {
+            new_role: newRole,
+            specialty,
+            license_number: licenseNumber,
+        }),
+
+    deleteUser: (userId: string) =>
+        api.delete<{ detail: string; user_id: string }>(`/admin/users/${userId}`),
+
     resetPassword: (userId: string, newPassword: string) =>
         api.post<{ message: string }>(`/admin/users/${userId}/reset-password`, { new_password: newPassword }),
 };
+
 
 export interface AIMetadata {
     provider: string;
@@ -1229,4 +1240,126 @@ export const patientRemindersApi = {
     delete: (reminderId: string) =>
         api.delete<{ detail: string; reminder_id: string }>(`/patients/me/reminders/${reminderId}`),
 };
+
+// =============================================================================
+// Milestone U-17: Admin Operations & Telemetry API
+// =============================================================================
+
+export interface OperationalDashboardData {
+    users_summary: {
+        total_users: number;
+        active_users: number;
+        doctors_count: number;
+        patients_count: number;
+        nurses_count: number;
+        receptionists_count: number;
+        admins_count: number;
+    };
+    appointments_summary: {
+        total_appointments: number;
+        today_total: number;
+        today_scheduled: number;
+        today_in_progress: number;
+        today_completed: number;
+        today_cancelled: number;
+    };
+    clinical_summary: {
+        prescriptions_finalized: number;
+        medical_records_finalized: number;
+        intake_sessions_total: number;
+        patient_reports_archived: number;
+    };
+    active_doctors_count: number;
+    system_telemetry: {
+        database_status: string;
+        gemini_live_mesh: string;
+        fhir_r4_compliance: string;
+        audit_logging_pipeline: string;
+        server_time_utc: string;
+    };
+    future_capabilities: Record<string, { is_available: boolean; status: string; roadmap_milestone: string }>;
+}
+
+export interface QueueItem {
+    appointment_id: string;
+    patient_id: string;
+    patient_name: string;
+    patient_phone?: string | null;
+    patient_abha?: string | null;
+    doctor_id: string;
+    doctor_name: string;
+    doctor_specialty: string;
+    scheduled_at: string;
+    duration_minutes: number;
+    status: 'scheduled' | 'in_progress' | 'completed' | 'cancelled' | string;
+    reason?: string | null;
+    meeting_link?: string | null;
+    intake_chief_complaint?: string | null;
+    intake_severity?: number | null;
+    wait_time_minutes: number;
+}
+
+export interface QueueListResponse {
+    queue: QueueItem[];
+    total_in_queue: number;
+    active_consultations_count: number;
+    completed_today_count: number;
+    date: string;
+}
+
+export interface DoctorSlotDetail {
+    slot_time: string;
+    is_available: boolean;
+    booked_appointment_id?: string | null;
+    patient_name?: string | null;
+}
+
+export interface DoctorCapacityItem {
+    doctor_id: string;
+    doctor_name: string;
+    specialty: string;
+    hospital_affiliation?: string | null;
+    email?: string | null;
+    phone?: string | null;
+    total_slots: number;
+    booked_slots: number;
+    available_slots: number;
+    utilization_rate_pct: number;
+    slots: DoctorSlotDetail[];
+}
+
+export interface DoctorAvailabilityMatrixResponse {
+    date: string;
+    total_doctors: number;
+    overall_clinic_utilization_pct: number;
+    doctors: DoctorCapacityItem[];
+}
+
+export interface OperationalAnalyticsResponse {
+    appointments_by_specialty: { specialty: string; count: number }[];
+    appointments_by_status: Record<string, number>;
+    prescriptions_issued_count: number;
+    medical_records_finalized_count: number;
+    intake_severity_distribution: Record<string, number>;
+    future_metrics: Record<string, { is_available: boolean; status: string; note: string }>;
+}
+
+export const adminOperationsApi = {
+    getDashboard: () =>
+        api.get<OperationalDashboardData>('/admin/operations/dashboard'),
+    getQueue: (params?: { date_str?: string; status_filter?: string; doctor_id?: string; search?: string }) =>
+        api.get<QueueListResponse>('/admin/operations/queue', params),
+    updateQueueStatus: (appointmentId: string, status: string) =>
+        api.patch<QueueItem>(`/admin/operations/queue/${appointmentId}/status`, { status }),
+    getDoctorAvailability: (dateStr?: string, specialty?: string) =>
+        api.get<DoctorAvailabilityMatrixResponse>('/admin/operations/doctors-availability', {
+            params: {
+                ...(dateStr ? { date_str: dateStr } : {}),
+                ...(specialty && specialty !== 'all' ? { specialty } : {}),
+            },
+        }),
+    getAnalytics: () =>
+        api.get<OperationalAnalyticsResponse>('/admin/operations/analytics'),
+};
+
 

@@ -48,6 +48,13 @@ export default function AdminUserManagementPage() {
     const [newPassword, setNewPassword] = useState('');
     const [resetting, setResetting] = useState(false);
 
+    // Modal state for Role Change
+    const [roleTargetUser, setRoleTargetUser] = useState<AdminUser | null>(null);
+    const [selectedNewRole, setSelectedNewRole] = useState<string>('doctor');
+    const [roleSpecialty, setRoleSpecialty] = useState('General Medicine');
+    const [roleLicenseNumber, setRoleLicenseNumber] = useState('');
+    const [updatingRole, setUpdatingRole] = useState(false);
+
     const loadUsers = useCallback(async () => {
         try {
             setLoading(true);
@@ -150,6 +157,29 @@ export default function AdminUserManagementPage() {
             setError(msg);
         } finally {
             setResetting(false);
+        }
+    };
+
+    const handleRoleChangeSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!roleTargetUser) return;
+        setUpdatingRole(true);
+        setError(null);
+        try {
+            await adminUsersApi.updateRole(
+                roleTargetUser.user_id,
+                selectedNewRole,
+                selectedNewRole === 'doctor' ? roleSpecialty.trim() || undefined : undefined,
+                selectedNewRole === 'doctor' ? roleLicenseNumber.trim() || undefined : undefined,
+            );
+            setSuccessMessage(`Role for ${roleTargetUser.email} updated to '${selectedNewRole}'.`);
+            setRoleTargetUser(null);
+            await loadUsers();
+        } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : 'Failed to update user role';
+            setError(msg);
+        } finally {
+            setUpdatingRole(false);
         }
     };
 
@@ -325,6 +355,20 @@ export default function AdminUserManagementPage() {
                                             {new Date(u.created_at).toLocaleDateString()}
                                         </td>
                                         <td className="px-5 py-3.5 text-right space-x-2">
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => {
+                                                    setRoleTargetUser(u);
+                                                    setSelectedNewRole(u.role.toLowerCase());
+                                                    setRoleSpecialty(u.doctor_profile?.specialty || 'General Medicine');
+                                                    setRoleLicenseNumber(u.doctor_profile?.license_number || '');
+                                                }}
+                                                disabled={u.user_id === currentAdmin?.user_id}
+                                            >
+                                                Change Role
+                                            </Button>
+
                                             <Button
                                                 variant="outline"
                                                 size="sm"
@@ -532,6 +576,90 @@ export default function AdminUserManagementPage() {
                     </div>
                 </div>
             )}
+
+            {/* Modal: Role Reassignment */}
+            {roleTargetUser && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+                    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 max-w-md w-full shadow-2xl space-y-4">
+                        <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
+                            <div>
+                                <h3 className="font-bold text-base text-slate-900 dark:text-white">
+                                    Reassign User Role & Permissions
+                                </h3>
+                                <p className="text-xs text-slate-500">
+                                    Target: {roleTargetUser.full_name} ({roleTargetUser.email})
+                                </p>
+                            </div>
+                            <button
+                                onClick={() => setRoleTargetUser(null)}
+                                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                            >
+                                ✕
+                            </button>
+                        </div>
+
+                        <form onSubmit={handleRoleChangeSubmit} className="space-y-4">
+                            <div>
+                                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                                    Select New Organizational Role
+                                </label>
+                                <select
+                                    value={selectedNewRole}
+                                    onChange={(e) => setSelectedNewRole(e.target.value)}
+                                    className="w-full text-sm px-3.5 py-2.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                                >
+                                    <option value="doctor">Doctor / Attending Physician</option>
+                                    <option value="nurse">Nurse / Clinical Care Staff</option>
+                                    <option value="receptionist">Front-Desk Receptionist</option>
+                                    <option value="admin">System Administrator</option>
+                                    <option value="patient">Patient / Consumer</option>
+                                </select>
+                            </div>
+
+                            {selectedNewRole === 'doctor' && (
+                                <div className="space-y-3 p-3.5 rounded-xl border border-blue-100 dark:border-blue-900/40 bg-blue-50/40 dark:bg-blue-950/20">
+                                    <span className="text-xs font-bold text-blue-900 dark:text-blue-300 block">
+                                        Physician Credential Information
+                                    </span>
+                                    <Input
+                                        id="role-specialty"
+                                        label="Clinical Specialty"
+                                        placeholder="e.g. Cardiology, Neurology"
+                                        value={roleSpecialty}
+                                        onChange={(e) => setRoleSpecialty(e.target.value)}
+                                    />
+                                    <Input
+                                        id="role-license"
+                                        label="Medical License Number"
+                                        placeholder="e.g. MCI-2026-9812"
+                                        value={roleLicenseNumber}
+                                        onChange={(e) => setRoleLicenseNumber(e.target.value)}
+                                    />
+                                </div>
+                            )}
+
+                            <div className="flex items-center justify-end gap-3 pt-2">
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    onClick={() => setRoleTargetUser(null)}
+                                    disabled={updatingRole}
+                                >
+                                    Cancel
+                                </Button>
+                                <Button
+                                    type="submit"
+                                    variant="primary"
+                                    isLoading={updatingRole}
+                                >
+                                    Confirm Role Change
+                                </Button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
+
