@@ -983,6 +983,19 @@ export interface IntakeMessageResponse {
     status: string;
 }
 
+export interface IntakeVoiceMessageResponse {
+    session_id: string;
+    transcription: string;
+    detected_language: string;
+    reply: string;
+    audio_base64?: string | null;
+    tts_provider: string;
+    is_complete: boolean;
+    structured_symptoms?: StructuredSymptoms | null;
+    ai_confidence?: number | null;
+    basis?: string | null;
+}
+
 export const intakeApi = {
     createSession: (initialMessage?: string, patientId?: string) =>
         api.post<IntakeSession>('/intake/sessions', { initial_message: initialMessage }, {
@@ -996,6 +1009,8 @@ export const intakeApi = {
         api.get<IntakeSession>(`/intake/sessions/${sessionId}`),
     sendMessage: (sessionId: string, content: string) =>
         api.post<IntakeMessageResponse>(`/intake/sessions/${sessionId}/message`, { content }),
+    sendVoiceMessage: (sessionId: string, formData: FormData) =>
+        api.post<IntakeVoiceMessageResponse>(`/intake/sessions/${sessionId}/voice-message`, formData),
     completeSession: (sessionId: string, notes?: string) =>
         api.post<IntakeSession>(`/intake/sessions/${sessionId}/complete`, { notes }),
     listSessions: (patientId?: string, limit: number = 20) =>
@@ -1445,6 +1460,74 @@ export const adminAuditApi = {
     getLog: (logId: string) =>
         api.get<AuditLogItem>(`/admin/audit/${logId}`),
 };
+
+// =============================================================================
+// Voice Intake & Multilingual Speech API (Milestone U-19)
+// =============================================================================
+
+export interface VoiceLanguageDetail {
+    code: string;
+    name: string;
+    native_name: string;
+    status: 'validated' | 'experimental' | string;
+    stt_supported: boolean;
+    tts_supported: boolean;
+    tts_voice_id?: string | null;
+    web_speech_lang: string;
+}
+
+export interface VoiceLanguagesResponse {
+    validated_languages: VoiceLanguageDetail[];
+    experimental_languages: VoiceLanguageDetail[];
+    default_language: string;
+    active_stt_provider: string;
+    active_tts_provider: string;
+}
+
+export interface VoiceTranscriptionResponse {
+    text: string;
+    language?: string | null;
+    provider: string;
+    confidence: number;
+    duration?: number | null;
+    latency_ms: number;
+}
+
+export interface VoiceSynthesisRequest {
+    text: string;
+    language?: string;
+    voice?: string;
+}
+
+export const voiceApi = {
+    getLanguages: () =>
+        api.get<VoiceLanguagesResponse>('/voice/languages'),
+    transcribeAudio: (file: Blob | File, language?: string) => {
+        const formData = new FormData();
+        formData.append('file', file, 'recorded_speech.webm');
+        return api.post<VoiceTranscriptionResponse>('/voice/transcribe', formData, {
+            params: language ? { language } : undefined,
+        });
+    },
+    synthesizeSpeech: async (payload: VoiceSynthesisRequest): Promise<Blob> => {
+        const baseOrigin = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
+        const url = new URL('/api/v1/voice/synthesize', baseOrigin);
+        const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
+        const res = await fetch(url.toString(), {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            },
+            body: JSON.stringify(payload),
+        });
+        if (!res.ok) {
+            throw new Error(`Speech synthesis error (${res.status})`);
+        }
+        return res.blob();
+    },
+};
+
 
 
 

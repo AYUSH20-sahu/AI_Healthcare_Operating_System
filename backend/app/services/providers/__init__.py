@@ -700,6 +700,184 @@ class GroqSTTProvider(STTProviderBase):
         )
 
 
+class ElevenLabsTTSProvider(TTSProviderBase):
+    """ElevenLabs TTS provider supporting multilingual speech synthesis."""
+
+    DEFAULT_VOICE_ID = "21m00Tcm4TlvDq8ikWAM"  # Rachel (Clear clinical tone)
+    DEFAULT_MODEL = "eleven_multilingual_v2"
+
+    def __init__(
+        self,
+        api_key: str | None = None,
+        default_voice_id: str | None = None,
+        default_model: str | None = None,
+    ):
+        self._api_key = api_key or os.getenv("ELEVENLABS_API_KEY")
+        self._default_voice_id = default_voice_id or os.getenv("ELEVENLABS_VOICE_ID", self.DEFAULT_VOICE_ID)
+        self._default_model = default_model or os.getenv("ELEVENLABS_MODEL_ID", self.DEFAULT_MODEL)
+
+    @property
+    def name(self) -> str:
+        return "elevenlabs"
+
+    async def health_check(self) -> bool:
+        return bool(self._api_key)
+
+    async def synthesize(
+        self,
+        text: str,
+        voice: str | None = None,
+        format: str = "mp3",
+        sample_rate: int = 22050,
+        **kwargs: Any,
+    ) -> SynthesisResult:
+        if not self._api_key:
+            raise ValueError("ELEVENLABS_API_KEY is not configured")
+
+        voice_id = voice or self._default_voice_id
+        model_id = kwargs.get("model_id", self._default_model)
+        start_time = time.perf_counter()
+
+        import httpx
+
+        url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
+        headers = {
+            "xi-api-key": self._api_key,
+            "Content-Type": "application/json",
+            "Accept": "audio/mpeg",
+        }
+        payload = {
+            "text": text,
+            "model_id": model_id,
+            "voice_settings": {
+                "stability": kwargs.get("stability", 0.5),
+                "similarity_boost": kwargs.get("similarity_boost", 0.75),
+            },
+        }
+
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.post(url, headers=headers, json=payload)
+            if resp.status_code != 200:
+                raise RuntimeError(f"ElevenLabs synthesis error {resp.status_code}: {resp.text}")
+            audio_bytes = resp.content
+
+        latency = (time.perf_counter() - start_time) * 1000.0
+        duration = max(1.0, len(text) * 0.06)
+
+        return SynthesisResult(
+            audio_data=audio_bytes,
+            format=format,
+            sample_rate=sample_rate,
+            duration=round(duration, 2),
+            latency_ms=round(latency, 2),
+        )
+
+
+class FallbackTTSProvider(TTSProviderBase):
+    """Resilient TTS Provider with automatic fallback to secondary provider."""
+
+    def __init__(self, primary: TTSProviderBase, fallback: TTSProviderBase):
+        self._primary = primary
+        self._fallback = fallback
+
+    @property
+    def name(self) -> str:
+        return f"fallback({self._primary.name}->{self._fallback.name})"
+
+    async def health_check(self) -> bool:
+        return await self._primary.health_check() or await self._fallback.health_check()
+
+    async def synthesize(
+        self,
+        text: str,
+        voice: str | None = None,
+        format: str = "mp3",
+        sample_rate: int = 22050,
+        **kwargs: Any,
+    ) -> SynthesisResult:
+        start_time = time.perf_counter()
+        try:
+            res = await self._primary.synthesize(text, voice=voice, format=format, sample_rate=sample_rate, **kwargs)
+            return res
+        except Exception as primary_error:
+            logger.warning(
+                f"Primary TTS provider [{self._primary.name}] failed: {primary_error}. "
+                f"Switching to fallback TTS provider [{self._fallback.name}]..."
+            )
+            try:
+                res = await self._fallback.synthesize(text, voice=voice, format=format, sample_rate=sample_rate, **kwargs)
+                res.latency_ms = round((time.perf_counter() - start_time) * 1000.0, 2)
+                return res
+            except Exception as fallback_error:
+                logger.error(f"Fallback TTS failed: {fallback_error}")
+                raise RuntimeError(f"All TTS providers failed: {primary_error} | {fallback_error}")
+
+
+# Supported Multilingual Voice & Speech Configuration
+SUPPORTED_LANGUAGES = {
+    "en": {
+        "code": "en",
+        "name": "English",
+        "native_name": "English",
+        "status": "validated",
+        "stt_supported": True,
+        "tts_supported": True,
+        "tts_voice_id": "21m00Tcm4TlvDq8ikWAM",
+        "web_speech_lang": "en-US",
+    },
+    "hi": {
+        "code": "hi",
+        "name": "Hindi",
+        "native_name": "हिन्दी",
+        "status": "validated",
+        "stt_supported": True,
+        "tts_supported": True,
+        "tts_voice_id": "pNInz6obpgDQGcFmaJgB",
+        "web_speech_lang": "hi-IN",
+    },
+    "ta": {
+        "code": "ta",
+        "name": "Tamil",
+        "native_name": "தமிழ்",
+        "status": "experimental",
+        "stt_supported": True,
+        "tts_supported": True,
+        "tts_voice_id": "pNInz6obpgDQGcFmaJgB",
+        "web_speech_lang": "ta-IN",
+    },
+    "te": {
+        "code": "te",
+        "name": "Telugu",
+        "native_name": "తెలుగు",
+        "status": "experimental",
+        "stt_supported": True,
+        "tts_supported": True,
+        "tts_voice_id": "pNInz6obpgDQGcFmaJgB",
+        "web_speech_lang": "te-IN",
+    },
+    "bn": {
+        "code": "bn",
+        "name": "Bengali",
+        "native_name": "বাংলা",
+        "status": "experimental",
+        "stt_supported": True,
+        "tts_supported": True,
+        "tts_voice_id": "pNInz6obpgDQGcFmaJgB",
+        "web_speech_lang": "bn-IN",
+    },
+    "es": {
+        "code": "es",
+        "name": "Spanish",
+        "native_name": "Español",
+        "status": "experimental",
+        "stt_supported": True,
+        "tts_supported": True,
+        "tts_voice_id": "EXAVITQu4vr4xnSDxMaL",
+        "web_speech_lang": "es-ES",
+    },
+}
+
+
 class ProviderRegistry:
     """Registry coordinating available AI providers."""
 
@@ -762,6 +940,7 @@ def configure_providers() -> None:
     has_nvidia = bool(os.getenv("NVIDIA_API_KEY") or os.getenv("LLM_API_KEY"))
     has_gemini = bool(os.getenv("GEMINI_API_KEY"))
     has_groq = bool(os.getenv("GROQ_API_KEY"))
+    has_elevenlabs = bool(os.getenv("ELEVENLABS_API_KEY"))
 
     # Register Mock Providers (always available for fallback/testing)
     mock_llm = MockLLMProvider("mock")
@@ -802,6 +981,16 @@ def configure_providers() -> None:
         registry.register_stt("groq", groq_prov, default=True)
     else:
         registry.register_stt("groq", mock_stt, default=True)
+
+    # Configure TTS
+    if has_elevenlabs:
+        eleven_prov = ElevenLabsTTSProvider()
+        fallback_tts = FallbackTTSProvider(primary=eleven_prov, fallback=mock_tts)
+        registry.register_tts("elevenlabs", eleven_prov)
+        registry.register_tts("fallback", fallback_tts, default=True)
+    else:
+        registry.register_tts("elevenlabs", mock_tts)
+        registry.register_tts("fallback", mock_tts, default=True)
 
 
 # Auto-configure on import

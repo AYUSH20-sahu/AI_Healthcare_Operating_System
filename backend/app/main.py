@@ -16,6 +16,7 @@ from app.api import (
     copilot,
     intake,
     telehealth,
+    voice,
 )
 
 from app.core.config import settings
@@ -55,6 +56,7 @@ app.include_router(admin_audit.router, prefix="/api/v1")
 app.include_router(copilot.router, prefix="/api/v1")
 app.include_router(intake.router, prefix="/api/v1")
 app.include_router(telehealth.router, prefix="/api/v1")
+app.include_router(voice.router, prefix="/api/v1")
 
 
 @app.on_event("startup")

@@ -5,11 +5,14 @@ AI orchestrator dispatch with non-diagnostic guardrails, and structured
 symptom persistence.
 """
 
+import base64
 from datetime import datetime
+import logging
 from typing import Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
+from pydantic import BaseModel
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
@@ -27,8 +30,24 @@ from app.models import IntakeSession, IntakeStatus, Patient, User, UserRole
 from app.services.auth.service import get_current_active_user
 from app.services.intake.intake_agent import IntakeAgentResult
 from app.services.orchestrator import TaskRequest, TaskType, get_orchestrator
+from app.services.providers import get_stt_provider, get_tts_provider
+
+logger = logging.getLogger("aihos.intake")
 
 router = APIRouter(prefix="/intake", tags=["intake"])
+
+
+class IntakeVoiceMessageResponse(BaseModel):
+    session_id: UUID
+    transcription: str
+    detected_language: str
+    reply: str
+    audio_base64: Optional[str] = None
+    tts_provider: str
+    is_complete: bool
+    structured_symptoms: Optional[StructuredSymptomsData] = None
+    ai_confidence: Optional[float] = None
+    basis: Optional[str] = None
 
 
 async def _resolve_patient_for_user(db: AsyncSession, current_user: User) -> Patient:
@@ -320,6 +339,162 @@ async def send_intake_message(
         ai_confidence=agent_res.ai_confidence,
         basis=agent_res.basis,
         status=session.status.value,
+    )
+
+
+@router.post("/sessions/{session_id}/voice-message", response_model=IntakeVoiceMessageResponse)
+async def send_intake_voice_message(
+    session_id: UUID,
+    file: UploadFile = File(..., description="Recorded patient speech audio"),
+    language: str = Form("en", description="Target language code (en, hi, ta, te, bn, es)"),
+    synthesize_reply: bool = Form(True, description="Whether to synthesize spoken assistant response"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Send voice audio to the intake dialogue pipeline.
+    
+    CRITICAL: Does NOT fork intake logic; transcribes audio via STT adapter,
+    submits transcribed text to the canonical IntakeAgent, updates structured
+    symptoms in PostgreSQL, and synthesizes spoken reply via TTS adapter.
+    """
+    stmt = select(IntakeSession).where(IntakeSession.session_id == session_id)
+    res = await db.execute(stmt)
+    session = res.scalar_one_or_none()
+    if not session:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Intake session not found.")
+
+    await _verify_session_access(session, current_user, db)
+
+    if session.status in (IntakeStatus.COMPLETED, IntakeStatus.CANCELLED):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Cannot post voice messages to an intake session that is {session.status.value}.",
+        )
+
+    # 1. Read audio bytes
+    content = await file.read()
+    if not content or len(content) == 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Uploaded audio file is empty (0 bytes).",
+        )
+
+    filename = file.filename or "intake_audio.webm"
+    audio_format = filename.split(".")[-1].lower() if "." in filename else "webm"
+    if audio_format not in ("webm", "mp3", "wav", "ogg", "m4a"):
+        audio_format = "webm"
+
+    # 2. Transcribe using STT provider adapter (Groq Whisper / fallback)
+    stt_provider = get_stt_provider()
+    try:
+        stt_res = await stt_provider.transcribe(
+            audio_data=content,
+            format=audio_format,
+            language=language,
+        )
+        transcribed_text = (stt_res.text or "").strip()
+    except Exception as exc:
+        logger.error(f"Voice intake STT transcription failure: {exc}")
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Audio transcription service failed: {str(exc)}",
+        )
+
+    if not transcribed_text:
+        transcribed_text = "[Inaudible speech input]"
+
+    # 3. Resolve patient context
+    p_stmt = select(Patient).where(Patient.patient_id == session.patient_id)
+    p_res = await db.execute(p_stmt)
+    patient = p_res.scalar_one_or_none()
+    patient_name = patient.full_name if patient else "Patient"
+    gender = patient.gender if patient else None
+
+    # 4. Append user turn
+    user_turn = {
+        "role": "patient",
+        "content": transcribed_text,
+        "is_voice": True,
+        "language": language,
+        "timestamp": datetime.utcnow().isoformat(),
+    }
+    current_messages = list(session.messages or [])
+    current_messages.append(user_turn)
+
+    # 5. Dispatch to canonical IntakeAgent (no fork!)
+    orchestrator = get_orchestrator()
+    task_req = TaskRequest(
+        task_type=TaskType.INTAKE,
+        payload={
+            "patient_name": patient_name,
+            "gender": gender,
+            "messages": current_messages[:-1],
+            "new_message": transcribed_text,
+        },
+    )
+    task_res = await orchestrator.submit_task(task_req)
+    if not task_res.result:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Intake agent failed to process dialogue turn.",
+        )
+
+    agent_res: IntakeAgentResult = task_res.result
+
+    # 6. Append assistant turn
+    assistant_turn = {
+        "role": "assistant",
+        "content": agent_res.reply,
+        "timestamp": datetime.utcnow().isoformat(),
+    }
+    current_messages.append(assistant_turn)
+
+    session.messages = current_messages
+    flag_modified(session, "messages")
+
+    session.structured_symptoms = agent_res.structured_symptoms
+    flag_modified(session, "structured_symptoms")
+
+    session.ai_confidence = float(agent_res.ai_confidence)
+    session.basis = agent_res.basis
+
+    if agent_res.is_complete:
+        session.status = IntakeStatus.COMPLETED
+        session.completed_at = datetime.utcnow()
+
+    await db.commit()
+    await db.refresh(session)
+
+    # 7. Synthesize spoken response via TTS provider adapter (ElevenLabs / fallback)
+    audio_base64_str = None
+    active_tts_name = "none"
+    if synthesize_reply and agent_res.reply:
+        tts_provider = get_tts_provider()
+        active_tts_name = tts_provider.name
+        try:
+            tts_res = await tts_provider.synthesize(
+                text=agent_res.reply,
+                format="mp3",
+            )
+            if tts_res and tts_res.audio_data:
+                audio_base64_str = base64.b64encode(tts_res.audio_data).decode("ascii")
+        except Exception as tts_exc:
+            logger.warning(f"Voice synthesis fallback activated: {tts_exc}")
+            active_tts_name = "browser_fallback"
+
+    struct_data = StructuredSymptomsData(**(agent_res.structured_symptoms or {}))
+
+    return IntakeVoiceMessageResponse(
+        session_id=session.session_id,
+        transcription=transcribed_text,
+        detected_language=language,
+        reply=agent_res.reply,
+        audio_base64=audio_base64_str,
+        tts_provider=active_tts_name,
+        is_complete=agent_res.is_complete,
+        structured_symptoms=struct_data,
+        ai_confidence=agent_res.ai_confidence,
+        basis=agent_res.basis,
     )
 
 
