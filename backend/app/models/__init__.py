@@ -215,6 +215,10 @@ class Appointment(Base):
         Enum(AppointmentStatus), default=AppointmentStatus.SCHEDULED, index=True
     )
     notes: Mapped[str | None] = mapped_column(Text)
+    meeting_link: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    telehealth_room_id: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
+    telehealth_started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    telehealth_ended_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

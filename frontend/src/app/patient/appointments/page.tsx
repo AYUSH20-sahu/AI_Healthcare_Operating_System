@@ -211,12 +211,12 @@ export default function PatientAppointmentsPage() {
                                                 Cancel
                                             </Button>
                                         )}
-                                        {appt.meeting_link && !isCancelled && (
-                                            <a href={appt.meeting_link} target="_blank" rel="noopener noreferrer">
-                                                <Button variant="primary" size="sm" className="text-xs">
-                                                    Join Telehealth Video
+                                        {!isCancelled && (
+                                            <Link href={`/patient/consultation/${appt.appointment_id}`}>
+                                                <Button variant="primary" size="sm" className="text-xs bg-indigo-600 hover:bg-indigo-700 text-white">
+                                                    📹 Join Telehealth Video
                                                 </Button>
-                                            </a>
+                                            </Link>
                                         )}
                                     </div>
                                 </CardContent>
