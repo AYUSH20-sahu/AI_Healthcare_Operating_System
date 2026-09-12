@@ -38,6 +38,10 @@ class Settings(BaseSettings):
     # ABDM/FHIR
     ABDM_CLIENT_ID: str | None = None
     ABDM_CLIENT_SECRET: str | None = None
+    ABDM_BASE_URL: str = "https://dev.abdm.gov.in/gateway"
+    ABDM_SANDBOX_MODE: bool = True
+    HFR_FACILITY_ID: str = "IN-DL-AIHOS-001"
+    HFR_FACILITY_NAME: str = "AI-HOS Apex Clinical Center"
     FHIR_BASE_URL: str = "https://hapi.fhir.org/baseR4"
 
     # Monitoring

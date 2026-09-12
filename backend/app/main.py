@@ -17,10 +17,18 @@ from app.api import (
     intake,
     telehealth,
     voice,
+    fhir,
+    abdm,
+    observability,
 )
 
 from app.core.config import settings
 from app.core.exceptions import register_exception_handlers
+from app.core.observability import (
+    ObservabilityMiddleware,
+    check_ai_mesh_health,
+    check_database_health,
+)
 from app.services.auth.audit import AuditLoggingMiddleware
 import app.services.scribe  # registers ScribeAgent on orchestrator
 import app.services.prescriptions  # registers PrescriptionDraftAgent on orchestrator
@@ -38,7 +46,10 @@ app = FastAPI(
 # Register exception handlers for standard error envelope
 register_exception_handlers(app)
 
-# Add audit logging middleware
+# Add observability middleware for request_id propagation & latency telemetry
+app.add_middleware(ObservabilityMiddleware)
+
+# Add audit logging middleware (separate compliance table)
 app.add_middleware(AuditLoggingMiddleware)
 
 app.include_router(auth.router, prefix="/api/v1")
@@ -57,6 +68,9 @@ app.include_router(copilot.router, prefix="/api/v1")
 app.include_router(intake.router, prefix="/api/v1")
 app.include_router(telehealth.router, prefix="/api/v1")
 app.include_router(voice.router, prefix="/api/v1")
+app.include_router(fhir.router, prefix="/api/v1")
+app.include_router(abdm.router, prefix="/api/v1")
+app.include_router(observability.router, prefix="/api/v1")
 
 
 @app.on_event("startup")
@@ -103,11 +117,16 @@ async def startup_event():
 
 @app.get("/health")
 async def health_check():
+    db_health = await check_database_health()
+    ai_mesh = check_ai_mesh_health()
+    overall_status = "healthy" if db_health.get("status") == "healthy" else "degraded"
     return {
-        "status": "healthy",
+        "status": overall_status,
         "service": "ai-hos-backend",
         "version": "0.1.0",
         "environment": settings.APP_ENV,
+        "database": db_health,
+        "ai_provider_mesh": ai_mesh,
     }
 
 

@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { ThemeProvider } from '@/lib/theme'
 import { AuthProvider } from '@/lib/auth'
+import { NetworkStatusBanner } from '@/components/ui'
 import './globals.css'
 
 export const metadata: Metadata = {
@@ -41,11 +42,11 @@ export default function RootLayout({
                 />
             </head>
             <body className="min-h-screen bg-slate-50 dark:bg-[#0B0F19] text-slate-900 dark:text-slate-100 selection:bg-blue-500 selection:text-white transition-colors duration-150 antialiased">
+                <NetworkStatusBanner />
                 <ThemeProvider>
                     <AuthProvider>{children}</AuthProvider>
                 </ThemeProvider>
             </body>
         </html>
-
     )
 }

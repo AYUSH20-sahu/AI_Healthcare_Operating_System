@@ -32,9 +32,41 @@ export interface SignupRequest {
     role?: string;
 }
 
+export class ApiError extends Error {
+    public status: number;
+    public code: string;
+    public requestId?: string;
+    public details?: any;
+    public isTimeout: boolean;
+    public isNetworkError: boolean;
+    public canRetry: boolean;
+
+    constructor(params: {
+        message: string;
+        status?: number;
+        code?: string;
+        requestId?: string;
+        details?: any;
+        isTimeout?: boolean;
+        isNetworkError?: boolean;
+        canRetry?: boolean;
+    }) {
+        super(params.message);
+        this.name = 'ApiError';
+        this.status = params.status || 500;
+        this.code = params.code || 'UNKNOWN_ERROR';
+        this.requestId = params.requestId;
+        this.details = params.details;
+        this.isTimeout = !!params.isTimeout;
+        this.isNetworkError = !!params.isNetworkError;
+        this.canRetry = params.canRetry !== undefined ? params.canRetry : (this.status >= 500 || this.isNetworkError || this.isTimeout);
+    }
+}
+
 interface RequestOptions extends RequestInit {
     params?: Record<string, string | number | boolean | undefined>;
     _retry?: boolean;
+    timeoutMs?: number;
 }
 
 let isRefreshing = false;
@@ -53,7 +85,7 @@ async function request<T>(
     endpoint: string,
     options: RequestOptions = {}
 ): Promise<T> {
-    const { params, headers, _retry, ...fetchOptions } = options;
+    const { params, headers, _retry, timeoutMs = 15000, ...fetchOptions } = options;
 
     const baseOrigin = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
     // Build URL with query parameters
@@ -76,10 +108,43 @@ async function request<T>(
         ...headers,
     };
 
-    const response = await fetch(url.toString(), {
-        ...fetchOptions,
-        headers: defaultHeaders,
-    });
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+    let response: Response;
+    try {
+        response = await fetch(url.toString(), {
+            ...fetchOptions,
+            headers: defaultHeaders,
+            signal: fetchOptions.signal || controller.signal,
+        });
+    } catch (err: any) {
+        clearTimeout(timer);
+        const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
+        const isAbort = err.name === 'AbortError';
+
+        if (isAbort) {
+            throw new ApiError({
+                message: `Request timed out after ${Math.round(timeoutMs / 1000)}s. Please retry.`,
+                status: 408,
+                code: 'REQUEST_TIMEOUT',
+                isTimeout: true,
+                canRetry: true,
+            });
+        }
+
+        throw new ApiError({
+            message: isOffline
+                ? 'You appear to be offline. Please verify your internet connection.'
+                : 'Network connection failure. Unable to reach AI-HOS backend server.',
+            status: 0,
+            code: isOffline ? 'OFFLINE_ERROR' : 'NETWORK_ERROR',
+            isNetworkError: true,
+            canRetry: true,
+        });
+    } finally {
+        clearTimeout(timer);
+    }
 
     // Handle 401 Unauthorized with token refresh if possible
     if (response.status === 401 && !_retry && typeof window !== 'undefined') {
@@ -130,16 +195,35 @@ async function request<T>(
     }
 
     if (!response.ok) {
+        let requestId = response.headers.get('X-Request-ID') || undefined;
         const error = await response.json().catch(() => ({}));
         let message = `HTTP ${response.status}`;
-        if (typeof error.detail === 'string') {
+        let code = `HTTP_${response.status}`;
+        let details = null;
+
+        if (error.error) {
+            code = error.error.code || code;
+            message = error.error.message || message;
+            details = error.error.details || null;
+            if (!requestId && error.error.request_id) {
+                requestId = error.error.request_id;
+            }
+        } else if (typeof error.detail === 'string') {
             message = error.detail;
         } else if (Array.isArray(error.detail)) {
             message = error.detail.map((d: { msg?: string }) => d.msg || 'Validation error').join(', ');
-        } else if (error.error?.message) {
-            message = error.error.message;
+            details = error.detail;
+            code = 'VALIDATION_ERROR';
         }
-        throw new Error(message);
+
+        throw new ApiError({
+            message,
+            status: response.status,
+            code,
+            requestId,
+            details,
+            canRetry: response.status >= 500 || response.status === 429,
+        });
     }
 
     // Handle 204 No Content
@@ -151,26 +235,44 @@ async function request<T>(
 }
 
 export const api = {
-    get: <T>(endpoint: string, params?: Record<string, string | number | boolean | undefined>) =>
-        request<T>(endpoint, { method: 'GET', params }),
+    get: <T>(endpoint: string, params?: Record<string, string | number | boolean | undefined>, options?: Partial<RequestOptions>) =>
+        request<T>(endpoint, { method: 'GET', params, ...options }),
 
-    post: <T>(endpoint: string, data?: unknown, params?: Record<string, string | number | boolean | undefined>) => {
+    post: <T>(endpoint: string, data?: unknown, params?: Record<string, string | number | boolean | undefined>, options?: Partial<RequestOptions>) => {
         const isFormData = typeof FormData !== 'undefined' && data instanceof FormData;
         return request<T>(endpoint, {
             method: 'POST',
             body: isFormData ? (data as FormData) : data !== undefined ? JSON.stringify(data) : undefined,
             params,
+            ...options,
         });
     },
 
-    put: <T>(endpoint: string, data: unknown) =>
-        request<T>(endpoint, { method: 'PUT', body: JSON.stringify(data) }),
+    put: <T>(endpoint: string, data: unknown, options?: Partial<RequestOptions>) =>
+        request<T>(endpoint, { method: 'PUT', body: JSON.stringify(data), ...options }),
 
-    patch: <T>(endpoint: string, data?: unknown) =>
-        request<T>(endpoint, { method: 'PATCH', body: data !== undefined ? JSON.stringify(data) : undefined }),
+    patch: <T>(endpoint: string, data?: unknown, options?: Partial<RequestOptions>) =>
+        request<T>(endpoint, { method: 'PATCH', body: data !== undefined ? JSON.stringify(data) : undefined, ...options }),
 
-    delete: <T>(endpoint: string) =>
-        request<T>(endpoint, { method: 'DELETE' }),
+    delete: <T>(endpoint: string, options?: Partial<RequestOptions>) =>
+        request<T>(endpoint, { method: 'DELETE', ...options }),
+
+    retry: async <T>(fn: () => Promise<T>, maxRetries = 2, delayMs = 800): Promise<T> => {
+        let lastErr: any;
+        for (let attempt = 0; attempt <= maxRetries; attempt++) {
+            try {
+                return await fn();
+            } catch (err: any) {
+                lastErr = err;
+                if (attempt < maxRetries && (err?.canRetry || err?.status >= 500 || err?.isNetworkError)) {
+                    await new Promise((r) => setTimeout(r, delayMs * Math.pow(2, attempt)));
+                    continue;
+                }
+                throw err;
+            }
+        }
+        throw lastErr;
+    },
 };
 
 // Auth API
@@ -1527,6 +1629,177 @@ export const voiceApi = {
         return res.blob();
     },
 };
+
+// =============================================================================
+// HL7 FHIR R4 Interoperability Integration API (Milestone U-20)
+// =============================================================================
+
+export interface FhirResourceHeader {
+    resourceType: string;
+    id: string;
+    [key: string]: any;
+}
+
+export interface FhirBundle {
+    resourceType: 'Bundle';
+    id: string;
+    type: 'searchset' | 'collection' | string;
+    timestamp: string;
+    total: number;
+    entry?: Array<{
+        fullUrl: string;
+        resource: FhirResourceHeader;
+    }>;
+}
+
+export const fhirApi = {
+    getPatientFhir: (patientId: string) =>
+        api.get<FhirResourceHeader>(`/fhir/Patient/${patientId}`),
+    getAppointmentFhir: (appointmentId: string) =>
+        api.get<FhirResourceHeader>(`/fhir/Appointment/${appointmentId}`),
+    getRecordFhir: (recordId: string) =>
+        api.get<FhirResourceHeader>(`/fhir/DiagnosticReport/${recordId}`),
+    getPrescriptionFhir: (prescriptionId: string) =>
+        api.get<FhirResourceHeader>(`/fhir/MedicationRequest/${prescriptionId}`),
+    getPatientBundle: (patientId?: string) =>
+        api.get<FhirBundle>(patientId ? `/fhir/Patient/${patientId}/$everything` : '/fhir/Bundle'),
+};
+
+// =============================================================================
+// ABDM Integration Foundations API (Milestone U-21)
+// =============================================================================
+
+export interface AbdmStatusResponse {
+    gateway_status: 'ONLINE' | 'OFFLINE' | string;
+    environment: 'sandbox' | 'production' | string;
+    base_url: string;
+    hfr_facility_id: string;
+    hfr_facility_name: string;
+    supported_auth_modes: string[];
+    client_configured: boolean;
+    abdm_version: string;
+}
+
+export interface AbhaInitResponse {
+    transaction_id: string;
+    abha_address: string;
+    auth_mode: string;
+    message: string;
+    sandbox_test_otp?: string | null;
+    expires_in_seconds: number;
+}
+
+export interface AbhaVerifyResponse {
+    status: 'LINKED' | 'UNLINKED' | string;
+    patient_id: string;
+    abha_address: string;
+    verified_at: string;
+    message: string;
+}
+
+export interface HfrFacilityInfo {
+    facility_id: string;
+    facility_name: string;
+    facility_type: string;
+    ownership: string;
+    state: string;
+    district: string;
+    abdm_registered: boolean;
+    hiu_hip_status: string;
+}
+
+export const abdmApi = {
+    getStatus: () =>
+        api.get<AbdmStatusResponse>('/abdm/status'),
+    initAbhaLinking: (abhaAddress: string, authMode: string = 'MOBILE_OTP') =>
+        api.post<AbhaInitResponse>('/abdm/abha/init', { abha_address: abhaAddress, auth_mode: authMode }),
+    verifyAbhaOtp: (transactionId: string, otp: string) =>
+        api.post<AbhaVerifyResponse>('/abdm/abha/verify', { transaction_id: transactionId, otp }),
+    unlinkAbha: () =>
+        api.delete<{ status: string; patient_id: string; message: string }>('/abdm/abha/unlink'),
+    getHfrInfo: () =>
+        api.get<HfrFacilityInfo>('/abdm/hfr'),
+    getConsentStatus: (requestId: string) =>
+        api.get<any>(`/abdm/consent/${requestId}`),
+};
+
+// =============================================================================
+// Observability & Telemetry API (Milestone U-22)
+// =============================================================================
+
+export interface HealthStatusData {
+    status: 'healthy' | 'degraded' | 'unhealthy';
+    service: string;
+    version: string;
+    environment: string;
+    timestamp: string;
+    database: { status: string; latency_ms: number; details?: string };
+    ai_provider_mesh: {
+        status: string;
+        primary_llm: string;
+        fallback_llm: string;
+        providers: Record<string, { configured: boolean; status: string }>;
+        resilience_mesh_ready: boolean;
+    };
+    cache: { status: string; type: string; details?: string };
+}
+
+export interface TelemetryMetricsData {
+    uptime_seconds: number;
+    system_timestamp: string;
+    service: string;
+    environment: string;
+    http_requests: {
+        total: number;
+        status_counts: Record<string, number>;
+        error_rate_percent: number;
+    };
+    latency_metrics: {
+        non_ai_api: {
+            p50: number;
+            p95: number;
+            p99: number;
+            min: number;
+            max: number;
+            avg: number;
+            samples: number;
+            target_p95_ms: number;
+            target_met: boolean;
+        };
+        ai_conversational_turn: {
+            p50: number;
+            p95: number;
+            p99: number;
+            min: number;
+            max: number;
+            avg: number;
+            samples: number;
+            target_p95_ms: number;
+            target_met: boolean;
+        };
+        stt_voice_intake: Record<string, number>;
+        tts_speech_synthesis: Record<string, number>;
+    };
+    ai_call_metrics: {
+        total_ai_calls: number;
+        fallback_count: number;
+        fallback_rate_percent: number;
+        provider_distribution: Record<string, number>;
+        token_usage: { prompt_tokens: number; completion_tokens: number; total_tokens: number };
+        provider_errors: Record<string, number>;
+    };
+    nfr_targets: {
+        non_ai_api_p95_ms: number;
+        ai_conversational_turn_p95_ms: number;
+    };
+}
+
+export const observabilityApi = {
+    getHealth: () => api.get<HealthStatusData>('/observability/health'),
+    getMetrics: () => api.get<TelemetryMetricsData>('/observability/metrics'),
+};
+
+
 
 
 

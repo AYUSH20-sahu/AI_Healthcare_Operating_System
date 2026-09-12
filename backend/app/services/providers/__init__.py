@@ -24,6 +24,31 @@ if TYPE_CHECKING:
 logger = logging.getLogger("ai_providers")
 
 
+def _safe_record_telemetry(
+    provider: str,
+    provider_type: str,
+    latency_ms: float,
+    tokens: dict[str, int] | None = None,
+    fallback_used: bool = False,
+    success: bool = True,
+    error: str | None = None,
+) -> None:
+    """Record AI provider latency and token metrics to TelemetryCollector."""
+    try:
+        from app.core.observability import telemetry_collector
+        telemetry_collector.record_ai_call(
+            provider=provider,
+            provider_type=provider_type,
+            latency_ms=latency_ms,
+            tokens=tokens,
+            fallback_used=fallback_used,
+            success=success,
+            error=error,
+        )
+    except Exception:
+        pass
+
+
 class ProviderType(str, Enum):
     """Supported provider types."""
     LLM = "llm"
@@ -252,6 +277,15 @@ class MockLLMProvider(LLMProviderBase):
             })
 
         latency = (time.perf_counter() - start_time) * 1000.0
+        tokens = {"prompt_tokens": 120, "completion_tokens": 180, "total_tokens": 300}
+        _safe_record_telemetry(
+            provider=self._name,
+            provider_type="llm",
+            latency_ms=round(latency, 2),
+            tokens=tokens,
+            fallback_used=False,
+            success=True,
+        )
 
         return LLMResponse(
             content=content,
@@ -259,7 +293,7 @@ class MockLLMProvider(LLMProviderBase):
             provider=self._name,
             fallback_used=False,
             latency_ms=round(latency, 2),
-            usage={"prompt_tokens": 120, "completion_tokens": 180, "total_tokens": 300},
+            usage=tokens,
             finish_reason="stop",
         )
 
@@ -303,6 +337,12 @@ class MockSTTProvider(STTProviderBase):
             "Severe allergy to penicillin confirmed. Ordering 12-lead ECG and cardiac enzymes. Prescribing Sorbitrate and Atorvastatin."
         )
         latency = (time.perf_counter() - start) * 1000.0
+        _safe_record_telemetry(
+            provider=self._name,
+            provider_type="stt",
+            latency_ms=round(latency, 2),
+            success=True,
+        )
         return TranscriptionResult(
             text=simulated_transcript,
             provider=self._name,
@@ -331,6 +371,12 @@ class MockTTSProvider(TTSProviderBase):
         sample_rate: int = 22050,
         **kwargs: Any,
     ) -> SynthesisResult:
+        _safe_record_telemetry(
+            provider=self.name,
+            provider_type="tts",
+            latency_ms=10.0,
+            success=True,
+        )
         return SynthesisResult(
             audio_data=b"\x00" * 1024,
             format=format,
@@ -599,6 +645,14 @@ class FallbackLLMProvider(LLMProviderBase):
             response = await self._primary.generate(messages, model, temperature, max_tokens, **kwargs)
             response.provider = self._primary.name
             response.fallback_used = False
+            _safe_record_telemetry(
+                provider=self._primary.name,
+                provider_type="llm",
+                latency_ms=response.latency_ms,
+                tokens=response.usage,
+                fallback_used=False,
+                success=True,
+            )
             return response
         except Exception as primary_error:
             logger.warning(
@@ -610,10 +664,26 @@ class FallbackLLMProvider(LLMProviderBase):
                 response.provider = self._fallback.name
                 response.fallback_used = True
                 response.latency_ms = round((time.perf_counter() - start_time) * 1000.0, 2)
+                _safe_record_telemetry(
+                    provider=self._fallback.name,
+                    provider_type="llm",
+                    latency_ms=response.latency_ms,
+                    tokens=response.usage,
+                    fallback_used=True,
+                    success=True,
+                )
                 logger.info(f"Fallback provider [{self._fallback.name}] successfully completed generation.")
                 return response
             except Exception as fallback_error:
                 total_latency = (time.perf_counter() - start_time) * 1000.0
+                _safe_record_telemetry(
+                    provider=self._fallback.name,
+                    provider_type="llm",
+                    latency_ms=round(total_latency, 2),
+                    fallback_used=True,
+                    success=False,
+                    error=str(fallback_error),
+                )
                 logger.error(
                     f"All LLM providers exhausted! Primary error: {primary_error}; "
                     f"Fallback error: {fallback_error}; Total latency: {total_latency:.2f}ms"

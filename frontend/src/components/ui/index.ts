@@ -17,3 +17,5 @@ export * from './EmptyState';
 export * from './PageHeader';
 export * from './ThemeToggle';
 export * from './Header';
+export * from './ErrorAlert';
+export * from './NetworkStatusBanner';

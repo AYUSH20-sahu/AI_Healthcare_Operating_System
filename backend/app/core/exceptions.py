@@ -1,6 +1,7 @@
 """Standard error envelope and exception handlers for AI-HOS API."""
 
-from typing import Any
+from datetime import datetime, timezone
+from typing import Any, Optional
 
 from app.core.config import settings
 from fastapi import FastAPI, Request, status
@@ -15,6 +16,8 @@ class ErrorDetail(BaseModel):
     code: str = Field(..., description="Error code")
     message: str = Field(..., description="Human-readable error message")
     details: dict[str, Any] | None = Field(None, description="Additional error details")
+    request_id: Optional[str] = Field(None, description="Request correlation identifier")
+    timestamp: Optional[str] = Field(None, description="ISO timestamp of error occurrence")
 
 
 class ErrorResponse(BaseModel):
@@ -27,13 +30,32 @@ def create_error_response(
     message: str,
     details: dict[str, Any] | None = None,
     status_code: int = status.HTTP_500_INTERNAL_SERVER_ERROR,
+    request: Optional[Request] = None,
 ) -> JSONResponse:
-    """Create a standardized error response."""
+    """Create a standardized error response with request correlation."""
+    from app.core.observability import current_request_id
+
+    req_id = None
+    if request and hasattr(request, "state") and hasattr(request.state, "request_id"):
+        req_id = request.state.request_id
+    if not req_id:
+        req_id = current_request_id.get("system")
+
+    ts = datetime.now(timezone.utc).isoformat()
+
+    headers = {"X-Request-ID": req_id} if req_id else {}
     return JSONResponse(
         status_code=status_code,
         content=ErrorResponse(
-            error=ErrorDetail(code=code, message=message, details=details)
+            error=ErrorDetail(
+                code=code,
+                message=message,
+                details=details,
+                request_id=req_id,
+                timestamp=ts,
+            )
         ).model_dump(),
+        headers=headers,
     )
 
 
@@ -58,14 +80,13 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException) 
     details = None
     if isinstance(exc.detail, dict):
         details = exc.detail
-    elif isinstance(exc.detail, str) and exc.detail != exc.detail:
-        pass
     
     return create_error_response(
         code=code,
         message=exc.detail if isinstance(exc.detail, str) else "An error occurred",
         details=details,
         status_code=exc.status_code,
+        request=request,
     )
 
 
@@ -84,17 +105,18 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
         message="Request validation failed",
         details={"errors": errors},
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        request=request,
     )
 
 
 async def generic_exception_handler(request: Request, exc: Exception) -> JSONResponse:
-    """Handle unexpected exceptions with standard error envelope."""
-    # Log the exception here if needed
+    """Handle unexpected exceptions with standard error envelope and no raw stack trace leakage."""
     return create_error_response(
         code="INTERNAL_ERROR",
-        message="An unexpected error occurred",
+        message="An unexpected server error occurred. Please contact support with the request_id.",
         details={"type": type(exc).__name__} if settings.DEBUG else None,
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        request=request,
     )
 
 
@@ -125,7 +147,9 @@ def register_exception_handlers(app: FastAPI) -> None:
             "properties": {
                 "code": {"title": "Code", "type": "string"},
                 "message": {"title": "Message", "type": "string"},
-                "details": {"title": "Details", "type": "object", "nullable": True}
+                "details": {"title": "Details", "type": "object", "nullable": True},
+                "request_id": {"title": "RequestId", "type": "string", "nullable": True},
+                "timestamp": {"title": "Timestamp", "type": "string", "nullable": True},
             },
             "required": ["code", "message"]
         }
