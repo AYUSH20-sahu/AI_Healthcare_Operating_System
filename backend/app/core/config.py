@@ -25,6 +25,9 @@ class Settings(BaseSettings):
     JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     JWT_REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
+    # Super Admin Privilege Boundary (SEC-06)
+    SUPER_ADMIN_EMAIL: str = "admin@test.com"
+
     # LLM
     LLM_PROVIDER: str = "openai"
     LLM_API_KEY: str | None = None

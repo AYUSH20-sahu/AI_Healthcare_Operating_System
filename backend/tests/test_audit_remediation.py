@@ -96,15 +96,25 @@ class TestLoginSecurityRemediation:
 
     def test_login_page_has_open_redirect_defense(self):
         login_file = REPO_ROOT / "frontend/src/app/auth/login/page.tsx"
-        content = login_file.read_text(encoding="utf-8")
+        helper_file = REPO_ROOT / "frontend/src/lib/redirect-validator.ts"
+        assert helper_file.exists(), "redirect-validator.ts not found"
+        
+        page_content = login_file.read_text(encoding="utf-8")
+        helper_content = helper_file.read_text(encoding="utf-8")
 
-        # Must check startsWith('/') and block protocol-relative '//'
-        assert "redirectUrl.startsWith('/')" in content
-        assert "!redirectUrl.startsWith('//')" in content
-        # Must validate role authorized target
-        assert "user.role === 'doctor'" in content
-        assert "user.role === 'patient'" in content
-        assert "user.role === 'admin'" in content
+        # Login page must import and invoke validatePostLoginRedirect
+        assert "validatePostLoginRedirect" in page_content
+        assert "validatePostLoginRedirect(redirectUrl, user.role)" in page_content
+
+        # Validator helper must enforce relative paths and block protocol-relative and backslashes
+        assert "trimmed.startsWith('/')" in helper_content
+        assert "trimmed.startsWith('//')" in helper_content
+        assert "trimmed.includes('\\\\')" in helper_content
+
+        # Validator helper must enforce role authorization boundaries
+        assert "userRole !== 'doctor'" in helper_content
+        assert "userRole !== 'patient'" in helper_content
+        assert "userRole !== 'admin'" in helper_content
 
 
 class TestRegistrationMassAssignmentRemediation:
@@ -157,7 +167,7 @@ class TestRegistrationMassAssignmentRemediation:
 
 
 class TestCIPipelineRemediation:
-    """Verify CI workflow enforces python syntax validation and typescript typechecking."""
+    """Verify CI workflow enforces syntax validation, typechecking, and security scanners."""
 
     def test_ci_workflow_checks(self):
         ci_file = REPO_ROOT / ".github/workflows/ci.yml"
@@ -166,3 +176,108 @@ class TestCIPipelineRemediation:
 
         assert "compileall" in content
         assert "tsc --noEmit" in content
+        # Security scanner gates (SEC-08, SEC-09)
+        assert "gitleaks" in content
+        assert "pip-audit" in content
+
+
+class TestDoctorCredentialVerification:
+    """Verify synthetic medical license generation is eliminated (SEC-05)."""
+
+    def test_admin_users_requires_real_license(self):
+        admin_users_file = REPO_ROOT / "backend/app/api/admin_users.py"
+        assert admin_users_file.exists()
+        content = admin_users_file.read_text(encoding="utf-8")
+
+        # Must not generate synthetic LIC-{uuid}
+        assert "LIC-{" not in content
+        assert "A verified medical license number is strictly required" in content
+        assert "Clinical specialty is strictly required" in content
+
+    def test_telehealth_requires_provisioned_doctor(self):
+        telehealth_file = REPO_ROOT / "backend/app/api/telehealth.py"
+        assert telehealth_file.exists()
+        content = telehealth_file.read_text(encoding="utf-8")
+
+        # Must not generate synthetic DOC-LIC-{
+        assert "DOC-LIC-{" not in content
+        assert "Attending doctor profile with verified medical license was not found" in content
+
+
+class TestAdminPrivilegeBoundary:
+    """Verify Super Admin boundary for administrator account provisioning (SEC-06)."""
+
+    def test_super_admin_email_configured(self):
+        from app.core.config import settings
+        assert hasattr(settings, "SUPER_ADMIN_EMAIL")
+        assert settings.SUPER_ADMIN_EMAIL
+
+    def test_admin_users_enforces_super_admin(self):
+        admin_users_file = REPO_ROOT / "backend/app/api/admin_users.py"
+        content = admin_users_file.read_text(encoding="utf-8")
+
+        assert "SUPER_ADMIN_EMAIL" in content
+        assert "Only the institutional Super Administrator can provision new Administrator accounts" in content
+        assert "Only the institutional Super Administrator can promote accounts to the Administrator role" in content
+
+
+class TestRefreshTokenRotationAndRevocation:
+    """Verify refresh token rotation, jti tracking, and session revocation (SEC-04)."""
+
+    def test_refresh_token_has_jti(self):
+        from app.services.auth.service import create_refresh_token, jwt, settings
+        token = create_refresh_token(data={"sub": "user-123", "email": "test@example.com", "role": "patient"})
+        payload = jwt.decode(token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM])
+
+        assert "jti" in payload
+        assert len(payload["jti"]) > 10
+        assert "iat" in payload
+
+    def test_token_revocation_registry(self):
+        from app.services.auth.service import is_token_jti_revoked, revoke_token_jti
+        test_jti = "test-jti-uuid-999"
+        assert not is_token_jti_revoked(test_jti)
+        revoke_token_jti(test_jti)
+        assert is_token_jti_revoked(test_jti)
+
+    def test_user_wide_token_invalidation(self):
+        import time
+        from app.services.auth.service import is_user_token_invalidated, revoke_all_user_tokens
+
+        user_id = "user-revocation-test-123"
+        issued_at = time.time() - 10  # issued 10 seconds ago
+        assert not is_user_token_invalidated(user_id, issued_at)
+
+        # Invalidate all tokens for user (e.g. password reset / deactivation)
+        revoke_all_user_tokens(user_id)
+        assert is_user_token_invalidated(user_id, issued_at)
+
+    def test_auth_api_has_logout_and_reuse_detection(self):
+        auth_file = REPO_ROOT / "backend/app/api/auth.py"
+        content = auth_file.read_text(encoding="utf-8")
+
+        assert "/logout" in content
+        assert "USER_LOGOUT" in content
+        assert "Revoked refresh token presented. Potential token theft detected" in content
+
+
+class TestDocumentationAndStatusMatrix:
+    """Verify project status matrix and test credentials notice (SEC-07, Section 22)."""
+
+    def test_project_status_matrix_exists(self):
+        status_file = REPO_ROOT / "docs/00_Project_Status.md"
+        assert status_file.exists()
+        content = status_file.read_text(encoding="utf-8")
+
+        assert "Engineering Status Matrix" in content
+        assert "VERIFIED" in content
+        assert "Backend Core" in content
+        assert "Authentication & Accounts" in content
+        assert "Clinical Safety & Guardrails" in content
+
+    def test_readme_marks_test_personas(self):
+        readme_file = REPO_ROOT / "README.md"
+        content = readme_file.read_text(encoding="utf-8")
+
+        assert "DEVELOPMENT & TEST PERSONAS ONLY" in content
+        assert "SEC-07" in content

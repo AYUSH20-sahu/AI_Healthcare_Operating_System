@@ -73,26 +73,61 @@ def get_password_hash(password: str) -> str:
     return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
 
 
+# In-memory revocation tracking (SEC-04: Refresh Token Rotation & Revocation)
+revoked_jtis: set[str] = set()
+user_tokens_revoked_before: dict[str, float] = {}  # user_id -> timestamp
+
+
+def revoke_token_jti(jti: str) -> None:
+    """Revoke a specific refresh token identifier."""
+    if jti:
+        revoked_jtis.add(str(jti))
+
+
+def is_token_jti_revoked(jti: str) -> bool:
+    """Check if token identifier is in revocation list."""
+    if not jti:
+        return False
+    return str(jti) in revoked_jtis
+
+
+def revoke_all_user_tokens(user_id: str) -> None:
+    """Revoke all tokens issued for a user before this timestamp."""
+    user_tokens_revoked_before[str(user_id)] = datetime.utcnow().timestamp()
+
+
+def is_user_token_invalidated(user_id: str, issued_at: float | None) -> bool:
+    """Check if a token was invalidated by a subsequent user-wide revocation."""
+    str_uid = str(user_id)
+    if not issued_at or str_uid not in user_tokens_revoked_before:
+        return False
+    return issued_at < user_tokens_revoked_before[str_uid]
+
+
 def create_access_token(data: dict, expires_delta: timedelta | None = None) -> str:
     """Create a JWT access token."""
     to_encode = data.copy()
+    now = datetime.utcnow()
     if expires_delta:
-        expire = datetime.utcnow() + expires_delta
+        expire = now + expires_delta
     else:
-        expire = datetime.utcnow() + timedelta(minutes=settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES)
-    to_encode.update({"exp": expire, "type": "access"})
+        expire = now + timedelta(minutes=settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES)
+    to_encode.update({"exp": expire, "type": "access", "iat": now.timestamp()})
     encoded_jwt = jwt.encode(to_encode, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
     return encoded_jwt
 
 
 def create_refresh_token(data: dict, expires_delta: timedelta | None = None) -> str:
-    """Create a JWT refresh token."""
+    """Create a JWT refresh token with unique jti identifier."""
+    import uuid as _uuid
     to_encode = data.copy()
+    now = datetime.utcnow()
     if expires_delta:
-        expire = datetime.utcnow() + expires_delta
+        expire = now + expires_delta
     else:
-        expire = datetime.utcnow() + timedelta(days=settings.JWT_REFRESH_TOKEN_EXPIRE_DAYS)
-    to_encode.update({"exp": expire, "type": "refresh"})
+        expire = now + timedelta(days=settings.JWT_REFRESH_TOKEN_EXPIRE_DAYS)
+    jti = to_encode.get("jti") or str(_uuid.uuid4())
+    to_encode.update({"exp": expire, "type": "refresh", "jti": jti, "iat": now.timestamp()})
     encoded_jwt = jwt.encode(to_encode, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
     return encoded_jwt
 
@@ -175,6 +210,8 @@ async def get_current_user(
 
         user_id: str = payload.get("sub")
         if user_id is None:
+            raise credentials_exception
+        if is_user_token_invalidated(user_id, payload.get("iat")):
             raise credentials_exception
         token_data = TokenData(user_id=UUID(user_id))
     except (JWTError, ValueError):

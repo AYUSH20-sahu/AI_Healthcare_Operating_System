@@ -148,6 +148,10 @@ NEXT_PUBLIC_APP_URL=http://localhost:3000
 - **Google Gemini**: https://aistudio.google.com (Flash models free tier)
 - **Groq**: https://console.groq.com (Whisper STT free tier)
 
+> [!WARNING]
+> **DEVELOPMENT & TEST PERSONAS ONLY (SEC-07)**:
+> Any test credentials referenced in local automated tests or development seeds (`admin@test.com`, `doctor@test.com`, `patient@test.com`) are strictly intended for local mock development (`APP_ENV=development`). They must **NEVER** be provisioned, configured, or utilized in staging or production environments. Production systems enforce strict administrative provisioning for staff, public self-registration for patients, and environment-injected cryptographic secrets.
+
 ## Running Tests
 
 ### Backend Tests

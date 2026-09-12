@@ -4,6 +4,7 @@ import React, { useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth';
+import { validatePostLoginRedirect } from '@/lib/redirect-validator';
 import {
     Card,
     CardHeader,
@@ -40,37 +41,8 @@ function LoginForm() {
         try {
             setSubmitting(true);
             const user = await login(email.trim(), password);
-
-            // Validate redirect URL: must be a safe internal relative path and authorized for the user's role
-            let safeTarget: string | null = null;
-            if (
-                redirectUrl &&
-                redirectUrl.startsWith('/') &&
-                !redirectUrl.startsWith('//') &&
-                !redirectUrl.includes('\\')
-            ) {
-                if (redirectUrl.startsWith('/doctor') && user.role === 'doctor') {
-                    safeTarget = redirectUrl;
-                } else if (redirectUrl.startsWith('/patient') && user.role === 'patient') {
-                    safeTarget = redirectUrl;
-                } else if (redirectUrl.startsWith('/admin') && user.role === 'admin') {
-                    safeTarget = redirectUrl;
-                } else if (!redirectUrl.startsWith('/doctor') && !redirectUrl.startsWith('/patient') && !redirectUrl.startsWith('/admin')) {
-                    safeTarget = redirectUrl;
-                }
-            }
-
-            if (safeTarget) {
-                router.push(safeTarget);
-            } else if (user.role === 'doctor') {
-                router.push('/doctor');
-            } else if (user.role === 'patient') {
-                router.push('/patient');
-            } else if (user.role === 'admin') {
-                router.push('/admin');
-            } else {
-                router.push('/');
-            }
+            const destination = validatePostLoginRedirect(redirectUrl, user.role);
+            router.push(destination);
         } catch (err: unknown) {
             const message = err instanceof Error ? err.message : 'Invalid credentials. Please try again.';
             setError(message);

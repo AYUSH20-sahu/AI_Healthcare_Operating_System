@@ -171,6 +171,15 @@ async def provision_user(
             detail=f"Invalid role: '{provision_data.role}'. Allowed: doctor, nurse, receptionist, admin, patient",
         )
 
+    # 1b. Enforce Super Admin Boundary (SEC-06)
+    if assigned_role == UserRole.ADMIN:
+        from app.core.config import settings
+        if current_admin.email.lower() != settings.SUPER_ADMIN_EMAIL.lower():
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only the institutional Super Administrator can provision new Administrator accounts.",
+            )
+
     # 2. Check email uniqueness
     existing_user = await db.execute(
         select(User).where(User.email == provision_data.email)
@@ -294,6 +303,11 @@ async def toggle_user_status(
     old_status = user.is_active
     user.is_active = status_data.is_active
 
+    # Revoke sessions if account deactivated (SEC-04)
+    if not status_data.is_active:
+        from app.services.auth.service import revoke_all_user_tokens
+        revoke_all_user_tokens(str(user.user_id))
+
     # Audit Log
     audit_entry = AuditLog(
         user_id=current_admin.user_id,
@@ -340,6 +354,10 @@ async def reset_user_password(
 
     user.hashed_password = get_password_hash(reset_data.new_password)
 
+    # Invalidate all existing sessions upon password reset (SEC-04)
+    from app.services.auth.service import revoke_all_user_tokens
+    revoke_all_user_tokens(str(user.user_id))
+
     # Audit Log
     audit_entry = AuditLog(
         user_id=current_admin.user_id,
@@ -385,6 +403,15 @@ async def update_user_role(
             detail=f"Invalid role: '{role_data.new_role}'. Allowed: doctor, nurse, receptionist, admin, patient",
         )
 
+    # Enforce Super Admin Boundary (SEC-06)
+    if assigned_role == UserRole.ADMIN:
+        from app.core.config import settings
+        if current_admin.email.lower() != settings.SUPER_ADMIN_EMAIL.lower():
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only the institutional Super Administrator can promote accounts to the Administrator role.",
+            )
+
     if user_id == current_admin.user_id and assigned_role != UserRole.ADMIN:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -407,13 +434,34 @@ async def update_user_role(
         doc_res = await db.execute(select(Doctor).where(Doctor.user_id == user.user_id))
         doc = doc_res.scalar_one_or_none()
         if not doc:
-            # Create doctor profile
+            if not role_data.license_number or not str(role_data.license_number).strip():
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="A verified medical license number is strictly required when promoting a user to Doctor. Synthetic identifiers are prohibited.",
+                )
+            if not role_data.specialty or not str(role_data.specialty).strip():
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Clinical specialty is strictly required when promoting a user to Doctor.",
+                )
+
+            clean_lic = str(role_data.license_number).strip()
+            existing_lic = await db.execute(
+                select(Doctor).where(Doctor.license_number == clean_lic)
+            )
+            if existing_lic.scalar_one_or_none():
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Medical license {clean_lic} is already registered to another clinician.",
+                )
+
+            # Create verified doctor profile
             doc = Doctor(
                 user_id=user.user_id,
                 email=user.email,
                 full_name=user.full_name,
-                specialty=role_data.specialty or "General Medicine",
-                license_number=role_data.license_number or f"LIC-{uuid.uuid4().hex[:8].upper()}",
+                specialty=str(role_data.specialty).strip(),
+                license_number=clean_lic,
                 hospital_affiliation="AI-HOS Central Health",
             )
             db.add(doc)

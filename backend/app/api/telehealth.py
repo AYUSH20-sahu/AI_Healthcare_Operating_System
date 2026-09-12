@@ -65,17 +65,10 @@ async def _resolve_doctor_profile(db: AsyncSession, current_user: User) -> Docto
     res = await db.execute(stmt)
     doctor = res.scalar_one_or_none()
     if not doctor:
-        doctor = Doctor(
-            user_id=current_user.user_id,
-            license_number=f"DOC-LIC-{str(current_user.user_id)[:8].upper()}",
-            specialty="General Medicine",
-            full_name=current_user.full_name or "Attending Physician",
-            email=current_user.email,
-            hospital_affiliation="AI-HOS Medical Center",
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Attending doctor profile with verified medical license was not found. Please contact an institutional administrator to complete clinical provisioning.",
         )
-        db.add(doctor)
-        await db.commit()
-        await db.refresh(doctor)
     return doctor
 
 

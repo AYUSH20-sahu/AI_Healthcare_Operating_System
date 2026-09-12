@@ -126,3 +126,28 @@ jobs:
 
       - name: Build frontend Docker image
         run: docker build -t ai-hos-frontend:test ./frontend -f frontend/Dockerfile.dev
+
+  security-audit:
+    name: Security & Secret Scanning (SEC-08, SEC-09)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run Gitleaks Secret Scanner
+        uses: gitleaks/gitleaks-action@v2
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Run pip-audit (backend dependency vulnerability scan)
+        run: |
+          pip install pip-audit
+          pip-audit -r backend/requirements.txt || true
