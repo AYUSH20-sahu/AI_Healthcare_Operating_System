@@ -60,6 +60,14 @@ class PrescriptionStatus(PyEnum):
     CANCELLED = "CANCELLED"
 
 
+class IntakeStatus(PyEnum):
+    """Patient intake session status."""
+    IN_PROGRESS = "in_progress"
+    COMPLETED = "completed"
+    CANCELLED = "cancelled"
+    ESCALATED = "escalated"
+
+
 class ConsentScope(PyEnum):
     """Consent record scope values."""
     FULL_ACCESS = "full_access"
@@ -147,6 +155,7 @@ class Patient(Base):
     prescriptions: Mapped[list["Prescription"]] = relationship(back_populates="patient")
     voice_notes: Mapped[list["VoiceNote"]] = relationship(back_populates="patient")
     consents: Mapped[list["Consent"]] = relationship(back_populates="patient")
+    intake_sessions: Mapped[list["IntakeSession"]] = relationship(back_populates="patient")
 
 
 # FHIR: Practitioner + PractitionerRole
@@ -397,4 +406,34 @@ class Consent(Base):
     __table_args__ = (
         Index("ix_consents_patient_active", "patient_id", "revoked_at"),
         Index("ix_consents_provider_active", "provider_id", "revoked_at"),
+    )
+
+
+# FHIR: QuestionnaireResponse / ClinicalImpression (Intake Session)
+class IntakeSession(Base):
+    """Patient conversational intake session for structured symptom collection."""
+    __tablename__ = "intake_sessions"
+
+    session_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    patient_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("patients.patient_id"), index=True
+    )
+    status: Mapped[IntakeStatus] = mapped_column(
+        Enum(IntakeStatus), default=IntakeStatus.IN_PROGRESS, index=True
+    )
+    messages: Mapped[list[dict]] = mapped_column(JSON, default=list)
+    structured_symptoms: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    ai_confidence: Mapped[float | None] = mapped_column(nullable=True)
+    basis: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    # Relationships
+    patient: Mapped["Patient"] = relationship(back_populates="intake_sessions")
+
+    __table_args__ = (
+        Index("ix_intake_sessions_patient_status", "patient_id", "status"),
     )

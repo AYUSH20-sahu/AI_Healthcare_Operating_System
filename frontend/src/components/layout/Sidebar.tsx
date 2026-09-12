@@ -123,9 +123,9 @@ export function Sidebar({
                             ),
                         },
                         {
-                            name: 'AI Voice Triage',
+                            name: 'AI Symptom Intake',
                             href: '/patient/intake',
-                            badge: 'Voice',
+                            badge: 'AI Intake',
                             badgeVariant: 'purple',
                             icon: (
                                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">

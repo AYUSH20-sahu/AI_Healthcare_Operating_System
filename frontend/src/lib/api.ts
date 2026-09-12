@@ -920,3 +920,71 @@ export const patientPortalApi = {
     getPrescriptions: () => api.get<PatientPortalPrescriptionItem[]>('/patients/me/prescriptions'),
     cancelAppointment: (appointmentId: string) => api.delete<void>(`/appointments/${appointmentId}/`),
 };
+
+// =============================================================================
+// AI Patient Intake & Symptom Collection API (Milestone U-13 / M25)
+// =============================================================================
+
+export interface IntakeMessageItem {
+    role: 'patient' | 'assistant' | 'user' | string;
+    content: string;
+    timestamp: string;
+}
+
+export interface StructuredSymptoms {
+    chief_complaint?: string | null;
+    duration?: string | null;
+    severity?: number | null;
+    associated_symptoms?: string[];
+    aggravating_factors?: string[];
+    relieving_factors?: string[];
+    summary?: string | null;
+}
+
+export interface IntakeSession {
+    session_id: string;
+    id?: string;
+    patient_id: string;
+    status: 'in_progress' | 'completed' | 'cancelled' | 'escalated' | string;
+    messages: IntakeMessageItem[];
+    structured_symptoms?: StructuredSymptoms | null;
+    ai_confidence?: number | null;
+    basis?: string | null;
+    created_at: string;
+    updated_at: string;
+    completed_at?: string | null;
+}
+
+export interface IntakeMessageResponse {
+    session_id: string;
+    reply: string;
+    is_complete: boolean;
+    structured_symptoms: StructuredSymptoms;
+    ai_confidence: number;
+    basis?: string | null;
+    status: string;
+}
+
+export const intakeApi = {
+    createSession: (initialMessage?: string, patientId?: string) =>
+        api.post<IntakeSession>('/intake/sessions', { initial_message: initialMessage }, {
+            params: patientId ? { patient_id: patientId } : undefined,
+        }),
+    getActiveSession: (patientId?: string) =>
+        api.get<IntakeSession | null>('/intake/sessions/active', {
+            params: patientId ? { patient_id: patientId } : undefined,
+        }),
+    getSessionById: (sessionId: string) =>
+        api.get<IntakeSession>(`/intake/sessions/${sessionId}`),
+    sendMessage: (sessionId: string, content: string) =>
+        api.post<IntakeMessageResponse>(`/intake/sessions/${sessionId}/message`, { content }),
+    completeSession: (sessionId: string, notes?: string) =>
+        api.post<IntakeSession>(`/intake/sessions/${sessionId}/complete`, { notes }),
+    listSessions: (patientId?: string, limit: number = 20) =>
+        api.get<IntakeSession[]>('/intake/sessions', {
+            params: {
+                ...(patientId ? { patient_id: patientId } : {}),
+                limit,
+            },
+        }),
+};
