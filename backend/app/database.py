@@ -13,9 +13,13 @@ AsyncSessionLocal = None
 def init_db():
     """Initialize the database engine and session factory."""
     global engine, AsyncSessionLocal
+    connect_args = {"command_timeout": 10}
+    if "localhost" not in settings.DATABASE_URL and "127.0.0.1" not in settings.DATABASE_URL:
+        connect_args["ssl"] = True
+
     engine = create_async_engine(
         settings.DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://"),
-        connect_args={"ssl": True, "command_timeout": 10},
+        connect_args=connect_args,
         echo=False,
     )
     AsyncSessionLocal = sessionmaker(

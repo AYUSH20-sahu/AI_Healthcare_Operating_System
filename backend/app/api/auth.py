@@ -11,6 +11,7 @@ from app.services.auth.service import (
     UserCreate,
     UserLogin,
     UserResponse,
+    UserSignupRequest,
     authenticate_user,
     create_access_token,
     create_refresh_token,
@@ -22,7 +23,7 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 @router.post("/signup", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
-async def signup(user_data: UserCreate, db: AsyncSession = Depends(get_db)):
+async def signup(user_data: UserSignupRequest, db: AsyncSession = Depends(get_db)):
     """Register a new patient user. Strictly enforces PATIENT role."""
     # Check if user already exists
     existing_user = await db.execute(
@@ -35,7 +36,13 @@ async def signup(user_data: UserCreate, db: AsyncSession = Depends(get_db)):
         )
     
     # Public registration strictly creates PATIENT accounts only
-    user = await create_user(db, user_data, role=UserRole.PATIENT.value)
+    user_create = UserCreate(
+        email=user_data.email,
+        password=user_data.password,
+        full_name=user_data.full_name,
+        role=UserRole.PATIENT.value,
+    )
+    user = await create_user(db, user_create, role=UserRole.PATIENT.value)
 
     # Automatically create associated Patient profile
     patient_profile = Patient(

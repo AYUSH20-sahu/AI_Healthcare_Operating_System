@@ -130,7 +130,15 @@ async def transcribe_audio(
             detail="Uploaded audio file is empty (0 bytes)",
         )
 
-    # Determine audio format
+    # Maximum 25 MB audio payload limit to protect against memory exhaustion DoS
+    MAX_AUDIO_BYTES = 25 * 1024 * 1024
+    if len(content) > MAX_AUDIO_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Audio file exceeds maximum allowed limit of 25 MB ({len(content)/(1024*1024):.2f} MB uploaded).",
+        )
+
+    # Determine and validate audio format
     filename = file.filename or "audio.webm"
     audio_format = filename.split(".")[-1].lower() if "." in filename else "webm"
     if audio_format not in ("webm", "mp3", "wav", "ogg", "m4a"):

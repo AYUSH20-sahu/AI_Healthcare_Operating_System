@@ -1,18 +1,22 @@
-"""Script to create/update an Admin user in Nhost PostgreSQL and verify authentication."""
+"""Script to create/update an Admin user in PostgreSQL and verify authentication."""
 
 import asyncio
+import os
 import uuid
 import bcrypt
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
 
-# Direct Nhost PostgreSQL connection
-DB_URL = "postgresql+asyncpg://postgres:@7HmkeZnqpfJSaB@icfbnbiumbflxblqcwdl.db.ap-south-1.nhost.run:5432/icfbnbiumbflxblqcwdl"
+# Database connection via environment variable
+DB_URL = os.getenv(
+    "DATABASE_URL",
+    "postgresql+asyncpg://postgres:postgres@localhost:5432/ai_hos"
+)
 
-ADMIN_EMAIL = "admin@test.com"
-ADMIN_PASSWORD = "adminpassword123"
-ADMIN_NAME = "Institutional Admin"
+ADMIN_EMAIL = os.getenv("ADMIN_EMAIL", "admin@test.com")
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "adminpassword123")
+ADMIN_NAME = os.getenv("ADMIN_NAME", "Institutional Admin")
 
 
 def get_hash(password: str) -> str:
@@ -24,7 +28,7 @@ def check_hash(password: str, hashed: str) -> bool:
 
 
 async def main():
-    print(f"[Admin Setup] Connecting to Nhost PostgreSQL...")
+    print(f"[Admin Setup] Connecting to PostgreSQL...")
     engine = create_async_engine(DB_URL, echo=False)
     async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 

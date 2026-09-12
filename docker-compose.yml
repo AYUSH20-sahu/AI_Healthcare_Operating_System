@@ -28,12 +28,12 @@ services:
     env_file:
       - .env
     environment:
-      - DATABASE_URL=${DATABASE_URL:-postgresql://postgres:@7HmkeZnqpfJSaB@icfbnbiumbflxblqcwdl.db.ap-south-1.nhost.run:5432/icfbnbiumbflxblqcwdl}
+      - DATABASE_URL=${DATABASE_URL:-postgresql+asyncpg://postgres:postgres@localhost:5432/ai_hos}
       - REDIS_URL=redis://redis:6379/0
       - APP_ENV=development
       - APP_HOST=0.0.0.0
       - APP_PORT=8000
-      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-K8mN2pQ9vX5yL3wR7tZ1cV6bH4jM8nP2qW5eR9uY3oI6aS1dF4gH7kL0zX8cV}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-dev_insecure_jwt_secret_change_in_production_min64chars}
       - JWT_ALGORITHM=HS256
       - JWT_ACCESS_TOKEN_EXPIRE_MINUTES=30
       - JWT_REFRESH_TOKEN_EXPIRE_DAYS=7

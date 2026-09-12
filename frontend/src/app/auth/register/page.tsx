@@ -56,7 +56,6 @@ export default function RegisterPage() {
                 full_name: fullName.trim(),
                 email: email.trim(),
                 password,
-                role: 'patient',
             });
 
             router.push('/patient');

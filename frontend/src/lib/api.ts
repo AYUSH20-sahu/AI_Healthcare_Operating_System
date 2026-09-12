@@ -29,7 +29,6 @@ export interface SignupRequest {
     email: string;
     password: string;
     full_name: string;
-    role?: string;
 }
 
 export class ApiError extends Error {

@@ -362,37 +362,30 @@ async def upload_patient_report(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
-    """Securely upload a medical report for the authenticated patient with MIME and size validation."""
+    """Securely upload a medical report for the authenticated patient with MIME, magic-byte, and size validation."""
+    from app.core.security import sanitize_filename, validate_file_upload
+
     patient = await _get_or_create_patient_profile(db, current_user)
 
-    # 1. MIME Validation
-    content_type = file.content_type or "application/octet-stream"
-    if content_type not in ALLOWED_REPORT_MIME_TYPES:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Unsupported file format '{content_type}'. Allowed types: PDF, PNG, JPEG, WebP.",
-        )
-
-    # 2. Size Validation
+    # 1. Read bytes and perform comprehensive security validation (MIME, size, magic bytes)
     file_bytes = await file.read()
-    file_size = len(file_bytes)
-    if file_size > MAX_REPORT_FILE_SIZE_BYTES:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"File size exceeds maximum allowed limit of 10 MB ({file_size / (1024*1024):.2f} MB uploaded).",
-        )
-    if file_size == 0:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Uploaded file is empty.",
-        )
+    content_type = file.content_type or "application/octet-stream"
+    safe_name = sanitize_filename(file.filename or "medical_report.pdf")
 
-    # 3. Secure isolated directory: uploads/reports/{patient_id}/
+    validate_file_upload(
+        file_bytes=file_bytes,
+        filename=safe_name,
+        content_type=content_type,
+        max_size_bytes=MAX_REPORT_FILE_SIZE_BYTES,
+        allowed_mimes=ALLOWED_REPORT_MIME_TYPES,
+        allowed_extensions={"pdf", "png", "jpg", "jpeg", "webp"},
+    )
+
+    # 2. Secure isolated directory: uploads/reports/{patient_id}/
     patient_dir = BASE_REPORTS_DIR / str(patient.patient_id)
     patient_dir.mkdir(parents=True, exist_ok=True)
 
-    safe_filename = os.path.basename(file.filename or "medical_report")
-    unique_filename = f"{uuid.uuid4().hex[:12]}_{safe_filename}"
+    unique_filename = f"{uuid.uuid4().hex[:12]}_{safe_name}"
     file_target_path = patient_dir / unique_filename
 
     with open(file_target_path, "wb") as f:

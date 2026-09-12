@@ -29,7 +29,9 @@ from app.core.observability import (
     check_ai_mesh_health,
     check_database_health,
 )
+from app.core.security import RateLimitingMiddleware, SecurityHeadersMiddleware
 from app.services.auth.audit import AuditLoggingMiddleware
+from fastapi.middleware.cors import CORSMiddleware
 import app.services.scribe  # registers ScribeAgent on orchestrator
 import app.services.prescriptions  # registers PrescriptionDraftAgent on orchestrator
 import app.services.intake  # registers IntakeAgent on orchestrator
@@ -46,10 +48,31 @@ app = FastAPI(
 # Register exception handlers for standard error envelope
 register_exception_handlers(app)
 
-# Add observability middleware for request_id propagation & latency telemetry
+# 1. Security Headers Middleware (OWASP defense-in-depth)
+app.add_middleware(SecurityHeadersMiddleware)
+
+# 2. CORS Middleware with restricted origins & exposed tracing headers
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:3000",
+        "http://localhost:8000",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:8000",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+    expose_headers=["X-Request-ID", "X-Response-Time", "X-RateLimit-Remaining", "Retry-After"],
+)
+
+# 3. Rate Limiting Middleware (protects auth, AI, and endpoints against abuse)
+app.add_middleware(RateLimitingMiddleware)
+
+# 4. Observability Middleware for request correlation & latency tracking
 app.add_middleware(ObservabilityMiddleware)
 
-# Add audit logging middleware (separate compliance table)
+# 5. Audit logging middleware (separate compliance table)
 app.add_middleware(AuditLoggingMiddleware)
 
 app.include_router(auth.router, prefix="/api/v1")

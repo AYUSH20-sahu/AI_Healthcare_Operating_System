@@ -118,11 +118,11 @@ GROQ_API_KEY=your_groq_key
 # TTS Provider (M34 - stub for now)
 TTS_PROVIDER=mock
 
-# Database (Nhost Managed PostgreSQL)
-DATABASE_URL=postgresql://postgres:@7HmkeZnqpfJSaB@icfbnbiumbflxblqcwdl.db.ap-south-1.nhost.run:5432/icfbnbiumbflxblqcwdl
+# Database (PostgreSQL)
+DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/ai_hos
 POSTGRES_USER=postgres
-POSTGRES_PASSWORD=@7HmkeZnqpfJSaB
-POSTGRES_DB=icfbnbiumbflxblqcwdl
+POSTGRES_PASSWORD=your_secure_password
+POSTGRES_DB=ai_hos
 
 # Redis
 REDIS_URL=redis://localhost:6379/0

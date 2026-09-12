@@ -30,6 +30,15 @@ class TokenData(BaseModel):
     role: str | None = None
 
 
+class UserSignupRequest(BaseModel):
+    email: EmailStr
+    password: str
+    full_name: str
+
+    class Config:
+        extra = "forbid"
+
+
 class UserCreate(BaseModel):
     email: EmailStr
     password: str
@@ -113,8 +122,18 @@ async def authenticate_user(db: AsyncSession, email: str, password: str) -> User
 
 
 async def create_user(db: AsyncSession, user_data: UserCreate, role: str = "patient") -> User:
-    """Create a new user. Public registration always forces patient role."""
+    """Create a new user with password strength validation. Public registration defaults to patient role."""
+    from app.core.security import validate_password_strength
     from app.models import UserRole
+
+    # Enforce password strength
+    is_valid, msg = validate_password_strength(user_data.password)
+    if not is_valid:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=msg or "Password does not meet security requirements.",
+        )
+
     # Enforce safe role conversion, default to patient
     try:
         user_role = UserRole(role)
@@ -139,7 +158,7 @@ async def get_current_user(
     token: str = Depends(oauth2_scheme),
     db: AsyncSession = Depends(get_db),
 ) -> User:
-    """Get current user from JWT token."""
+    """Get current user from JWT token, strictly verifying token type is 'access'."""
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -149,6 +168,11 @@ async def get_current_user(
         payload = jwt.decode(
             token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM]
         )
+        # Prevent refresh tokens from accessing authorized API routes
+        token_type = payload.get("type")
+        if token_type and token_type != "access":
+            raise credentials_exception
+
         user_id: str = payload.get("sub")
         if user_id is None:
             raise credentials_exception

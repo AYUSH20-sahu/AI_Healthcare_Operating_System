@@ -39,7 +39,7 @@ if env_path.exists():
 
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
-    "postgresql+asyncpg://postgres:@7HmkeZnqpfJSaB@icfbnbiumbflxblqcwdl.db.ap-south-1.nhost.run:5432/icfbnbiumbflxblqcwdl"
+    "postgresql+asyncpg://postgres:postgres@localhost:5432/ai_hos"
 )
 
 # Ensure asyncpg driver
@@ -51,9 +51,13 @@ elif DATABASE_URL.startswith("postgres://"):
 
 async def seed_database():
     """Seed the database with development data."""
+    connect_args = {'command_timeout': 10}
+    if "localhost" not in DATABASE_URL and "127.0.0.1" not in DATABASE_URL:
+        connect_args['ssl'] = True
+
     engine = create_async_engine(
         DATABASE_URL,
-        connect_args={'ssl': True, 'command_timeout': 10},
+        connect_args=connect_args,
         echo=True
     )
     async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)

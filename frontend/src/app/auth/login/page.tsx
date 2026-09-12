@@ -41,8 +41,27 @@ function LoginForm() {
             setSubmitting(true);
             const user = await login(email.trim(), password);
 
-            if (redirectUrl) {
-                router.push(redirectUrl);
+            // Validate redirect URL: must be a safe internal relative path and authorized for the user's role
+            let safeTarget: string | null = null;
+            if (
+                redirectUrl &&
+                redirectUrl.startsWith('/') &&
+                !redirectUrl.startsWith('//') &&
+                !redirectUrl.includes('\\')
+            ) {
+                if (redirectUrl.startsWith('/doctor') && user.role === 'doctor') {
+                    safeTarget = redirectUrl;
+                } else if (redirectUrl.startsWith('/patient') && user.role === 'patient') {
+                    safeTarget = redirectUrl;
+                } else if (redirectUrl.startsWith('/admin') && user.role === 'admin') {
+                    safeTarget = redirectUrl;
+                } else if (!redirectUrl.startsWith('/doctor') && !redirectUrl.startsWith('/patient') && !redirectUrl.startsWith('/admin')) {
+                    safeTarget = redirectUrl;
+                }
+            }
+
+            if (safeTarget) {
+                router.push(safeTarget);
             } else if (user.role === 'doctor') {
                 router.push('/doctor');
             } else if (user.role === 'patient') {
@@ -58,12 +77,6 @@ function LoginForm() {
         } finally {
             setSubmitting(false);
         }
-    };
-
-    const handleQuickPersona = (demoEmail: string, demoPass: string) => {
-        setEmail(demoEmail);
-        setPassword(demoPass);
-        setError(null);
     };
 
     return (
@@ -162,41 +175,6 @@ function LoginForm() {
                         </p>
                     </div>
 
-                    {/* Quick Persona Fill */}
-                    <div className="p-3.5 rounded-xl bg-slate-100 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60">
-                        <p className="text-xs font-semibold text-slate-600 dark:text-slate-300 uppercase tracking-wider mb-2 flex items-center justify-between">
-                            <span>One-Click Test Personas</span>
-                            <span className="text-[10px] text-blue-500 font-normal">Click to prefill</span>
-                        </p>
-                        <div className="grid grid-cols-3 gap-2">
-                            <button
-                                type="button"
-                                onClick={() => handleQuickPersona('doctor@test.com', 'doctorpassword123')}
-                                className="px-2.5 py-1.5 text-xs font-medium rounded-lg bg-white dark:bg-slate-700/80 hover:bg-blue-50 dark:hover:bg-blue-900/30 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-600 transition-all text-center flex flex-col items-center justify-center gap-0.5 shadow-sm"
-                            >
-                                <span className="text-sm">👨‍⚕️</span>
-                                <span>Doctor</span>
-                            </button>
-
-                            <button
-                                type="button"
-                                onClick={() => handleQuickPersona('patient@test.com', 'patientpassword123')}
-                                className="px-2.5 py-1.5 text-xs font-medium rounded-lg bg-white dark:bg-slate-700/80 hover:bg-blue-50 dark:hover:bg-blue-900/30 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-600 transition-all text-center flex flex-col items-center justify-center gap-0.5 shadow-sm"
-                            >
-                                <span className="text-sm">🧑</span>
-                                <span>Patient</span>
-                            </button>
-
-                            <button
-                                type="button"
-                                onClick={() => handleQuickPersona('admin@test.com', 'adminpassword123')}
-                                className="px-2.5 py-1.5 text-xs font-medium rounded-lg bg-white dark:bg-slate-700/80 hover:bg-blue-50 dark:hover:bg-blue-900/30 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-600 transition-all text-center flex flex-col items-center justify-center gap-0.5 shadow-sm"
-                            >
-                                <span className="text-sm">🛡️</span>
-                                <span>Admin</span>
-                            </button>
-                        </div>
-                    </div>
 
                     {error && (
                         <Alert

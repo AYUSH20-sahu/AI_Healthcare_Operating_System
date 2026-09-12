@@ -12,7 +12,7 @@ env:
   POSTGRES_DB: ai_hos
   DATABASE_URL: postgresql://postgres:postgres@localhost:5432/ai_hos
   REDIS_URL: redis://localhost:6379/0
-  JWT_SECRET_KEY: test_secret_key
+  JWT_SECRET_KEY: test_secret_key_for_ci_pipeline_min32chars
   JWT_ALGORITHM: HS256
   APP_ENV: test
 
@@ -62,6 +62,10 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Validate Python syntax & compilation
+        run: |
+          python -m compileall app/
+
       - name: Run backend lint (ruff)
         run: |
           ruff check .
@@ -96,6 +100,9 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: TypeScript typecheck
+        run: npx tsc --noEmit
 
       - name: Run frontend lint
         run: npm run lint
