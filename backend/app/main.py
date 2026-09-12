@@ -12,10 +12,12 @@ from app.api import (
     voice_notes,
     admin_users,
     admin_operations,
+    admin_audit,
     copilot,
     intake,
     telehealth,
 )
+
 from app.core.config import settings
 from app.core.exceptions import register_exception_handlers
 from app.services.auth.audit import AuditLoggingMiddleware
@@ -49,6 +51,7 @@ app.include_router(voice_notes.router, prefix="/api/v1")
 app.include_router(approval.router, prefix="/api/v1")
 app.include_router(admin_users.router, prefix="/api/v1")
 app.include_router(admin_operations.router, prefix="/api/v1")
+app.include_router(admin_audit.router, prefix="/api/v1")
 app.include_router(copilot.router, prefix="/api/v1")
 app.include_router(intake.router, prefix="/api/v1")
 app.include_router(telehealth.router, prefix="/api/v1")

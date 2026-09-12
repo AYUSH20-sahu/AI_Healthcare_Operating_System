@@ -1362,4 +1362,89 @@ export const adminOperationsApi = {
         api.get<OperationalAnalyticsResponse>('/admin/operations/analytics'),
 };
 
+// =============================================================================
+// Milestone U-18: Consent Management & Audit Query APIs
+// =============================================================================
+
+export interface ConsentItem {
+    consent_id: string;
+    patient_id: string;
+    provider_id: string;
+    provider_name?: string | null;
+    provider_specialty?: string | null;
+    provider_hospital?: string | null;
+    record_scope: 'full_access' | 'records_only' | 'appointments_only' | 'notes_only' | string;
+    is_active: boolean;
+    granted_at: string;
+    revoked_at?: string | null;
+    created_at: string;
+    updated_at: string;
+}
+
+export interface ConsentCreatePayload {
+    provider_id: string;
+    patient_id?: string;
+    record_scope?: 'full_access' | 'records_only' | 'appointments_only' | 'notes_only' | string;
+}
+
+export const consentApi = {
+    getMyConsents: (activeOnly: boolean = false) =>
+        api.get<ConsentItem[]>('/consents/me', {
+            params: activeOnly ? { active_only: true } : undefined,
+        }),
+    getPatientConsents: (patientId: string, activeOnly: boolean = true) =>
+        api.get<ConsentItem[]>(`/consents/patients/${patientId}`, {
+            params: { active_only: activeOnly },
+        }),
+    grantConsent: (data: ConsentCreatePayload) =>
+        api.post<ConsentItem>('/consents', data),
+    revokeConsent: (consentId: string) =>
+        api.delete<ConsentItem>(`/consents/${consentId}`),
+};
+
+export interface AuditLogItem {
+    log_id: string;
+    user_id?: string | null;
+    user_email?: string | null;
+    user_name?: string | null;
+    user_role?: string | null;
+    action: string;
+    resource_type: string;
+    resource_id?: string | null;
+    timestamp: string;
+    outcome: 'SUCCESS' | 'FAILURE' | 'DENIED' | 'ERROR' | string;
+    details?: Record<string, any> | null;
+    ip_address?: string | null;
+    user_agent?: string | null;
+}
+
+export interface AuditLogListResponse {
+    logs: AuditLogItem[];
+    total: number;
+    page: number;
+    page_size: number;
+    total_pages: number;
+}
+
+export interface AuditLogQueryParams {
+    user_id?: string;
+    action?: string;
+    resource_type?: string;
+    resource_id?: string;
+    outcome?: string;
+    start_date?: string;
+    end_date?: string;
+    search?: string;
+    page?: number;
+    page_size?: number;
+}
+
+export const adminAuditApi = {
+    listLogs: (params?: AuditLogQueryParams) =>
+        api.get<AuditLogListResponse>('/admin/audit', params as Record<string, any>),
+    getLog: (logId: string) =>
+        api.get<AuditLogItem>(`/admin/audit/${logId}`),
+};
+
+
 
