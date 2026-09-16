@@ -60,8 +60,20 @@ class Settings(BaseSettings):
     def validate_database_url(cls, v):
         if not v or not str(v).strip():
             return "postgresql+asyncpg://postgres:postgres@localhost:5432/ai_hos"
-        # Convert plain postgres:// or postgresql:// to postgresql+asyncpg:// for async engine
         v_str = str(v).strip()
+        # Sanitize unencoded @ in password if multiple @ signs exist
+        if "://" in v_str:
+            scheme, rest = v_str.split("://", 1)
+            if rest.count("@") > 1:
+                userinfo, host_part = rest.rsplit("@", 1)
+                if ":" in userinfo:
+                    import urllib.parse
+                    username, password = userinfo.split(":", 1)
+                    encoded_password = urllib.parse.quote(urllib.parse.unquote(password), safe="")
+                    rest = f"{username}:{encoded_password}@{host_part}"
+                    v_str = f"{scheme}://{rest}"
+
+        # Convert plain postgres:// or postgresql:// to postgresql+asyncpg:// for async engine
         if v_str.startswith("postgres://"):
             return v_str.replace("postgres://", "postgresql+asyncpg://", 1)
         elif v_str.startswith("postgresql://") and not v_str.startswith("postgresql+asyncpg://"):

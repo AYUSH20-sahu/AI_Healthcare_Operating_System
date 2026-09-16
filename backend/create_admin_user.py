@@ -28,10 +28,31 @@ DB_URL = os.getenv(
     "DATABASE_URL",
     "postgresql+asyncpg://postgres:postgres@localhost:5432/ai_hos"
 )
+try:
+    import asyncpg
+    DRIVER_PREFIX = "postgresql+asyncpg://"
+except ImportError:
+    try:
+        import psycopg
+        DRIVER_PREFIX = "postgresql+psycopg://"
+    except ImportError:
+        DRIVER_PREFIX = "postgresql+asyncpg://"
+
+import urllib.parse
+if "://" in DB_URL:
+    scheme, rest = DB_URL.split("://", 1)
+    if rest.count("@") > 1:
+        userinfo, host_part = rest.rsplit("@", 1)
+        if ":" in userinfo:
+            username, password = userinfo.split(":", 1)
+            encoded_password = urllib.parse.quote(urllib.parse.unquote(password), safe="")
+            rest = f"{username}:{encoded_password}@{host_part}"
+            DB_URL = f"{scheme}://{rest}"
+
 if DB_URL.startswith("postgres://"):
-    DB_URL = DB_URL.replace("postgres://", "postgresql+asyncpg://", 1)
-elif DB_URL.startswith("postgresql://") and not DB_URL.startswith("postgresql+asyncpg://"):
-    DB_URL = DB_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
+    DB_URL = DB_URL.replace("postgres://", DRIVER_PREFIX, 1)
+elif DB_URL.startswith("postgresql://") and not DB_URL.startswith("postgresql+"):
+    DB_URL = DB_URL.replace("postgresql://", DRIVER_PREFIX, 1)
 
 ADMIN_EMAIL = os.getenv("ADMIN_EMAIL", "admin@test.com")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "adminpassword123")

@@ -31,28 +31,61 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 import os
 from pathlib import Path
 
-# Load .env.local or .env from project root (parent of database/)
-env_local = Path(__file__).parent.parent / ".env.local"
+# Load .env first, then .env.local (if it exists, overriding .env)
 env_file = Path(__file__).parent.parent / ".env"
+env_local = Path(__file__).parent.parent / ".env.local"
 try:
     from dotenv import load_dotenv
+    if env_file.exists():
+        load_dotenv(env_file, override=True)
     if env_local.exists():
-        load_dotenv(env_local)
-    elif env_file.exists():
-        load_dotenv(env_file)
+        load_dotenv(env_local, override=True)
 except ImportError:
     pass
+
 
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
     "postgresql+asyncpg://postgres:postgres@localhost:5432/ai_hos"
 )
 
-# Ensure asyncpg driver
+# Detect available async PostgreSQL driver (asyncpg or psycopg)
+try:
+    import asyncpg
+    DRIVER_PREFIX = "postgresql+asyncpg://"
+except ImportError:
+    try:
+        import psycopg
+        DRIVER_PREFIX = "postgresql+psycopg://"
+    except ImportError:
+        DRIVER_PREFIX = "postgresql+asyncpg://"
+
+import urllib.parse
+
+
+def _sanitize_db_url(url: str) -> str:
+    if not url:
+        return url
+    url = str(url).strip()
+    if "://" in url:
+        scheme, rest = url.split("://", 1)
+        if rest.count("@") > 1:
+            userinfo, host_part = rest.rsplit("@", 1)
+            if ":" in userinfo:
+                username, password = userinfo.split(":", 1)
+                encoded_password = urllib.parse.quote(urllib.parse.unquote(password), safe="")
+                rest = f"{username}:{encoded_password}@{host_part}"
+                url = f"{scheme}://{rest}"
+    return url
+
+
+DATABASE_URL = _sanitize_db_url(DATABASE_URL)
+
+# Ensure async driver prefix
 if DATABASE_URL.startswith("postgresql://"):
-    DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
+    DATABASE_URL = DATABASE_URL.replace("postgresql://", DRIVER_PREFIX, 1)
 elif DATABASE_URL.startswith("postgres://"):
-    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql+asyncpg://", 1)
+    DATABASE_URL = DATABASE_URL.replace("postgres://", DRIVER_PREFIX, 1)
 
 
 async def seed_database():
