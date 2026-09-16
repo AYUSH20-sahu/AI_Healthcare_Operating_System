@@ -1,10 +1,19 @@
 from pathlib import Path
 
+from dotenv import load_dotenv
 from pydantic import field_validator, model_validator
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# Explicitly load .env and .env.local from project root
+_root_dir = Path(__file__).parent.parent.parent.parent
+if (_root_dir / ".env").exists():
+    load_dotenv(_root_dir / ".env", override=True)
+if (_root_dir / ".env.local").exists():
+    load_dotenv(_root_dir / ".env.local", override=True)
 
 
 class Settings(BaseSettings):
+
     # App
     APP_ENV: str = "development"
     APP_HOST: str = "0.0.0.0"
@@ -104,21 +113,13 @@ class Settings(BaseSettings):
                 raise ValueError("JWT_SECRET_KEY must be set to a strong secret in production")
         return self
 
-    class Config:
-        # Check multiple potential locations for env files (.env.local, .env)
-        env_file = (
-            Path(__file__).parent.parent.parent.parent / ".env.local",
-            Path(__file__).parent.parent.parent.parent / ".env",
-            Path(__file__).parent.parent.parent / ".env.local",
-            Path(__file__).parent.parent.parent / ".env",
-            Path("/app/.env.local"),
-            Path("/app/.env"),
-            ".env.local",
-            ".env",
-        )
-        env_file_encoding = "utf-8"
-        case_sensitive = True
-        extra = "allow"
+    model_config = SettingsConfigDict(
+        env_file=(".env.local", ".env"),
+        env_file_encoding="utf-8",
+        case_sensitive=True,
+        extra="allow",
+    )
+
 
 
 settings = Settings()

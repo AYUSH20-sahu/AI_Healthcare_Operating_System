@@ -22,10 +22,25 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 
-# Import models (will be created in M7)
-# For now, we'll use raw SQL to insert data
+# Import models (with fallback)
+import sys
+from pathlib import Path
+backend_dir = Path(__file__).parent.parent / "backend"
+if str(backend_dir) not in sys.path:
+    sys.path.insert(0, str(backend_dir))
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+try:
+    from app.models import Base
+except ImportError:
+    Base = None
+
+import bcrypt
+
+def hash_password(password: str) -> str:
+    """Hash password using native bcrypt matching auth service."""
+    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+
+
 
 # Database URL - use environment variable or default to Nhost
 import os
@@ -110,23 +125,42 @@ async def seed_database():
             """))
             tables = [row[0] for row in result.fetchall()]
             
-            if not tables:
-                print("No tables found. Run Alembic migrations first (M7).")
-                return
+            if not tables or "users" not in tables:
+                print("Core schema tables not yet created in public schema.")
+                if Base is not None:
+                    print("⚙️ Auto-creating all database tables from SQLAlchemy models...")
+                    async with engine.begin() as conn:
+                        await conn.run_sync(Base.metadata.create_all)
+                    print("✅ Tables created successfully!")
+                else:
+                    print("⚠️ Models could not be imported. Run Alembic migrations first (M7).")
+                    return
 
-            print(f"Found tables: {tables}")
+
+            # Re-fetch tables to confirm
+            result = await session.execute(text("""
+                SELECT table_name FROM information_schema.tables 
+                WHERE table_schema = 'public'
+            """))
+            tables = [row[0] for row in result.fetchall()]
+            print(f"Found {len(tables)} tables: {tables}")
 
             # Seed users
             users = await seed_users(session)
             print(f"Seeded {len(users)} users")
 
+            # Fetch actual user_ids from DB (so FKs are 100% consistent across reruns)
+            user_rows = (await session.execute(text("SELECT email, user_id FROM users"))).fetchall()
+            user_map = {row[0]: row[1] for row in user_rows}
+
             # Seed doctors
-            doctors = await seed_doctors(session)
+            doctors = await seed_doctors(session, user_map)
             print(f"Seeded {len(doctors)} doctors")
 
             # Seed patients
-            patients = await seed_patients(session)
+            patients = await seed_patients(session, user_map)
             print(f"Seeded {len(patients)} patients")
+
 
             # Seed appointments
             appointments = await seed_appointments(session, doctors, patients)
@@ -149,7 +183,17 @@ async def seed_database():
 
         except Exception as e:
             await session.rollback()
-            print(f"❌ Error seeding database: {e}")
+            err_msg = str(e)
+            print(f"\n❌ Error seeding database: {e}")
+            if "11001" in err_msg or "getaddrinfo" in err_msg:
+                print("\n💡 DIAGNOSTIC: DNS host resolution failed ([Errno 11001]).")
+                print("   • If using Nhost: Cloud projects pause after a period of inactivity.")
+                print("     Log into https://app.nhost.io, open your project, and click 'Resume Project' / 'Wake Up'.")
+                print("   • Also ensure your internet connection is active.")
+            elif "SASL" in err_msg or "authentication failed" in err_msg.lower():
+                print("\n💡 DIAGNOSTIC: SASL authentication failed.")
+                print("   • The database was reached, but the password was rejected.")
+                print("   • Check your database password in Nhost Dashboard -> Settings -> Database.")
             raise
         finally:
             await engine.dispose()
@@ -161,7 +205,7 @@ async def seed_users(session: AsyncSession):
         {
             "user_id": uuid.uuid4(),
             "email": "doctor@test.com",
-            "hashed_password": pwd_context.hash("doctorpassword123"),
+            "hashed_password": hash_password("doctorpassword123"),
             "full_name": "Dr. Rajesh Sharma",
             "role": "doctor",
             "is_active": True,
@@ -169,7 +213,7 @@ async def seed_users(session: AsyncSession):
         {
             "user_id": uuid.uuid4(),
             "email": "patient@test.com",
-            "hashed_password": pwd_context.hash("patientpassword123"),
+            "hashed_password": hash_password("patientpassword123"),
             "full_name": "Amit Kumar",
             "role": "patient",
             "is_active": True,
@@ -177,12 +221,13 @@ async def seed_users(session: AsyncSession):
         {
             "user_id": uuid.uuid4(),
             "email": "admin@test.com",
-            "hashed_password": pwd_context.hash("adminpassword123"),
+            "hashed_password": hash_password("adminpassword123"),
             "full_name": "Institutional Admin",
             "role": "admin",
             "is_active": True,
         },
     ]
+
 
     for user in users_data:
         await session.execute(text("""
@@ -194,22 +239,26 @@ async def seed_users(session: AsyncSession):
     return users_data
 
 
-async def seed_doctors(session: AsyncSession):
+async def seed_doctors(session: AsyncSession, user_map: dict | None = None):
     """Seed doctors across specialties."""
+    if user_map is None:
+        user_map = {}
+    doctor_user_id = user_map.get("doctor@test.com")
+
     doctors_data = [
         {
             "doctor_id": uuid.uuid4(),
-            "user_id": uuid.uuid4(),
+            "user_id": doctor_user_id,
             "specialty": "Cardiology",
             "license_number": "MD-CARD-001",
             "hospital_affiliation": "City General Hospital",
-            "email": "dr.sharma@citygeneral.com",
+            "email": "doctor@test.com",
             "full_name": "Dr. Rajesh Sharma",
             "phone": "+91-98765-43210",
         },
         {
             "doctor_id": uuid.uuid4(),
-            "user_id": uuid.uuid4(),
+            "user_id": None,
             "specialty": "Neurology",
             "license_number": "MD-NEURO-002",
             "hospital_affiliation": "City General Hospital",
@@ -219,7 +268,7 @@ async def seed_doctors(session: AsyncSession):
         },
         {
             "doctor_id": uuid.uuid4(),
-            "user_id": uuid.uuid4(),
+            "user_id": None,
             "specialty": "Pediatrics",
             "license_number": "MD-PED-003",
             "hospital_affiliation": "Children's Medical Center",
@@ -229,7 +278,7 @@ async def seed_doctors(session: AsyncSession):
         },
         {
             "doctor_id": uuid.uuid4(),
-            "user_id": uuid.uuid4(),
+            "user_id": None,
             "specialty": "Orthopedics",
             "license_number": "MD-ORTHO-004",
             "hospital_affiliation": "City General Hospital",
@@ -239,7 +288,7 @@ async def seed_doctors(session: AsyncSession):
         },
         {
             "doctor_id": uuid.uuid4(),
-            "user_id": uuid.uuid4(),
+            "user_id": None,
             "specialty": "Dermatology",
             "license_number": "MD-DERM-005",
             "hospital_affiliation": "Skin & Hair Clinic",
@@ -261,23 +310,30 @@ async def seed_doctors(session: AsyncSession):
     return doctors_data
 
 
-async def seed_patients(session: AsyncSession):
+
+async def seed_patients(session: AsyncSession, user_map: dict | None = None):
     """Seed sample patients."""
+    if user_map is None:
+        user_map = {}
+    patient_user_id = user_map.get("patient@test.com")
+
     patients_data = [
         {
             "patient_id": uuid.uuid4(),
+            "user_id": patient_user_id,
             "abha_address": "patient1@abdm",
             "full_name": "Amit Kumar",
             "date_of_birth": date(1985, 3, 15),
             "gender": "male",
             "phone": "+91-98765-11111",
-            "email": "amit.kumar@email.com",
+            "email": "patient@test.com",
             "address": "123 MG Road, Bangalore, Karnataka 560001",
             "emergency_contact_name": "Sunita Kumar",
             "emergency_contact_phone": "+91-98765-11112",
         },
         {
             "patient_id": uuid.uuid4(),
+            "user_id": None,
             "abha_address": "patient2@abdm",
             "full_name": "Priya Sharma",
             "date_of_birth": date(1990, 7, 22),
@@ -290,6 +346,7 @@ async def seed_patients(session: AsyncSession):
         },
         {
             "patient_id": uuid.uuid4(),
+            "user_id": None,
             "abha_address": "patient3@abdm",
             "full_name": "Rahul Singh",
             "date_of_birth": date(1978, 11, 5),
@@ -302,6 +359,7 @@ async def seed_patients(session: AsyncSession):
         },
         {
             "patient_id": uuid.uuid4(),
+            "user_id": None,
             "abha_address": "patient4@abdm",
             "full_name": "Anjali Gupta",
             "date_of_birth": date(1995, 1, 30),
@@ -314,6 +372,7 @@ async def seed_patients(session: AsyncSession):
         },
         {
             "patient_id": uuid.uuid4(),
+            "user_id": None,
             "abha_address": "patient5@abdm",
             "full_name": "Suresh Nair",
             "date_of_birth": date(1965, 9, 12),
@@ -328,10 +387,10 @@ async def seed_patients(session: AsyncSession):
 
     for pat in patients_data:
         await session.execute(text("""
-            INSERT INTO patients (patient_id, abha_address, full_name, date_of_birth,
+            INSERT INTO patients (patient_id, user_id, abha_address, full_name, date_of_birth,
                                 gender, phone, email, address, emergency_contact_name,
                                 emergency_contact_phone, created_at, updated_at)
-            VALUES (:patient_id, :abha_address, :full_name, :date_of_birth,
+            VALUES (:patient_id, :user_id, :abha_address, :full_name, :date_of_birth,
                     :gender, :phone, :email, :address, :emergency_contact_name,
                     :emergency_contact_phone, NOW(), NOW())
             ON CONFLICT (abha_address) DO NOTHING
@@ -347,13 +406,14 @@ async def seed_appointments(session: AsyncSession, doctors, patients):
 
     # Create a few appointments
     appointment_configs = [
-        (0, 0, base_date + timedelta(days=1), 30, "scheduled"),  # Amit with Dr. Sharma
-        (1, 1, base_date + timedelta(days=2), 30, "scheduled"),  # Priya with Dr. Patel
-        (2, 2, base_date + timedelta(days=3), 20, "scheduled"),  # Rahul with Dr. Kumar
-        (3, 3, base_date + timedelta(days=1, hours=2), 30, "scheduled"),  # Anjali with Dr. Singh
-        (4, 4, base_date + timedelta(days=2, hours=1), 20, "scheduled"),  # Suresh with Dr. Reddy
-        (0, 1, base_date + timedelta(days=5), 30, "completed"),  # Amit with Dr. Patel (past)
+        (0, 0, base_date + timedelta(days=1), 30, "SCHEDULED"),  # Amit with Dr. Sharma
+        (1, 1, base_date + timedelta(days=2), 30, "SCHEDULED"),  # Priya with Dr. Patel
+        (2, 2, base_date + timedelta(days=3), 20, "SCHEDULED"),  # Rahul with Dr. Kumar
+        (3, 3, base_date + timedelta(days=1, hours=2), 30, "SCHEDULED"),  # Anjali with Dr. Singh
+        (4, 4, base_date + timedelta(days=2, hours=1), 20, "SCHEDULED"),  # Suresh with Dr. Reddy
+        (0, 1, base_date + timedelta(days=5), 30, "COMPLETED"),  # Amit with Dr. Patel (past)
     ]
+
 
     for i, (pat_idx, doc_idx, scheduled_at, duration, status) in enumerate(appointment_configs):
         appt_id = uuid.uuid4()
@@ -375,10 +435,11 @@ async def seed_appointments(session: AsyncSession, doctors, patients):
                                     duration_minutes, status, notes, created_at, updated_at)
             VALUES (:appointment_id, :patient_id, :doctor_id, :scheduled_at,
                     :duration_minutes, :status, :notes, :created_at, :updated_at)
-            ON CONFLICT (patient_id, doctor_id, scheduled_at) DO NOTHING
+            ON CONFLICT (appointment_id) DO NOTHING
         """), appt)
 
     return appointments_data
+
 
 
 async def seed_medical_records(session: AsyncSession, doctors, patients, appointments):
@@ -386,7 +447,7 @@ async def seed_medical_records(session: AsyncSession, doctors, patients, appoint
     records_data = []
 
     # One completed appointment gets a medical record
-    completed_appt = next((a for a in appointments if a["status"] == "completed"), None)
+    completed_appt = next((a for a in appointments if a["status"] == "COMPLETED"), None)
     if completed_appt:
         record_id = uuid.uuid4()
         records_data.append({
@@ -404,14 +465,14 @@ async def seed_medical_records(session: AsyncSession, doctors, patients, appoint
                 "assessment": "Tension-type headache, likely stress-related. Rule out secondary causes.",
                 "plan": "1. Lifestyle modifications - stress management, regular sleep\n2. Ibuprofen 400mg PRN for breakthrough pain\n3. Follow-up in 2 weeks\n4. If worsening, consider neuroimaging",
             },
-            "status": "finalized",
+            "status": "FINALIZED",
             "created_at": completed_appt["scheduled_at"],
             "updated_at": completed_appt["scheduled_at"] + timedelta(hours=1),
             "finalized_at": completed_appt["scheduled_at"] + timedelta(hours=1),
         })
 
     # One upcoming appointment gets a draft medical record
-    upcoming_appt = next((a for a in appointments if a["status"] == "scheduled"), None)
+    upcoming_appt = next((a for a in appointments if a["status"] == "SCHEDULED"), None)
     if upcoming_appt:
         record_id = uuid.uuid4()
         records_data.append({
@@ -429,7 +490,7 @@ async def seed_medical_records(session: AsyncSession, doctors, patients, appoint
                 "assessment": "Hypertension - borderline controlled. Orthostatic hypotension noted.",
                 "plan": "1. Continue current medications\n2. Monitor home BP readings\n3. Consider dose adjustment if BP > 140/90 consistently\n4. Follow-up in 3 months",
             },
-            "status": "draft",
+            "status": "DRAFT",
             "created_at": datetime.now(),
             "updated_at": datetime.now(),
             "finalized_at": None,
@@ -455,7 +516,7 @@ async def seed_prescriptions(session: AsyncSession, doctors, patients, medical_r
     prescriptions_data = []
 
     # Prescription for the finalized medical record
-    finalized_record = next((r for r in medical_records if r["status"] == "finalized"), None)
+    finalized_record = next((r for r in medical_records if r["status"] == "FINALIZED"), None)
     if finalized_record:
         presc_id = uuid.uuid4()
         prescriptions_data.append({
@@ -472,14 +533,14 @@ async def seed_prescriptions(session: AsyncSession, doctors, patients, medical_r
                     "instructions": "Take with food. Do not exceed 1200mg/day.",
                 }
             ],
-            "status": "finalized",
+            "status": "FINALIZED",
             "created_at": finalized_record["finalized_at"],
             "updated_at": finalized_record["finalized_at"],
             "finalized_at": finalized_record["finalized_at"],
         })
 
     # Draft prescription for the draft medical record
-    draft_record = next((r for r in medical_records if r["status"] == "draft"), None)
+    draft_record = next((r for r in medical_records if r["status"] == "DRAFT"), None)
     if draft_record:
         presc_id = uuid.uuid4()
         prescriptions_data.append({
@@ -503,7 +564,7 @@ async def seed_prescriptions(session: AsyncSession, doctors, patients, medical_r
                     "instructions": "Take with breakfast and dinner.",
                 }
             ],
-            "status": "draft",
+            "status": "DRAFT",
             "created_at": datetime.now(),
             "updated_at": datetime.now(),
             "finalized_at": None,
@@ -535,17 +596,18 @@ async def seed_consents(session: AsyncSession, patients, doctors):
             "consent_id": consent_id,
             "patient_id": patient["patient_id"],
             "provider_id": doctors[i]["doctor_id"],
-            "record_scope": "full_access",
+            "record_scope": "FULL_ACCESS",
             "granted_at": datetime.now() - timedelta(days=30),
             "revoked_at": None,
         })
 
+
     for consent in consents_data:
         await session.execute(text("""
             INSERT INTO consents (consent_id, patient_id, provider_id, record_scope,
-                                granted_at, revoked_at)
+                                granted_at, revoked_at, created_at, updated_at)
             VALUES (:consent_id, :patient_id, :provider_id, :record_scope,
-                    :granted_at, :revoked_at)
+                    :granted_at, :revoked_at, NOW(), NOW())
             ON CONFLICT (consent_id) DO NOTHING
         """), consent)
 

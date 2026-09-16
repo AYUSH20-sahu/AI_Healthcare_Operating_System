@@ -79,9 +79,21 @@ async def run_migrations_online() -> None:
     and associate a connection with the context.
 
     """
+    url = get_url()
+    try:
+        from urllib.parse import urlparse
+        parsed = urlparse(url)
+        print(f"\n[Alembic] Connecting to host: '{parsed.hostname}' on port {parsed.port} (database: '{parsed.path.lstrip('/')}')")
+    except Exception:
+        pass
+
+    connect_args = {'command_timeout': 10}
+    if "localhost" not in url and "127.0.0.1" not in url:
+        connect_args['ssl'] = True
+
     connectable = create_async_engine(
-        get_url(),
-        connect_args={'ssl': True, 'command_timeout': 10},
+        url,
+        connect_args=connect_args,
         poolclass=pool.NullPool
     )
 
@@ -89,6 +101,7 @@ async def run_migrations_online() -> None:
         await connection.run_sync(do_run_migrations)
 
     await connectable.dispose()
+
 
 
 if context.is_offline_mode():
