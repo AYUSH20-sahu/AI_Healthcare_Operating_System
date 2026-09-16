@@ -24,6 +24,7 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 @router.post("/signup", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 async def signup(user_data: UserSignupRequest, db: AsyncSession = Depends(get_db)):
     """Register a new patient user. Strictly enforces PATIENT role."""
     # Check if user already exists

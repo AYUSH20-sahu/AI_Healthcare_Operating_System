@@ -19,29 +19,50 @@ class AuditLogger:
         user_id: UUID | None,
         action: str,
         resource_type: str,
-        resource_id: UUID | None = None,
+        resource_id: UUID | str | None = None,
         outcome: AuditOutcome = AuditOutcome.SUCCESS,
         details: dict[str, Any] | None = None,
         ip_address: str | None = None,
         user_agent: str | None = None,
+        db: Any | None = None,
     ) -> AuditLog | None:
         """Log an audit event."""
+        res_uuid = None
+        if resource_id:
+            if isinstance(resource_id, UUID):
+                res_uuid = resource_id
+            else:
+                try:
+                    res_uuid = UUID(str(resource_id))
+                except (ValueError, TypeError):
+                    res_uuid = None
+
+        audit_log = AuditLog(
+            user_id=user_id,
+            action=action,
+            resource_type=resource_type,
+            resource_id=res_uuid,
+            timestamp=datetime.utcnow(),
+            outcome=outcome,
+            details=details,
+            ip_address=ip_address,
+            user_agent=user_agent,
+        )
+
         try:
-            async with AsyncSessionLocal() as db:
-                audit_log = AuditLog(
-                    user_id=user_id,
-                    action=action,
-                    resource_type=resource_type,
-                    resource_id=resource_id,
-                    timestamp=datetime.utcnow(),
-                    outcome=outcome,
-                    details=details,
-                    ip_address=ip_address,
-                    user_agent=user_agent,
-                )
+            if db is not None:
                 db.add(audit_log)
                 await db.commit()
                 await db.refresh(audit_log)
+                return audit_log
+
+            import app.database as app_db
+            if app_db.AsyncSessionLocal is None:
+                app_db.init_db()
+            async with app_db.AsyncSessionLocal() as session:
+                session.add(audit_log)
+                await session.commit()
+                await session.refresh(audit_log)
                 return audit_log
         except Exception:
             # Don't let audit logging failures affect the application
@@ -88,6 +109,35 @@ class AuditLogger:
             ip_address=ip_address,
             user_agent=user_agent,
         )
+
+
+# Singleton instance for direct imports: from app.services.auth.audit import audit_logger
+audit_logger = AuditLogger()
+
+
+async def log_audit_event(
+    db: Any | None = None,
+    user_id: UUID | None = None,
+    action: str = "",
+    resource_type: str = "",
+    resource_id: UUID | str | None = None,
+    outcome: AuditOutcome = AuditOutcome.SUCCESS,
+    details: dict[str, Any] | None = None,
+    ip_address: str | None = None,
+    user_agent: str | None = None,
+) -> AuditLog | None:
+    """Helper function to log audit events with optional DB session."""
+    return await AuditLogger.log_event(
+        user_id=user_id,
+        action=action,
+        resource_type=resource_type,
+        resource_id=resource_id,
+        outcome=outcome,
+        details=details,
+        ip_address=ip_address,
+        user_agent=user_agent,
+        db=db,
+    )
 
 
 class AuditLoggingMiddleware(BaseHTTPMiddleware):

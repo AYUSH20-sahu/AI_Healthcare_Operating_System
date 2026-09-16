@@ -35,6 +35,7 @@ This document maintains the authoritative status of all subsystems, architecture
 | **Frontend Web Architecture** | Next.js 14 App Router, TypeScript typechecking, dark/light theme engine, unified glassmorphism design system. | `VERIFIED` | `npm run typecheck`, `npm run build`, `validatePostLoginRedirect` internal security boundary. |
 | **Security & OWASP Hardening** | OWASP HTTP security headers, sliding-window rate limiting, magic byte file upload validation, zero client-side secret exposure. | `VERIFIED` | `test_security_u23.py`, `test_audit_remediation.py`, CSP, X-Frame-Options, HSTS headers active. |
 | **CI/CD & Secret Scanning** | GitHub Actions CI with Python compilation, Ruff linting, Pytest coverage, TypeScript check, Gitleaks, and pip-audit. | `VERIFIED` | Configured in `.github/workflows/ci.yml`. |
+| **Full Test Coverage & E2E** | Comprehensive end-to-end integration covering Patient, Doctor, and Admin journeys with real authentication, RBAC, and approval gates. | `VERIFIED` | `test_full_system_e2e_u24.py`, `frontend/test-e2e.mjs`, covering all 3 clinical and governance user journeys. |
 | **Containerization & Deployment** | Docker Compose local dev stack (Redis, Backend, Frontend) with environment isolation and healthchecks. | `VERIFIED` | `docker-compose.yml` uses local dev defaults; `.env.*` gitignored. |
 
 ---
