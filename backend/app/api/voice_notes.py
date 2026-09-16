@@ -20,6 +20,8 @@ from fastapi.responses import FileResponse
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.security import sanitize_filename, validate_file_upload
+
 from app.api.schemas.voice_note import (
     VoiceNoteListResponse,
     VoiceNoteResponse,
@@ -123,37 +125,36 @@ async def upload_voice_note(
             detail=f"Invalid file type '{content_type}'. Allowed types: {', '.join(sorted(ALLOWED_CONTENT_TYPES))}",
         )
     
+    # Read file bytes and sanitize filename
+    file_bytes = await file.read()
+    raw_filename = file.filename or "recording.webm"
+    safe_name = sanitize_filename(raw_filename)
+    allowed_audio_exts = {"webm", "wav", "mp3", "ogg", "m4a", "mp4", "oga"}
+
+    # Run comprehensive security validation (MIME, extension, size, magic bytes)
+    validate_file_upload(
+        file_bytes=file_bytes,
+        filename=safe_name,
+        content_type=content_type,
+        max_size_bytes=MAX_FILE_SIZE_BYTES,
+        allowed_mimes=ALLOWED_CONTENT_TYPES,
+        allowed_extensions=allowed_audio_exts,
+    )
+
     # Generate unique file path
-    file_extension = Path(file.filename).suffix if file.filename else ".webm"
+    file_extension = Path(safe_name).suffix or ".webm"
     unique_filename = f"{appointment_id}_{doctor_id}_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}{file_extension}"
     file_path = STORAGE_DIR / unique_filename
     
     # Save file
     try:
         with file_path.open("wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
-        file_size = file_path.stat().st_size
+            buffer.write(file_bytes)
+        file_size = len(file_bytes)
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to save file: {e!s}",
-        )
-
-    # Validate file size
-    if file_size == 0:
-        if file_path.exists():
-            file_path.unlink()
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Empty audio file received",
-        )
-
-    if file_size > MAX_FILE_SIZE_BYTES:
-        if file_path.exists():
-            file_path.unlink()
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"File exceeds maximum allowed size of 50 MB (received {file_size} bytes)",
         )
     
     # Create voice note record

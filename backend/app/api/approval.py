@@ -194,9 +194,12 @@ async def review_medical_record(
         )
         reviewer_doctor = doctor_result.scalar_one_or_none()
     elif current_user.role == UserRole.ADMIN:
-        # For admin, find any doctor profile or create a system reviewer
-        doctor_result = await db.execute(select(Doctor).limit(1))
-        reviewer_doctor = doctor_result.scalar_one_or_none()
+        # For admin, prioritize the record's assigned doctor profile for clinical continuity
+        if record.doctor_id:
+            reviewer_doctor = await db.get(Doctor, record.doctor_id)
+        if not reviewer_doctor:
+            doctor_result = await db.execute(select(Doctor).limit(1))
+            reviewer_doctor = doctor_result.scalar_one_or_none()
     
     if not reviewer_doctor:
         raise HTTPException(
@@ -334,8 +337,12 @@ async def review_prescription(
         )
         reviewer_doctor = doctor_result.scalar_one_or_none()
     elif current_user.role == UserRole.ADMIN:
-        doctor_result = await db.execute(select(Doctor).limit(1))
-        reviewer_doctor = doctor_result.scalar_one_or_none()
+        # For admin, prioritize the prescription's assigned doctor profile for clinical continuity
+        if prescription.doctor_id:
+            reviewer_doctor = await db.get(Doctor, prescription.doctor_id)
+        if not reviewer_doctor:
+            doctor_result = await db.execute(select(Doctor).limit(1))
+            reviewer_doctor = doctor_result.scalar_one_or_none()
     
     if not reviewer_doctor:
         raise HTTPException(

@@ -119,7 +119,7 @@ GROQ_API_KEY=your_groq_key
 TTS_PROVIDER=mock
 
 # Database (PostgreSQL)
-DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/ai_hos
+DATABASE_URL=postgresql+asyncpg://postgres:your_secure_password@localhost:5432/ai_hos
 POSTGRES_USER=postgres
 POSTGRES_PASSWORD=your_secure_password
 POSTGRES_DB=ai_hos
@@ -143,13 +143,17 @@ NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1
 NEXT_PUBLIC_APP_URL=http://localhost:3000
 ```
 
+### Database Deployment Architecture (SEC-M01)
+- **Local Development**: Uses local Docker Compose PostgreSQL (`localhost:5432`). In-memory/file-based SQLite engines are strictly utilized for isolated unit test runs.
+- **Staging & Production**: Uses managed cloud PostgreSQL (e.g., Nhost, Supabase, or AWS RDS). No credentials are committed to version control; connection strings are injected dynamically via GitHub Secrets / Kubernetes secret mounts (`${{ secrets.DATABASE_URL }}`).
+
 ### Getting API Keys
 - **NVIDIA NIM**: https://build.nvidia.com (Nemotron 3 Ultra free tier)
 - **Google Gemini**: https://aistudio.google.com (Flash models free tier)
 - **Groq**: https://console.groq.com (Whisper STT free tier)
 
 > [!WARNING]
-> **DEVELOPMENT & TEST PERSONAS ONLY (SEC-07)**:
+> **DEVELOPMENT & TEST PERSONAS ONLY (SEC-07 & SEC-M02)**:
 > Any test credentials referenced in local automated tests or development seeds (`admin@test.com`, `doctor@test.com`, `patient@test.com`) are strictly intended for local mock development (`APP_ENV=development`). They must **NEVER** be provisioned, configured, or utilized in staging or production environments. Production systems enforce strict administrative provisioning for staff, public self-registration for patients, and environment-injected cryptographic secrets.
 
 ## Running Tests

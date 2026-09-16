@@ -73,35 +73,83 @@ def get_password_hash(password: str) -> str:
     return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
 
 
-# In-memory revocation tracking (SEC-04: Refresh Token Rotation & Revocation)
+# Revocation tracking (SEC-04: Refresh Token Rotation & Revocation with Redis + In-Memory Fallback)
 revoked_jtis: set[str] = set()
 user_tokens_revoked_before: dict[str, float] = {}  # user_id -> timestamp
 
 
+def _get_redis_client():
+    try:
+        import redis
+        client = redis.from_url(settings.REDIS_URL, decode_responses=True, socket_timeout=0.5)
+        client.ping()
+        return client
+    except Exception:
+        return None
+
+
 def revoke_token_jti(jti: str) -> None:
-    """Revoke a specific refresh token identifier."""
-    if jti:
-        revoked_jtis.add(str(jti))
+    """Revoke a specific refresh token identifier in Redis and in-memory set."""
+    if not jti:
+        return
+    str_jti = str(jti)
+    revoked_jtis.add(str_jti)
+    r = _get_redis_client()
+    if r:
+        try:
+            ttl_seconds = settings.JWT_REFRESH_TOKEN_EXPIRE_DAYS * 86400
+            r.set(f"revoked_jti:{str_jti}", "1", ex=ttl_seconds)
+        except Exception:
+            pass
 
 
 def is_token_jti_revoked(jti: str) -> bool:
-    """Check if token identifier is in revocation list."""
+    """Check if token identifier is in revocation list (Redis or in-memory)."""
     if not jti:
         return False
-    return str(jti) in revoked_jtis
+    str_jti = str(jti)
+    if str_jti in revoked_jtis:
+        return True
+    r = _get_redis_client()
+    if r:
+        try:
+            if r.exists(f"revoked_jti:{str_jti}"):
+                return True
+        except Exception:
+            pass
+    return False
 
 
 def revoke_all_user_tokens(user_id: str) -> None:
     """Revoke all tokens issued for a user before this timestamp."""
-    user_tokens_revoked_before[str(user_id)] = datetime.utcnow().timestamp()
+    ts = datetime.utcnow().timestamp()
+    str_uid = str(user_id)
+    user_tokens_revoked_before[str_uid] = ts
+    r = _get_redis_client()
+    if r:
+        try:
+            ttl_seconds = settings.JWT_REFRESH_TOKEN_EXPIRE_DAYS * 86400
+            r.set(f"user_revoked_before:{str_uid}", str(ts), ex=ttl_seconds)
+        except Exception:
+            pass
 
 
 def is_user_token_invalidated(user_id: str, issued_at: float | None) -> bool:
     """Check if a token was invalidated by a subsequent user-wide revocation."""
     str_uid = str(user_id)
-    if not issued_at or str_uid not in user_tokens_revoked_before:
+    if not issued_at:
         return False
-    return issued_at < user_tokens_revoked_before[str_uid]
+    if str_uid in user_tokens_revoked_before and issued_at < user_tokens_revoked_before[str_uid]:
+        return True
+    r = _get_redis_client()
+    if r:
+        try:
+            val = r.get(f"user_revoked_before:{str_uid}")
+            if val and issued_at < float(val):
+                return True
+        except Exception:
+            pass
+    return False
 
 
 def create_access_token(data: dict, expires_delta: timedelta | None = None) -> str:

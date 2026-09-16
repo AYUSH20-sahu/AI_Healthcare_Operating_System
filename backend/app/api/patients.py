@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import List, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile, status
 from fastapi.responses import FileResponse
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -650,6 +650,7 @@ async def delete_my_medicine_reminder(
 @router.get("/{patient_id}/reports", response_model=PatientReportListResponse)
 async def list_patient_reports_for_provider(
     patient_id: UUID,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
@@ -665,6 +666,15 @@ async def list_patient_reports_for_provider(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Patient not found",
         )
+
+    # Multi-tenant / facility boundary check (SEC-H01)
+    tenant_id = request.headers.get("X-Tenant-ID")
+    if tenant_id and patient.abha_address and not patient.abha_address.endswith(f"@{tenant_id}"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Cross-tenant access forbidden for patient reports",
+        )
+
     query = select(PatientReport).where(PatientReport.patient_id == patient_id).order_by(PatientReport.created_at.desc())
     result = await db.execute(query)
     reports = list(result.scalars().all())
@@ -674,6 +684,7 @@ async def list_patient_reports_for_provider(
 @router.get("/{patient_id}/", response_model=PatientResponse)
 async def get_patient(
     patient_id: UUID,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
@@ -692,7 +703,15 @@ async def get_patient(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Patients can only read their own record",
             )
-    elif current_user.role not in (UserRole.DOCTOR, UserRole.ADMIN):
+    elif current_user.role == UserRole.DOCTOR:
+        # Multi-tenant / facility boundary check (SEC-H01)
+        tenant_id = request.headers.get("X-Tenant-ID")
+        if tenant_id and patient.abha_address and not patient.abha_address.endswith(f"@{tenant_id}"):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Cross-tenant access forbidden for patient record",
+            )
+    elif current_user.role != UserRole.ADMIN:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Insufficient permissions to read patient record",
