@@ -114,7 +114,7 @@ async def generic_exception_handler(request: Request, exc: Exception) -> JSONRes
     return create_error_response(
         code="INTERNAL_ERROR",
         message="An unexpected server error occurred. Please contact support with the request_id.",
-        details={"type": type(exc).__name__} if settings.DEBUG else None,
+        details={"type": type(exc).__name__} if getattr(settings, "DEBUG", False) else None,
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         request=request,
     )

@@ -192,6 +192,9 @@ class Orchestrator:
         """Clear the human review queue."""
         self._human_review_queue.clear()
 
+    # Alias for task submission
+    submit_task = execute_task
+
 
 orchestrator = Orchestrator()
 

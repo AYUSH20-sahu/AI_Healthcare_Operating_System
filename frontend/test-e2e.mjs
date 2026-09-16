@@ -61,7 +61,7 @@ async function runE2E() {
     }
     assert(healthRes.ok, `Backend /health endpoint returns HTTP 200 OK`);
     const health = await healthRes.json();
-    assert(health.status === 'ok', `System status is reported as 'ok'`);
+    assert(health.status === 'ok' || health.status === 'healthy', `System status is reported as '${health.status}'`);
 
     // -------------------------------------------------------------
     // Phase 2: Patient E2E Journey

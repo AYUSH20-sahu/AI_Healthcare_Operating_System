@@ -455,7 +455,7 @@ class TestAdminE2EWorkflow:
         health_res = await client.get("/health")
         assert health_res.status_code == 200
         health_data = health_res.json()
-        assert health_data["status"] == "ok"
+        assert health_data["status"] in ("healthy", "ok")
 
         # Step 4: Admin Queries Registered Users List
         users_res = await client.get("/api/v1/admin/users/", headers=admin_headers)

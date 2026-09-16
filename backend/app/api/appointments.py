@@ -466,6 +466,7 @@ async def delete_appointment(
     await db.commit()
 
 
+@router.get("", response_model=AppointmentListResponse)
 @router.get("/", response_model=AppointmentListResponse)
 async def list_appointments(
     page: int = Query(1, ge=1, description="Page number"),

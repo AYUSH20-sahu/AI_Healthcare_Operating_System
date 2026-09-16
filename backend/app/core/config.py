@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     APP_ENV: str = "development"
     APP_HOST: str = "0.0.0.0"
     APP_PORT: int = 8000
+    DEBUG: bool = False
 
     # Database - local standard PostgreSQL default, overridable via DATABASE_URL env var
     DATABASE_URL: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/ai_hos"
