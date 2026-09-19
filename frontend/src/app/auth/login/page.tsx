@@ -4,7 +4,7 @@ import React, { useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth';
-import { validatePostLoginRedirect } from '@/lib/redirect-validator';
+import { validatePostLoginRedirect, getDefaultRouteForRole } from '@/lib/redirect-validator';
 import {
     Card,
     CardHeader,
@@ -21,7 +21,7 @@ function LoginForm() {
     const searchParams = useSearchParams();
     const redirectUrl = searchParams.get('redirect');
 
-    const { login, isLoading } = useAuth();
+    const { login, isLoading, user } = useAuth();
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
@@ -67,7 +67,7 @@ function LoginForm() {
 
                 {/* Brand Header */}
                 <div className="relative z-10">
-                    <Link href="/" className="inline-flex items-center gap-3 group">
+                    <Link href={getDefaultRouteForRole(user?.role)} className="inline-flex items-center gap-3 group">
                         <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-cyan-500 flex items-center justify-center text-white font-bold shadow-lg shadow-blue-500/25 group-hover:scale-105 transition-transform">
                             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M13 10V3L4 14h7v7l9-11h-7z" />
@@ -251,8 +251,8 @@ function LoginForm() {
                             </Link>
                         </p>
                         <p>
-                            <Link href="/" className="hover:underline text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">
-                                ← Return to System Overview
+                            <Link href={getDefaultRouteForRole(user?.role)} className="hover:underline text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">
+                                {user ? '← Return to Dashboard' : '← Return to System Overview'}
                             </Link>
                         </p>
                     </div>

@@ -1,9 +1,11 @@
 'use client';
 
 import React from 'react';
+import Link from 'next/link';
 import { ThemeToggle } from './ThemeToggle';
 import { Badge } from './Badge';
 import { useAuth } from '@/lib/auth';
+import { getDefaultRouteForRole } from '@/lib/redirect-validator';
 
 export interface HeaderProps {
     currentRole?: 'doctor' | 'patient' | 'admin' | string | null;
@@ -28,7 +30,7 @@ export function Header({
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
                 {/* Logo & Branding */}
                 <div className="flex items-center gap-4">
-                    <a href="/" className="flex items-center gap-2.5 group">
+                    <Link href={getDefaultRouteForRole(effectiveRole)} className="flex items-center gap-2.5 group" title="Return to Dashboard">
                         <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white shadow-md shadow-blue-500/20 group-hover:scale-105 transition-transform">
                             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path
@@ -52,7 +54,7 @@ export function Header({
                                 Healthcare Operating System
                             </span>
                         </div>
-                    </a>
+                    </Link>
 
                     {/* Nav links */}
                     {showNavLinks && (

@@ -147,8 +147,8 @@ export default function AdminPage() {
                             </span>
                         </div>
                         <div className="mt-2 pt-2 border-t border-slate-100 dark:border-slate-800 text-[11px] text-slate-500 dark:text-slate-400 flex justify-between">
-                            <span>Completed: {data?.appointments_summary.completed ?? 0}</span>
-                            <span>In-Queue: {data?.appointments_summary.in_progress ?? 0}</span>
+                            <span>Completed: {data?.appointments_summary.today_completed ?? 0}</span>
+                            <span>In-Queue: {data?.appointments_summary.today_in_progress ?? 0}</span>
                         </div>
                     </CardContent>
                 </Card>

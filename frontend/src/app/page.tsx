@@ -1,6 +1,9 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { useAuth } from '@/lib/auth';
+import { getDefaultRouteForRole } from '@/lib/redirect-validator';
 import {
     Header,
     Card,
@@ -15,6 +18,15 @@ import {
 } from '@/components/ui';
 
 export default function HomePage() {
+    const router = useRouter();
+    const { user, isAuthenticated, isLoading } = useAuth();
+
+    useEffect(() => {
+        if (!isLoading && isAuthenticated && user?.role) {
+            router.replace(getDefaultRouteForRole(user.role));
+        }
+    }, [isLoading, isAuthenticated, user, router]);
+
     return (
         <div className="min-h-screen flex flex-col">
             {/* Top Navigation */}

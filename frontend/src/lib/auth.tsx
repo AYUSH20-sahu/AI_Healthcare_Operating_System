@@ -12,6 +12,7 @@ export interface AuthContextType {
     isAuthenticated: boolean;
     isDoctor: boolean;
     isPatient: boolean;
+    isNurse: boolean;
     isAdmin: boolean;
     login: (email: string, password: string) => Promise<User>;
     signup: (data: SignupRequest) => Promise<User>;
@@ -47,6 +48,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const router = useRouter();
 
     const logout = useCallback(() => {
+        const storedRefreshToken = typeof window !== 'undefined' ? localStorage.getItem('refresh_token') : null;
+        if (storedRefreshToken) {
+            authApi.logout(storedRefreshToken).catch(() => {});
+        }
         if (typeof window !== 'undefined') {
             localStorage.removeItem('access_token');
             localStorage.removeItem('refresh_token');
@@ -76,49 +81,42 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     // Initialize auth from localStorage
     useEffect(() => {
-        async function initAuth() {
-            if (typeof window === 'undefined') return;
+        const initAuth = async () => {
+            try {
+                const storedToken = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
+                const storedRefreshToken = typeof window !== 'undefined' ? localStorage.getItem('refresh_token') : null;
+                const storedUser = typeof window !== 'undefined' ? localStorage.getItem('auth_user') : null;
 
-            const savedAccessToken = localStorage.getItem('access_token');
-            const savedRefreshToken = localStorage.getItem('refresh_token');
-            const savedUser = localStorage.getItem('auth_user');
+                if (storedToken) {
+                    setToken(storedToken);
+                    setRefreshToken(storedRefreshToken);
 
-            if (savedAccessToken) {
-                setToken(savedAccessToken);
-                setRefreshToken(savedRefreshToken);
-
-                // Quick restore cached user or decode token for instant UI
-                if (savedUser) {
-                    try {
-                        setUser(JSON.parse(savedUser));
-                    } catch {
-                        // ignore parse error
+                    if (storedUser) {
+                        try {
+                            setUser(JSON.parse(storedUser));
+                        } catch {
+                            // Ignore corrupted local cache
+                        }
                     }
-                } else {
-                    const jwtData = parseJwtPayload(savedAccessToken);
-                    if (jwtData && jwtData.sub) {
-                        setUser({
-                            user_id: jwtData.sub,
-                            email: jwtData.email || '',
-                            full_name: jwtData.email ? jwtData.email.split('@')[0] : 'User',
-                            role: jwtData.role || 'patient',
-                            is_active: true,
-                            created_at: new Date().toISOString(),
+
+                    // Background profile validation
+                    authApi
+                        .me()
+                        .then((userData) => {
+                            setUser(userData);
+                            if (typeof window !== 'undefined') {
+                                localStorage.setItem('auth_user', JSON.stringify(userData));
+                            }
+                        })
+                        .catch(() => {
+                            // If token is dead, logout cleanly
+                            logout();
                         });
-                    }
                 }
-
-                // Verify with backend
-                try {
-                    const freshUser = await authApi.me();
-                    setUser(freshUser);
-                    localStorage.setItem('auth_user', JSON.stringify(freshUser));
-                } catch (err) {
-                    console.warn('Initial session validation error:', err);
-                }
+            } finally {
+                setIsLoading(false);
             }
-            setIsLoading(false);
-        }
+        };
 
         initAuth();
 
@@ -184,8 +182,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
 
     const isAuthenticated = !!token && !!user;
-    const isDoctor = user?.role === 'doctor' || user?.role === 'admin';
-    const isPatient = user?.role === 'patient' || user?.role === 'admin';
+    const isDoctor = user?.role === 'doctor' || user?.role === 'physician';
+    const isPatient = user?.role === 'patient';
+    const isNurse = user?.role === 'nurse';
     const isAdmin = user?.role === 'admin';
 
     return (
@@ -198,6 +197,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 isAuthenticated,
                 isDoctor,
                 isPatient,
+                isNurse,
                 isAdmin,
                 login,
                 signup,

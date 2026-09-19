@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import { ThemeToggle, Badge } from '@/components/ui';
+import { getDefaultRouteForRole } from '@/lib/redirect-validator';
 
 interface TopNavProps {
     collapsed: boolean;
@@ -99,7 +100,7 @@ export function TopNav({ collapsed, onMenuClick }: TopNavProps) {
 
                     {/* Breadcrumbs */}
                     <nav className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 min-w-0">
-                        <Link href="/" className="hover:text-blue-600 dark:hover:text-blue-400 font-medium shrink-0">
+                        <Link href={getDefaultRouteForRole(user?.role)} className="hover:text-blue-600 dark:hover:text-blue-400 font-medium shrink-0">
                             AI-HOS
                         </Link>
                         {breadcrumbs.map((crumb, i) => (

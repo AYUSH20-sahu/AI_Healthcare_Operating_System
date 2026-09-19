@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   redis:
     image: redis:7-alpine
@@ -38,7 +36,7 @@ services:
       - JWT_ACCESS_TOKEN_EXPIRE_MINUTES=30
       - JWT_REFRESH_TOKEN_EXPIRE_DAYS=7
       - LLM_PROVIDER=${LLM_PROVIDER:-nvidia}
-      - LLM_API_KEY=${LLM_API_KEY}
+      - LLM_API_KEY=${LLM_API_KEY:-${NVIDIA_API_KEY}}
       - LLM_BASE_URL=${LLM_BASE_URL:-https://integrate.api.nvidia.com/v1}
       - LLM_MODEL=${LLM_MODEL:-nvidia/nemotron-3-ultra-550b-a55b}
     volumes:
@@ -50,7 +48,10 @@ services:
       redis:
         condition: service_healthy
     networks:
-      - ai-hos-network
+      ai-hos-network:
+        aliases:
+          - backend
+          - ai-hos-backend
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
   frontend:
@@ -60,7 +61,7 @@ services:
     container_name: ai-hos-frontend
     restart: unless-stopped
     environment:
-      - BACKEND_INTERNAL_URL=http://backend:8000
+      - BACKEND_INTERNAL_URL=http://ai-hos-backend:8000
       - NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1
       - NEXT_PUBLIC_APP_URL=http://localhost:3000
     volumes:

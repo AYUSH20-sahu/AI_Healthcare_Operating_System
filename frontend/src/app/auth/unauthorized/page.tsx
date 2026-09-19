@@ -80,8 +80,8 @@ export default function UnauthorizedPage() {
                                 Switch Account / Sign Out
                             </Button>
 
-                            <Link href="/" className="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 mt-2">
-                                Return to System Overview
+                            <Link href={getTargetPortal()} className="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 mt-2">
+                                Return to My Workspace
                             </Link>
                         </div>
                     </CardContent>

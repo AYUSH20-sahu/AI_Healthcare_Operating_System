@@ -4,11 +4,10 @@ import React from 'react';
 import { ProtectedRoute } from '@/components/auth';
 import { PortalShell } from '@/components/layout';
 
-export default function PatientLayout({ children }: { children: React.ReactNode }) {
+export default function NurseLayout({ children }: { children: React.ReactNode }) {
     return (
-        <ProtectedRoute allowedRoles={['patient']}>
+        <ProtectedRoute allowedRoles={['nurse']}>
             <PortalShell>{children}</PortalShell>
         </ProtectedRoute>
     );
 }
-

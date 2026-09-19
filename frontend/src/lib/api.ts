@@ -63,7 +63,7 @@ export class ApiError extends Error {
 }
 
 interface RequestOptions extends RequestInit {
-    params?: Record<string, string | number | boolean | undefined>;
+    params?: Record<string, any>;
     _retry?: boolean;
     timeoutMs?: number;
 }
@@ -87,8 +87,17 @@ async function request<T>(
     const { params, headers, _retry, timeoutMs = 15000, ...fetchOptions } = options;
 
     const baseOrigin = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
+    const configuredApiUrl = (typeof process !== 'undefined' && process.env && process.env.NEXT_PUBLIC_API_URL) ? process.env.NEXT_PUBLIC_API_URL : null;
+    
     // Build URL with query parameters
-    const url = new URL(`${API_BASE}${endpoint}`, baseOrigin);
+    let url: URL;
+    if (configuredApiUrl && (configuredApiUrl.startsWith('http://') || configuredApiUrl.startsWith('https://'))) {
+        const cleanBase = configuredApiUrl.replace(/\/$/, '');
+        const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+        url = new URL(`${cleanBase}${cleanEndpoint}`);
+    } else {
+        url = new URL(`${API_BASE}${endpoint}`, baseOrigin);
+    }
     if (params) {
         Object.entries(params).forEach(([key, value]) => {
             if (value !== undefined && value !== null) {
@@ -154,7 +163,12 @@ async function request<T>(
             if (!isRefreshing) {
                 isRefreshing = true;
                 try {
-                    const refreshUrl = new URL(`${API_BASE}/auth/refresh`, baseOrigin);
+                    let refreshUrl: URL;
+                    if (configuredApiUrl && (configuredApiUrl.startsWith('http://') || configuredApiUrl.startsWith('https://'))) {
+                        refreshUrl = new URL(`${configuredApiUrl.replace(/\/$/, '')}/auth/refresh`);
+                    } else {
+                        refreshUrl = new URL(`${API_BASE}/auth/refresh`, baseOrigin);
+                    }
                     refreshUrl.searchParams.append('refresh_token', refreshToken);
 
                     const refreshRes = await fetch(refreshUrl.toString(), {
@@ -234,16 +248,40 @@ async function request<T>(
 }
 
 export const api = {
-    get: <T>(endpoint: string, params?: Record<string, string | number | boolean | undefined>, options?: Partial<RequestOptions>) =>
-        request<T>(endpoint, { method: 'GET', params, ...options }),
+    get: <T>(
+        endpoint: string,
+        paramsOrOptions?: Record<string, any>,
+        options?: Partial<RequestOptions>
+    ) => {
+        let params = paramsOrOptions;
+        let opts = options;
+        if (paramsOrOptions && 'params' in paramsOrOptions && typeof paramsOrOptions.params === 'object') {
+            params = paramsOrOptions.params;
+            const { params: _, ...rest } = paramsOrOptions;
+            opts = { ...rest, ...options };
+        }
+        return request<T>(endpoint, { method: 'GET', params, ...opts });
+    },
 
-    post: <T>(endpoint: string, data?: unknown, params?: Record<string, string | number | boolean | undefined>, options?: Partial<RequestOptions>) => {
+    post: <T>(
+        endpoint: string,
+        data?: unknown,
+        paramsOrOptions?: Record<string, any>,
+        options?: Partial<RequestOptions>
+    ) => {
+        let params = paramsOrOptions;
+        let opts = options;
+        if (paramsOrOptions && 'params' in paramsOrOptions && typeof paramsOrOptions.params === 'object') {
+            params = paramsOrOptions.params;
+            const { params: _, ...rest } = paramsOrOptions;
+            opts = { ...rest, ...options };
+        }
         const isFormData = typeof FormData !== 'undefined' && data instanceof FormData;
         return request<T>(endpoint, {
             method: 'POST',
             body: isFormData ? (data as FormData) : data !== undefined ? JSON.stringify(data) : undefined,
             params,
-            ...options,
+            ...opts,
         });
     },
 
@@ -283,12 +321,14 @@ export const authApi = {
         api.post<User>('/auth/signup', data),
 
     refresh: (refreshToken: string) =>
-        api.post<TokenResponse>('/auth/refresh', undefined, { refresh_token: refreshToken }),
+        api.post<TokenResponse>('/auth/refresh', { refresh_token: refreshToken }),
+
+    logout: (refreshToken?: string) =>
+        api.post<{ message: string }>('/auth/logout', { refresh_token: refreshToken }),
 
     me: () =>
         api.get<User>('/auth/me'),
 };
-
 
 // Types matching backend schemas
 export interface Patient {
@@ -306,6 +346,8 @@ export interface Patient {
     created_at: string;
     updated_at: string;
 }
+
+export type PatientProfile = Patient;
 
 export interface PatientListResponse {
     patients: Patient[];
@@ -753,6 +795,8 @@ export interface AdminUser {
     role: string;
     is_active: boolean;
     created_at: string;
+    phone?: string;
+    is_verified?: boolean;
     doctor_profile?: AdminDoctorProfile;
 }
 
@@ -999,9 +1043,13 @@ export interface PatientPortalRecordItem {
     record_id: string;
     doctor_id: string;
     doctor_name: string;
+    doctor_specialty?: string | null;
+    doctor_hospital?: string | null;
     appointment_id?: string | null;
     status: string;
     chief_complaint?: string | null;
+    subjective?: string | null;
+    objective?: string | null;
     assessment?: string | null;
     plan?: string | null;
     content?: Record<string, any> | null;
@@ -1058,6 +1106,8 @@ export interface StructuredSymptoms {
     aggravating_factors?: string[];
     relieving_factors?: string[];
     summary?: string | null;
+    has_red_flags?: boolean;
+    red_flag_warnings?: string[];
 }
 
 export interface IntakeSession {
@@ -1748,6 +1798,27 @@ export interface TelemetryMetricsData {
     system_timestamp: string;
     service: string;
     environment: string;
+    latency_percentiles?: {
+        non_ai_endpoints?: {
+            p50: number;
+            p95: number;
+            p99: number;
+            avg?: number;
+            samples?: number;
+            min?: number;
+            max?: number;
+        };
+        ai_turn_completion?: {
+            p50: number;
+            p95: number;
+            p99: number;
+            avg?: number;
+            samples?: number;
+            min?: number;
+            max?: number;
+        };
+        [key: string]: any;
+    };
     http_requests: {
         total: number;
         status_counts: Record<string, number>;

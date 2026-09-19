@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth';
+import { getDefaultRouteForRole } from '@/lib/redirect-validator';
 import {
     Card,
     CardContent,
@@ -16,7 +17,7 @@ import {
 
 export default function RegisterPage() {
     const router = useRouter();
-    const { signup } = useAuth();
+    const { signup, user } = useAuth();
 
     const [fullName, setFullName] = useState('');
     const [email, setEmail] = useState('');
@@ -77,7 +78,7 @@ export default function RegisterPage() {
             <div className="w-full max-w-lg space-y-6">
                 {/* Header Logo */}
                 <div className="text-center space-y-2">
-                    <Link href="/" className="inline-flex items-center gap-2.5">
+                    <Link href={getDefaultRouteForRole(user?.role)} className="inline-flex items-center gap-2.5">
                         <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-cyan-500 flex items-center justify-center text-white font-bold shadow-md shadow-blue-500/20">
                             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M13 10V3L4 14h7v7l9-11h-7z" />
@@ -180,8 +181,8 @@ export default function RegisterPage() {
                         </Link>
                     </p>
                     <p>
-                        <Link href="/" className="hover:underline text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">
-                            ← Back to Overview
+                        <Link href={getDefaultRouteForRole(user?.role)} className="hover:underline text-slate-400 hover:text-slate-600 dark:hover:text-slate-300">
+                            {user ? '← Return to Dashboard' : '← Back to Overview'}
                         </Link>
                     </p>
                 </div>

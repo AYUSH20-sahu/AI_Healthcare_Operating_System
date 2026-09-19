@@ -60,29 +60,12 @@ ROLE_PERMISSIONS: dict[UserRole, set[Permission]] = {
         Permission.PATIENT_READ_OWN,
     },
     UserRole.ADMIN: {
+        # Strict Administrative Governance boundary (HIPAA & ABDM principle of least privilege)
         Permission.ADMIN_READ_ALL,
         Permission.ADMIN_WRITE_ALL,
         Permission.ADMIN_MANAGE_USERS,
         Permission.ADMIN_VIEW_AUDIT_LOGS,
         Permission.ADMIN_MANAGE_CONSENTS,
-        # Admins inherit all permissions
-        Permission.DOCTOR_READ_PATIENTS,
-        Permission.DOCTOR_CREATE_MEDICAL_RECORDS,
-        Permission.DOCTOR_UPDATE_MEDICAL_RECORDS,
-        Permission.DOCTOR_CREATE_PRESCRIPTIONS,
-        Permission.DOCTOR_READ_APPOINTMENTS,
-        Permission.DOCTOR_UPDATE_APPOINTMENTS,
-        Permission.NURSE_READ_PATIENTS,
-        Permission.NURSE_UPDATE_PATIENTS,
-        Permission.NURSE_READ_APPOINTMENTS,
-        Permission.RECEPTIONIST_READ_APPOINTMENTS,
-        Permission.RECEPTIONIST_CREATE_APPOINTMENTS,
-        Permission.RECEPTIONIST_UPDATE_APPOINTMENTS,
-        Permission.RECEPTIONIST_READ_PATIENTS,
-        # Patient permissions
-        Permission.PATIENT_READ_OWN,
-        Permission.PATIENT_UPDATE_OWN,
-        Permission.PATIENT_CREATE_OWN,
     },
     UserRole.NURSE: {
         Permission.NURSE_READ_PATIENTS,

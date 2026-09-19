@@ -3,7 +3,7 @@
 import React from 'react';
 
 export interface BadgeProps extends React.HTMLAttributes<HTMLSpanElement> {
-    variant?: 'default' | 'primary' | 'success' | 'warning' | 'danger' | 'info' | 'purple' | 'outline';
+    variant?: 'default' | 'primary' | 'success' | 'warning' | 'danger' | 'info' | 'purple' | 'outline' | 'error' | 'neutral';
     size?: 'sm' | 'md';
     dot?: boolean;
 }
@@ -24,6 +24,8 @@ export function Badge({
     const variantStyles = {
         default:
             'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200 dark:border-slate-700/60',
+        neutral:
+            'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border border-slate-200 dark:border-slate-700/60',
         primary:
             'bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-400 border border-blue-200 dark:border-blue-500/20',
         success:
@@ -31,6 +33,8 @@ export function Badge({
         warning:
             'bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400 border border-amber-200 dark:border-amber-500/20',
         danger:
+            'bg-rose-50 text-rose-700 dark:bg-rose-500/10 dark:text-rose-400 border border-rose-200 dark:border-rose-500/20',
+        error:
             'bg-rose-50 text-rose-700 dark:bg-rose-500/10 dark:text-rose-400 border border-rose-200 dark:border-rose-500/20',
         info:
             'bg-cyan-50 text-cyan-700 dark:bg-cyan-500/10 dark:text-cyan-400 border border-cyan-200 dark:border-cyan-500/20',
@@ -42,10 +46,12 @@ export function Badge({
 
     const dotStyles = {
         default: 'bg-slate-400',
+        neutral: 'bg-slate-400',
         primary: 'bg-blue-500',
         success: 'bg-emerald-500',
         warning: 'bg-amber-500',
         danger: 'bg-rose-500',
+        error: 'bg-rose-500',
         info: 'bg-cyan-500',
         purple: 'bg-purple-500',
         outline: 'bg-slate-400',
