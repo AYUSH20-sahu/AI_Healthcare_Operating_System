@@ -1,3 +1,4 @@
+import os
 from fastapi import FastAPI
 
 from app.api import (
@@ -38,6 +39,36 @@ import app.services.scribe  # registers ScribeAgent on orchestrator
 import app.services.prescriptions  # registers PrescriptionDraftAgent on orchestrator
 import app.services.intake  # registers IntakeAgent on orchestrator
 
+# ─── Sentry Error Tracking (optional) ────────────────────────────────────────
+sentry_dsn = os.getenv("SENTRY_DSN") or settings.SENTRY_DSN
+if sentry_dsn and not sentry_dsn.startswith("your_sentry"):
+    try:
+        import sentry_sdk  # type: ignore
+        sentry_init_kwargs = {
+            "dsn": sentry_dsn,
+            "send_default_pii": True,
+            "enable_logs": True,
+            "traces_sample_rate": 1.0,
+            "profile_session_sample_rate": 1.0,
+            "profile_lifecycle": "trace",
+            "environment": settings.APP_ENV,
+            "release": "ai-hos@0.1.0",
+        }
+        try:
+            sentry_sdk.init(**sentry_init_kwargs)
+        except TypeError:
+            # Fallback for older sentry-sdk versions without new profiling options
+            sentry_init_kwargs.pop("profile_session_sample_rate", None)
+            sentry_init_kwargs.pop("profile_lifecycle", None)
+            sentry_init_kwargs.pop("enable_logs", None)
+            sentry_init_kwargs["profiles_sample_rate"] = 1.0
+            sentry_sdk.init(**sentry_init_kwargs)
+    except ImportError:
+        import logging
+        logging.getLogger(__name__).warning(
+            "sentry-sdk not installed — Sentry disabled. Run: pip install sentry-sdk"
+        )
+
 app = FastAPI(
     title="AI-HOS Backend",
     description="AI Healthcare Operating System - Backend API",
@@ -46,6 +77,7 @@ app = FastAPI(
     redoc_url="/redoc",
     openapi_url="/openapi.json",
 )
+
 
 # Register exception handlers for standard error envelope
 register_exception_handlers(app)

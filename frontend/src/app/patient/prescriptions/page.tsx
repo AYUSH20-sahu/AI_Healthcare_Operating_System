@@ -5,9 +5,12 @@ import Link from 'next/link';
 import { patientPortalApi, PatientPortalPrescriptionItem } from '@/lib/api';
 import { Card, CardContent, Button, Badge } from '@/components/ui';
 
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000/api/v1';
+
 export default function PatientPrescriptionsPage() {
     const [prescriptions, setPrescriptions] = useState<PatientPortalPrescriptionItem[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+    const [downloadingId, setDownloadingId] = useState<string | null>(null);
 
     useEffect(() => {
         loadPrescriptions();
@@ -22,6 +25,29 @@ export default function PatientPrescriptionsPage() {
             console.error('Failed to load prescriptions:', err);
         } finally {
             setIsLoading(false);
+        }
+    };
+
+    const downloadPdf = async (prescriptionId: string, doctorName: string) => {
+        setDownloadingId(prescriptionId);
+        try {
+            const token = localStorage.getItem('access_token');
+            const res = await fetch(`${API_BASE}/prescriptions/${prescriptionId}/pdf`, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const blob = await res.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `Prescription_${prescriptionId.slice(0, 8).toUpperCase()}_Dr_${doctorName.replace(/\s+/g, '_')}.pdf`;
+            a.click();
+            URL.revokeObjectURL(url);
+        } catch (err) {
+            console.error('PDF download failed:', err);
+            alert('Could not generate PDF. Please try again.');
+        } finally {
+            setDownloadingId(null);
         }
     };
 
@@ -149,11 +175,29 @@ export default function PatientPrescriptionsPage() {
                                 )}
 
                                 {/* Dispensing Guidance Footer */}
-                                <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-slate-400">
-                                    <span>Present this digital order or QR at any participating hospital dispensary or pharmacy.</span>
-                                    <span className="font-semibold text-slate-600 dark:text-slate-300">
-                                        Physician Electronic Sign-off Stamped ✅
-                                    </span>
+                                <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                    <span className="text-xs text-slate-400">Present this digital order or QR at any participating hospital dispensary or pharmacy.</span>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-xs font-semibold text-slate-600 dark:text-slate-300">
+                                            Physician Electronic Sign-off Stamped ✅
+                                        </span>
+                                        {rx.status === 'finalized' && (
+                                            <Button
+                                                id={`download-pdf-${rx.prescription_id}`}
+                                                variant="secondary"
+                                                size="sm"
+                                                onClick={() => downloadPdf(rx.prescription_id, rx.doctor_name)}
+                                                disabled={downloadingId === rx.prescription_id}
+                                                className="text-xs flex items-center gap-1.5"
+                                            >
+                                                {downloadingId === rx.prescription_id ? (
+                                                    <><span className="animate-spin">⏳</span> Generating...</>
+                                                ) : (
+                                                    <><span>📄</span> Download PDF</>
+                                                )}
+                                            </Button>
+                                        )}
+                                    </div>
                                 </div>
                             </CardContent>
                         </Card>

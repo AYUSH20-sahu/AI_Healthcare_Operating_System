@@ -33,6 +33,8 @@ from app.models import (
     UserRole,
 )
 from app.services.auth.rbac import require_admin
+from app.services.auth.service import get_current_active_user
+from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -623,3 +625,113 @@ async def get_operational_analytics(
         intake_severity_distribution=severity_dist,
         future_metrics=future_metrics,
     )
+
+
+# =============================================================================
+# System Integration Status — GET /admin/config/status
+# =============================================================================
+
+@router.get("/config/status")
+async def get_integration_status(
+    current_user: User = Depends(get_current_active_user),
+):
+    """
+    Return live status of every optional external integration.
+    Shows which providers are active (real key present) vs mock/disabled.
+    Key values are NEVER returned — only boolean presence.
+
+    Access: admin, super_admin only.
+    """
+    # settings already imported at module level
+    # UserRole already imported at module level
+
+    if current_user.role not in (UserRole.ADMIN, UserRole.SUPER_ADMIN):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required.")
+
+    def _key_present(val: str | None, placeholder_prefixes: tuple = ("your_", "sk-placeholder")) -> bool:
+        if not val:
+            return False
+        for p in placeholder_prefixes:
+            if str(val).lower().startswith(p):
+                return False
+        return True
+
+    # Check Redis connectivity
+    redis_live = False
+    try:
+        import importlib
+        redis_mod = importlib.import_module("redis")
+        r = redis_mod.from_url(settings.REDIS_URL, socket_connect_timeout=1)
+        r.ping()
+        redis_live = True
+    except Exception:
+        pass
+
+    nvidia_key = _key_present(settings.NVIDIA_API_KEY)
+    gemini_key = _key_present(settings.GEMINI_API_KEY)
+    groq_key = _key_present(settings.GROQ_API_KEY)
+    elevenlabs_key = _key_present(settings.ELEVENLABS_API_KEY)
+    abdm_creds = _key_present(settings.ABDM_CLIENT_ID) and _key_present(settings.ABDM_CLIENT_SECRET)
+    sentry_set = _key_present(settings.SENTRY_DSN)
+    smtp_set = bool(settings.SMTP_ENABLED and _key_present(settings.SMTP_USER))
+
+    return {
+        "ai_providers": {
+            "llm": {
+                "nvidia_nim": {
+                    "status": "live" if nvidia_key else "not_configured",
+                    "description": "Primary LLM — AI Intake, Scribe SOAP, Copilot",
+                },
+                "gemini": {
+                    "status": "live" if gemini_key else "not_configured",
+                    "description": "Fallback LLM — activates if NVIDIA fails",
+                },
+                "active_mode": "live" if (nvidia_key or gemini_key) else "mock",
+            },
+            "stt": {
+                "groq_whisper": {
+                    "status": "live" if groq_key else "not_configured",
+                    "description": "Voice note transcription (Whisper via Groq)",
+                },
+                "active_mode": "live" if groq_key else "mock",
+            },
+            "tts": {
+                "elevenlabs": {
+                    "status": "live" if elevenlabs_key else "not_configured",
+                    "description": "Text-to-speech for AI Intake voice responses",
+                },
+                "active_mode": "live" if elevenlabs_key else "mock_silent",
+            },
+        },
+        "infrastructure": {
+            "redis": {
+                "status": "connected" if redis_live else "unavailable",
+                "url": settings.REDIS_URL.split("@")[-1] if "@" in settings.REDIS_URL else settings.REDIS_URL,
+                "description": "JWT revocation persistence (degrades to in-memory if unavailable)",
+            },
+            "smtp_email": {
+                "status": "configured" if smtp_set else "disabled",
+                "host": settings.SMTP_HOST if smtp_set else None,
+                "description": "Medicine reminder & appointment notification emails",
+            },
+            "sentry": {
+                "status": "active" if sentry_set else "not_configured",
+                "description": "Production error tracking & performance monitoring",
+            },
+        },
+        "abdm": {
+            "credentials": {
+                "status": "configured" if abdm_creds else "not_configured",
+                "description": "ABHA health ID linking (real gateway vs sandbox OTP 123456)",
+            },
+            "sandbox_mode": settings.ABDM_SANDBOX_MODE,
+            "gateway_url": settings.ABDM_BASE_URL,
+        },
+        "overall_readiness": {
+            "ai_features": "live" if (nvidia_key or gemini_key) else "mock_mode",
+            "voice_transcription": "live" if groq_key else "mock_mode",
+            "email_delivery": "enabled" if smtp_set else "disabled",
+            "error_tracking": "active" if sentry_set else "disabled",
+            "abdm_linking": "real" if abdm_creds else "sandbox",
+        },
+    }

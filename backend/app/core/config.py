@@ -47,6 +47,16 @@ class Settings(BaseSettings):
     # Voice
     WHISPER_API_KEY: str | None = None
     ELEVENLABS_API_KEY: str | None = None
+    GROQ_API_KEY: str | None = None
+    NVIDIA_API_KEY: str | None = None
+
+    # SMTP / Email delivery
+    SMTP_ENABLED: bool = False
+    SMTP_HOST: str = "smtp.gmail.com"
+    SMTP_PORT: int = 587
+    SMTP_USER: str | None = None
+    SMTP_PASSWORD: str | None = None
+    SMTP_FROM_EMAIL: str | None = None
 
     # ABDM/FHIR
     ABDM_CLIENT_ID: str | None = None

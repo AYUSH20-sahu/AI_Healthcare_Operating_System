@@ -358,7 +358,7 @@ export default function PatientMedicalRecordsPage() {
                                         {fhirData.total !== undefined && (
                                             <div className="p-2.5 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
                                                 <span className="text-[10px] text-slate-400 block font-mono">Bundled Entries</span>
-                                                <span className="font-bold text-emerald-600 dark:text-emerald-400">{fhirData.total}</span>
+                                                <span className="font-bold text-emerald-600 dark:text-emerald-400">{String(fhirData.total)}</span>
                                             </div>
                                         )}
                                         <div className="p-2.5 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">

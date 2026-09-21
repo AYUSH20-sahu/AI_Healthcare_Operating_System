@@ -394,11 +394,11 @@ async def upload_patient_report(
     # 4. Save metadata in DB
     report = PatientReport(
         patient_id=patient.patient_id,
-        title=title.strip() if title else safe_filename,
+        title=title.strip() if title.strip() else unique_filename,  # title is required Form field
         report_type=report_type.lower().strip() if report_type else "other",
-        file_name=safe_filename,
+        file_name=unique_filename,              # stored filename with uuid prefix
         file_path=str(file_target_path.resolve()),
-        file_size_bytes=file_size,
+        file_size_bytes=len(file_bytes),        # file_bytes already read on line 371
         mime_type=content_type,
         notes=notes.strip() if notes else None,
     )
@@ -645,6 +645,59 @@ async def delete_my_medicine_reminder(
 
     logger.info("[Scheduler Stub] Cancelled reminder job for %s", reminder.medication_name)
     return {"detail": "Medicine reminder deleted successfully", "reminder_id": str(reminder_id)}
+
+
+@router.post("/me/reminders/{reminder_id}/send-test")
+async def send_test_reminder_email(
+    reminder_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """
+    Send a test reminder email to the patient's registered email address.
+
+    Returns:
+        status: "sent" | "skipped" (if SMTP not configured)
+        email: masked destination email
+    """
+    patient = await _get_or_create_patient_profile(db, current_user)
+    reminder = await db.get(MedicineReminder, reminder_id)
+    if not reminder:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Medicine reminder not found")
+    if reminder.patient_id != patient.patient_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied.")
+
+    to_email = current_user.email
+    medications = [
+        {
+            "name": reminder.medication_name,
+            "dose": reminder.dosage,
+            "frequency": reminder.frequency,
+        }
+    ]
+    reminder_time_str = ", ".join(reminder.times_of_day) if reminder.times_of_day else "your scheduled time"
+
+    from app.services.notifications.email_service import send_reminder_email
+    sent = await send_reminder_email(
+        to_email=to_email,
+        patient_name=current_user.full_name,
+        medications=medications,
+        reminder_time=reminder_time_str,
+    )
+
+    # Mask email for response (privacy)
+    parts = to_email.split("@")
+    masked = f"{parts[0][:2]}{'*' * (len(parts[0]) - 2)}@{parts[1]}" if len(parts) == 2 else "***"
+
+    return {
+        "status": "sent" if sent else "skipped",
+        "email": masked,
+        "message": (
+            f"Test reminder email sent to {masked}"
+            if sent
+            else "Email delivery is not configured (SMTP_ENABLED=false). Set SMTP settings in .env to enable."
+        ),
+    }
 
 
 @router.get("/{patient_id}/reports", response_model=PatientReportListResponse)

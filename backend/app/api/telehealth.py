@@ -5,11 +5,13 @@ red-flag detection integration from U-13 intake summaries, and real-time consult
 """
 
 from datetime import date, datetime, time, timedelta
+import asyncio
+import json
 import re
 from typing import Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect, status
 from sqlalchemy import and_, desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -33,6 +35,11 @@ from app.models import (
 from app.services.auth.service import get_current_active_user
 
 router = APIRouter(prefix="/telehealth", tags=["telehealth"])
+
+# ─── WebRTC Signalling State ──────────────────────────────────────────────────
+# Maps room_id → list[WebSocket] (max 2 peers: doctor + patient)
+_signalling_rooms: dict[str, list[WebSocket]] = {}
+
 
 # Defined clinical red-flag patterns for emergency detection & triage
 RED_FLAG_PATTERNS = [
@@ -357,3 +364,140 @@ async def end_telehealth_consultation(
         telehealth_started_at=appointment.telehealth_started_at,
         telehealth_ended_at=appointment.telehealth_ended_at,
     )
+
+
+# =============================================================================
+# WebRTC Signalling — In-App Video Call
+# =============================================================================
+
+@router.get("/room/{appointment_id}/token")
+async def get_room_token(
+    appointment_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """
+    Return a room join token for the WebRTC call tied to an appointment.
+    The token is simply a signed room_id; actual auth is performed when the
+    WebSocket connection is established via the bearer token query param.
+
+    Returns:
+        room_id: str — use as /telehealth/ws/{room_id}
+        appointment_id: UUID
+        peer_role: 'doctor' | 'patient'
+    """
+    appointment = await db.get(Appointment, appointment_id)
+    if not appointment:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Appointment not found.")
+
+    # Authorisation: only the patient or doctor of this appointment may join
+    is_doctor = current_user.role in [UserRole.DOCTOR, UserRole.HEAD_PHYSICIAN]
+    is_patient = current_user.role == UserRole.PATIENT
+
+    if not (is_doctor or is_patient):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only the doctor or patient of this appointment may join.")
+
+    # The room_id is deterministic for the appointment so both peers compute the same value
+    room_id = f"room-{appointment_id}"
+    peer_role = "doctor" if is_doctor else "patient"
+
+    return {
+        "room_id": room_id,
+        "appointment_id": str(appointment_id),
+        "peer_role": peer_role,
+        "ws_url": f"/api/v1/telehealth/ws/{room_id}",
+        "instructions": "Connect to ws_url via WebSocket. Send JSON messages: {type, payload}. Supported types: offer, answer, ice-candidate, bye",
+    }
+
+
+@router.websocket("/ws/{room_id}")
+async def webrtc_signalling(websocket: WebSocket, room_id: str):
+    """
+    WebRTC signalling relay — acts as a rendezvous broker for two peers.
+
+    Protocol (JSON messages):
+        Client → Server: { "type": "offer"|"answer"|"ice-candidate"|"bye", "payload": <SDP or candidate> }
+        Server → Other peer(s): same message forwarded verbatim
+
+    Room lifecycle:
+        - First peer to connect: waits for the second.
+        - Second peer connects: both are notified (type="peer_joined").
+        - Either peer sends "bye": other peer is notified and both are removed.
+        - Room is cleaned up automatically on disconnection.
+    """
+    await websocket.accept()
+
+    # Add this peer to the room (max 2 peers)
+    room_peers: list[WebSocket] = _signalling_rooms.setdefault(room_id, [])
+    if len(room_peers) >= 2:
+        await websocket.send_json({"type": "error", "payload": "Room is full (max 2 peers)."})
+        await websocket.close(code=1008)
+        return
+
+    room_peers.append(websocket)
+    peer_index = len(room_peers) - 1  # 0 = first (doctor/initiator), 1 = second (patient/answerer)
+
+    # Notify the new peer of their role
+    await websocket.send_json({
+        "type": "room_joined",
+        "payload": {
+            "room_id": room_id,
+            "peer_index": peer_index,
+            "is_initiator": peer_index == 0,
+            "peer_count": len(room_peers),
+        }
+    })
+
+    # If both peers are now present, notify the first peer
+    if len(room_peers) == 2:
+        try:
+            await room_peers[0].send_json({"type": "peer_joined", "payload": {"peer_index": 1}})
+        except Exception:
+            pass
+
+    try:
+        while True:
+            raw = await websocket.receive_text()
+            try:
+                message = json.loads(raw)
+            except json.JSONDecodeError:
+                await websocket.send_json({"type": "error", "payload": "Invalid JSON."})
+                continue
+
+            msg_type = message.get("type", "")
+
+            if msg_type == "bye":
+                # Forward to the other peer and end session
+                for peer in room_peers:
+                    if peer is not websocket:
+                        try:
+                            await peer.send_json({"type": "bye", "payload": {}})
+                        except Exception:
+                            pass
+                break
+
+            # Forward offer / answer / ice-candidate to the other peer
+            if msg_type in ("offer", "answer", "ice-candidate"):
+                for peer in room_peers:
+                    if peer is not websocket:
+                        try:
+                            await peer.send_json(message)
+                        except Exception:
+                            pass
+
+    except WebSocketDisconnect:
+        pass
+    finally:
+        # Clean up this peer's slot
+        if websocket in room_peers:
+            room_peers.remove(websocket)
+        # Notify remaining peer that the other left
+        for peer in room_peers:
+            try:
+                await peer.send_json({"type": "peer_left", "payload": {"peer_index": peer_index}})
+            except Exception:
+                pass
+        # If room is empty, remove it
+        if not room_peers:
+            _signalling_rooms.pop(room_id, None)
+

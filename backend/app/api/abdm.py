@@ -169,9 +169,74 @@ async def request_abdm_consent(
 @router.post("/consent/notification")
 async def consent_manager_notification_webhook(
     payload: ConsentNotificationPayload,
+    db: AsyncSession = Depends(get_db),
 ) -> Dict[str, Any]:
-    """Callback webhook for ABDM Consent Manager notifications."""
-    return ABDMIntegrationService.handle_consent_notification(payload.dict())
+    """
+    ABDM Consent Manager callback webhook.
+
+    Handles GRANTED / DENIED / REVOKED lifecycle events and updates the
+    local Consent record accordingly. This endpoint is called by the ABDM
+    gateway — no user auth required (webhook receiver pattern).
+
+    Flow:
+        GRANTED  → set consent.status = "GRANTED", set valid_until
+        DENIED   → set consent.status = "DENIED"
+        REVOKED  → set consent.status = "REVOKED", clear access window
+    """
+    import logging
+    from datetime import datetime, timedelta
+    from sqlalchemy import select as sa_select
+
+    webhook_logger = logging.getLogger("abdm.webhook")
+
+    notification_status = (payload.status or "").upper()
+    request_id = payload.request_id or payload.notification_id or "unknown"
+    artefact_id = payload.consent_artefact_id
+
+    webhook_logger.info(
+        "ABDM consent webhook received: request_id=%s status=%s artefact=%s",
+        request_id,
+        notification_status,
+        artefact_id,
+    )
+
+    # Try to find a matching Consent record by request_id or artefact_id
+    try:
+        from app.models import Consent, AuditLog
+        consent_query = await db.execute(
+            sa_select(Consent).where(Consent.consent_request_id == request_id)
+        )
+        consent_obj = consent_query.scalar_one_or_none()
+
+        if consent_obj:
+            consent_obj.consent_status = notification_status
+            consent_obj.updated_at = datetime.utcnow()
+
+            if notification_status == "GRANTED":
+                # Default: 90-day consent window
+                consent_obj.valid_until = datetime.utcnow() + timedelta(days=90)
+                if artefact_id:
+                    consent_obj.consent_artefact_id = artefact_id
+
+            elif notification_status in ("REVOKED", "DENIED"):
+                # Clear access window
+                if hasattr(consent_obj, "valid_until"):
+                    consent_obj.valid_until = datetime.utcnow()
+
+            await db.commit()
+            webhook_logger.info(
+                "Consent record %s updated to %s", consent_obj.consent_id, notification_status
+            )
+    except Exception as exc:
+        webhook_logger.warning("Could not update consent record: %s", exc)
+        # Don't raise — acknowledge the webhook regardless so ABDM doesn't retry
+
+    return {
+        "acknowledged": True,
+        "request_id": request_id,
+        "processed_status": notification_status,
+        "message": f"Consent notification {notification_status} processed by AI-HOS.",
+    }
 
 
 @router.get("/consent/{request_id}")
