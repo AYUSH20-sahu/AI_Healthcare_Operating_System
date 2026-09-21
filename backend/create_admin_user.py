@@ -133,6 +133,28 @@ async def main():
             await session.commit()
         print(f"✓ [Admin Setup] Verified secondary admin: {alt_email}")
 
+        # Also provision superadmin: superadmin@aihos.org
+        super_email = "superadmin@aihos.org"
+        result_super = await session.execute(select(User).where(User.email == super_email))
+        existing_super = result_super.scalar_one_or_none()
+        if existing_super:
+            existing_super.hashed_password = hashed_pwd
+            existing_super.role = UserRole.SUPER_ADMIN
+            existing_super.is_active = True
+            await session.commit()
+        else:
+            super_admin = User(
+                user_id=uuid.uuid4(),
+                email=super_email,
+                hashed_password=hashed_pwd,
+                full_name="AI-HOS Global Super Administrator",
+                role=UserRole.SUPER_ADMIN,
+                is_active=True,
+            )
+            session.add(super_admin)
+            await session.commit()
+        print(f"✓ [Admin Setup] Verified Super Admin: {super_email}")
+
         # Verify authentication
         print(f"\n[Auth Check] Verifying password verification logic...")
         is_valid = check_hash(ADMIN_PASSWORD, admin_user.hashed_password)

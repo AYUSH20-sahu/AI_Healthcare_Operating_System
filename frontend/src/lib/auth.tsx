@@ -2,7 +2,15 @@
 
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { authApi, User, TokenResponse, SignupRequest } from './api';
+import {
+    authApi,
+    User,
+    TokenResponse,
+    SignupRequest,
+    PatientSignupRequest,
+    PatientLoginRequest,
+    OrgRegisterRequest,
+} from './api';
 
 export interface AuthContextType {
     user: User | null;
@@ -14,8 +22,12 @@ export interface AuthContextType {
     isPatient: boolean;
     isNurse: boolean;
     isAdmin: boolean;
-    login: (email: string, password: string) => Promise<User>;
+    isSuperAdmin: boolean;
+    login: (identifier: string, password: string) => Promise<User>;
+    patientLogin: (identifier: string, password: string) => Promise<User>;
     signup: (data: SignupRequest) => Promise<User>;
+    patientSignup: (data: PatientSignupRequest) => Promise<User>;
+    registerOrg: (data: OrgRegisterRequest) => Promise<User>;
     logout: () => void;
     refreshUser: () => Promise<User | null>;
 }
@@ -130,11 +142,43 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         };
     }, [logout]);
 
-    const login = async (email: string, password: string): Promise<User> => {
+    const login = async (identifier: string, password: string): Promise<User> => {
         setIsLoading(true);
         try {
-            const tokenRes: TokenResponse = await authApi.login({ email, password });
+            const tokenRes: TokenResponse = await authApi.login({
+                identifier: identifier.trim(),
+                email: identifier.includes('@') ? identifier.trim() : undefined,
+                phone: !identifier.includes('@') ? identifier.trim() : undefined,
+                password,
+            });
             
+            if (typeof window !== 'undefined') {
+                localStorage.setItem('access_token', tokenRes.access_token);
+                localStorage.setItem('refresh_token', tokenRes.refresh_token);
+            }
+            setToken(tokenRes.access_token);
+            setRefreshToken(tokenRes.refresh_token);
+
+            // Fetch current profile
+            const currentUser = await authApi.me();
+            setUser(currentUser);
+            if (typeof window !== 'undefined') {
+                localStorage.setItem('auth_user', JSON.stringify(currentUser));
+            }
+            return currentUser;
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const patientLogin = async (identifier: string, password: string): Promise<User> => {
+        setIsLoading(true);
+        try {
+            const tokenRes: TokenResponse = await authApi.patientLogin({
+                identifier: identifier.trim(),
+                password,
+            });
+
             if (typeof window !== 'undefined') {
                 localStorage.setItem('access_token', tokenRes.access_token);
                 localStorage.setItem('refresh_token', tokenRes.refresh_token);
@@ -181,11 +225,62 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
     };
 
+    const patientSignup = async (data: PatientSignupRequest): Promise<User> => {
+        setIsLoading(true);
+        try {
+            const createdUser = await authApi.patientRegister(data);
+
+            const tokenRes = await authApi.patientLogin({
+                identifier: data.email,
+                password: data.password,
+            });
+
+            if (typeof window !== 'undefined') {
+                localStorage.setItem('access_token', tokenRes.access_token);
+                localStorage.setItem('refresh_token', tokenRes.refresh_token);
+                localStorage.setItem('auth_user', JSON.stringify(createdUser));
+            }
+            setToken(tokenRes.access_token);
+            setRefreshToken(tokenRes.refresh_token);
+            setUser(createdUser);
+
+            return createdUser;
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const registerOrg = async (data: OrgRegisterRequest): Promise<User> => {
+        setIsLoading(true);
+        try {
+            const createdAdmin = await authApi.registerOrg(data);
+
+            const tokenRes = await authApi.login({
+                identifier: data.email,
+                password: data.password,
+            });
+
+            if (typeof window !== 'undefined') {
+                localStorage.setItem('access_token', tokenRes.access_token);
+                localStorage.setItem('refresh_token', tokenRes.refresh_token);
+                localStorage.setItem('auth_user', JSON.stringify(createdAdmin));
+            }
+            setToken(tokenRes.access_token);
+            setRefreshToken(tokenRes.refresh_token);
+            setUser(createdAdmin);
+
+            return createdAdmin;
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
     const isAuthenticated = !!token && !!user;
     const isDoctor = user?.role === 'doctor' || user?.role === 'physician';
     const isPatient = user?.role === 'patient';
     const isNurse = user?.role === 'nurse';
-    const isAdmin = user?.role === 'admin';
+    const isSuperAdmin = user?.role === 'super_admin';
+    const isAdmin = user?.role === 'admin' || isSuperAdmin;
 
     return (
         <AuthContext.Provider
@@ -199,8 +294,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 isPatient,
                 isNurse,
                 isAdmin,
+                isSuperAdmin,
                 login,
+                patientLogin,
                 signup,
+                patientSignup,
+                registerOrg,
                 logout,
                 refreshUser,
             }}

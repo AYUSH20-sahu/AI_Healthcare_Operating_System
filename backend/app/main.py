@@ -13,6 +13,7 @@ from app.api import (
     admin_users,
     admin_operations,
     admin_audit,
+    admin_organizations,
     copilot,
     intake,
     telehealth,
@@ -20,6 +21,7 @@ from app.api import (
     fhir,
     abdm,
     observability,
+    nurses,
 )
 
 from app.core.config import settings
@@ -87,6 +89,7 @@ app.include_router(approval.router, prefix="/api/v1")
 app.include_router(admin_users.router, prefix="/api/v1")
 app.include_router(admin_operations.router, prefix="/api/v1")
 app.include_router(admin_audit.router, prefix="/api/v1")
+app.include_router(admin_organizations.router, prefix="/api/v1")
 app.include_router(copilot.router, prefix="/api/v1")
 app.include_router(intake.router, prefix="/api/v1")
 app.include_router(telehealth.router, prefix="/api/v1")
@@ -94,48 +97,97 @@ app.include_router(voice.router, prefix="/api/v1")
 app.include_router(fhir.router, prefix="/api/v1")
 app.include_router(abdm.router, prefix="/api/v1")
 app.include_router(observability.router, prefix="/api/v1")
+app.include_router(nurses.router, prefix="/api/v1")
 
 
 @app.on_event("startup")
 async def startup_event():
-    """Ensure database connection initialized and default test personas exist."""
+    """Ensure database connection initialized and default test personas & organizations exist."""
+    from sqlalchemy import select
     from app.database import AsyncSessionLocal, init_db
-    from app.models import UserRole
+    from app.models import Organization, UserRole
     from app.services.auth.service import UserCreate, create_user, get_password_hash, get_user_by_email
 
     try:
         init_db()
-        test_personas = [
-            ("doctor@test.com", "doctorpassword123", "Dr. Rajesh Sharma", "doctor"),
-            ("patient@test.com", "patientpassword123", "Amit Kumar", "patient"),
-            ("admin@test.com", "adminpassword123", "Institutional Admin", "admin"),
-            ("admin@aihos.org", "adminpassword123", "AI-HOS Lead Admin", "admin"),
-        ]
+        from app.database import engine
+        from sqlalchemy import text
+
+        # Ensure enum and new columns exist on startup
+        if engine and "sqlite" not in str(engine.url):
+            try:
+                async with engine.connect() as conn:
+                    await conn.execution_options(isolation_level="AUTOCOMMIT")
+                    await conn.execute(text("ALTER TYPE userrole ADD VALUE IF NOT EXISTS 'super_admin';"))
+                    await conn.execute(text("ALTER TYPE userrole ADD VALUE IF NOT EXISTS 'head_physician';"))
+                    await conn.execute(text("ALTER TYPE userrole ADD VALUE IF NOT EXISTS 'head_nurse';"))
+            except Exception:
+                pass
+
+            async with engine.begin() as conn:
+                alter_stmts = [
+                    "ALTER TABLE users ADD COLUMN IF NOT EXISTS phone VARCHAR(30);",
+                    "ALTER TABLE users ADD COLUMN IF NOT EXISTS organization_id UUID REFERENCES organizations(organization_id) ON DELETE SET NULL;",
+                    "ALTER TABLE users ADD COLUMN IF NOT EXISTS department VARCHAR(100);",
+                    "ALTER TABLE users ADD COLUMN IF NOT EXISTS designation VARCHAR(100);",
+                    "ALTER TABLE users ADD COLUMN IF NOT EXISTS qualifications VARCHAR(255);",
+                    "ALTER TABLE users ADD COLUMN IF NOT EXISTS experience_years INTEGER;",
+                    "ALTER TABLE users ADD COLUMN IF NOT EXISTS room_number VARCHAR(50);",
+                    "ALTER TABLE users ADD COLUMN IF NOT EXISTS shift VARCHAR(100);",
+                    "ALTER TABLE users ADD COLUMN IF NOT EXISTS supervisor_id UUID REFERENCES users(user_id) ON DELETE SET NULL;",
+                    "ALTER TABLE doctors ADD COLUMN IF NOT EXISTS department VARCHAR(100);",
+                    "ALTER TABLE doctors ADD COLUMN IF NOT EXISTS designation VARCHAR(100);",
+                    "ALTER TABLE doctors ADD COLUMN IF NOT EXISTS qualifications VARCHAR(255);",
+                    "ALTER TABLE doctors ADD COLUMN IF NOT EXISTS experience_years INTEGER;",
+                    "ALTER TABLE doctors ADD COLUMN IF NOT EXISTS room_number VARCHAR(50);",
+                    "ALTER TABLE doctors ADD COLUMN IF NOT EXISTS shift VARCHAR(100);",
+                    "ALTER TABLE doctors ADD COLUMN IF NOT EXISTS is_head_physician BOOLEAN DEFAULT FALSE;",
+                    "ALTER TABLE doctors ADD COLUMN IF NOT EXISTS supervisor_id UUID REFERENCES users(user_id) ON DELETE SET NULL;",
+                    "ALTER TABLE patients ADD COLUMN IF NOT EXISTS phone VARCHAR(30);",
+                    "ALTER TABLE organizations ADD COLUMN IF NOT EXISTS facility_type VARCHAR(100);",
+                    "ALTER TABLE organizations ADD COLUMN IF NOT EXISTS departments JSONB;",
+                    "ALTER TABLE organizations ADD COLUMN IF NOT EXISTS total_beds INTEGER DEFAULT 0;",
+                    "ALTER TABLE organizations ADD COLUMN IF NOT EXISTS icu_beds INTEGER DEFAULT 0;",
+                    "ALTER TABLE organizations ADD COLUMN IF NOT EXISTS has_emergency BOOLEAN DEFAULT TRUE;",
+                    "ALTER TABLE organizations ADD COLUMN IF NOT EXISTS has_ambulance BOOLEAN DEFAULT TRUE;",
+                    "ALTER TABLE organizations ADD COLUMN IF NOT EXISTS license_number VARCHAR(100);",
+                    "ALTER TABLE organizations ADD COLUMN IF NOT EXISTS abdm_facility_id VARCHAR(100);",
+                    "ALTER TABLE organizations ADD COLUMN IF NOT EXISTS insurance_network_code VARCHAR(100);",
+                    "ALTER TABLE organizations ADD COLUMN IF NOT EXISTS emergency_hotline VARCHAR(50);",
+                    "ALTER TABLE organizations ADD COLUMN IF NOT EXISTS operating_hours VARCHAR(255);",
+                    "ALTER TABLE organizations ADD COLUMN IF NOT EXISTS clinical_review_policy TEXT;",
+                ]
+                for stmt in alter_stmts:
+                    try:
+                        await conn.execute(text(stmt))
+                    except Exception:
+                        pass
+
+        # Ensure ONLY Global Super Administrator exists (Zero dummy data/organizations)
         if AsyncSessionLocal:
             async with AsyncSessionLocal() as session:
-                for email, password, name, role in test_personas:
-                    existing = await get_user_by_email(session, email)
-                    if not existing:
-                        await create_user(
-                            session,
-                            UserCreate(
-                                email=email,
-                                password=password,
-                                full_name=name,
-                                role=role,
-                            ),
-                            role=role,
-                        )
-                        print(f"[AI-HOS Startup] Created persona: {email} ({role})")
-                    else:
-                        # Ensure credentials, role, and active status are freshly validated
-                        existing.hashed_password = get_password_hash(password)
-                        existing.role = UserRole(role)
-                        existing.is_active = True
-                        await session.commit()
-                        print(f"[AI-HOS Startup] Verified & updated persona: {email} ({role})")
+                super_admin_email = "superadmin@aihos.org"
+                existing = await get_user_by_email(session, super_admin_email)
+                if not existing:
+                    await create_user(
+                        session,
+                        UserCreate(
+                            email=super_admin_email,
+                            password="adminpassword123",
+                            full_name="AI-HOS Global Super Administrator",
+                            phone="+919999000001",
+                            role="super_admin",
+                        ),
+                        role="super_admin",
+                    )
+                    print(f"[AI-HOS Startup] Provisioned Super Admin: {super_admin_email}")
+                else:
+                    existing.hashed_password = get_password_hash("adminpassword123")
+                    existing.role = UserRole.SUPER_ADMIN
+                    existing.is_active = True
+                    await session.commit()
     except Exception as e:
-        print(f"[AI-HOS Startup] Notice: Test persona auto-seed check skipped or deferred: {e}")
+        print(f"[AI-HOS Startup] Notice during startup initialization: {e}")
 
 
 @app.get("/health")

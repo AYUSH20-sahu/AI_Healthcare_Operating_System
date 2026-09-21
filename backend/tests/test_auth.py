@@ -144,3 +144,62 @@ class TestAuthentication:
         """Test authentication with non-existent user."""
         user = await authenticate_user(db_session, "nonexistent@example.com", "password")
         assert user is None
+
+
+class TestCredentialAvailability:
+    """Test verification that mobile number and email are not already linked to any account."""
+
+    @pytest.mark.asyncio
+    async def test_credentials_available_success(self, db_session):
+        """Test brand new email and phone pass validation."""
+        from app.services.auth.service import check_credentials_available
+        # Should not raise any exception
+        await check_credentials_available(
+            db_session,
+            email="unique.email@example.com",
+            phone="+919876500001",
+        )
+
+    @pytest.mark.asyncio
+    async def test_duplicate_email_rejected(self, db_session, test_user):
+        """Test existing user email is rejected across any account type."""
+        from fastapi import HTTPException
+        from app.services.auth.service import check_credentials_available
+
+        with pytest.raises(HTTPException) as exc_info:
+            await check_credentials_available(
+                db_session,
+                email=test_user.email,
+                phone="+919876500002",
+            )
+        assert exc_info.value.status_code == 400
+        assert "already exists" in exc_info.value.detail
+        assert "log in using your credentials" in exc_info.value.detail
+
+    @pytest.mark.asyncio
+    async def test_duplicate_phone_rejected(self, db_session):
+        """Test existing phone number is rejected across any account type."""
+        from fastapi import HTTPException
+        from app.services.auth.service import check_credentials_available
+
+        user = User(
+            email="phone.owner@example.com",
+            hashed_password=get_password_hash("testpassword123"),
+            full_name="Phone Owner",
+            phone="+919876543210",
+            role=UserRole.DOCTOR,
+            is_active=True,
+        )
+        db_session.add(user)
+        await db_session.commit()
+
+        # Attempt to register with the same phone (even with formatting spaces/dashes)
+        with pytest.raises(HTTPException) as exc_info:
+            await check_credentials_available(
+                db_session,
+                email="another.user@example.com",
+                phone="+91 98765 43210",
+            )
+        assert exc_info.value.status_code == 400
+        assert "already exists" in exc_info.value.detail
+        assert "log in using your credentials" in exc_info.value.detail

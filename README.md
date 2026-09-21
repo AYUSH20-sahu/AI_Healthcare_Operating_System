@@ -78,20 +78,20 @@ docker compose up
 - **PostgreSQL**: Managed Cloud PostgreSQL (Nhost)
 - **Redis**: localhost:6379 (with healthcheck)
 
-### Default User Credentials & Personas
+### Production Baseline Credentials (Super Administrator Only)
 
-The system automatically provisions verified test personas on startup for local development and review:
+All dummy organizations, patients, appointments, and test records have been purged. The system maintains **only** the Global Super Administrator:
 
-| Role | Email (User ID) | Password | Clearance & Access Route |
-| :--- | :--- | :--- | :--- |
-| **System Administrator** | `admin@test.com` <br> *(Alt: `admin@aihos.org`)* | `adminpassword123` | **Level 4 Clearance** — Admin Console (`/admin`), User & Clinician Provisioning (`/admin/users`), Immutable Audit Logs (`/admin/audit`) |
-| **Physician / Doctor** | `doctor@test.com` | `doctorpassword123` | **Clinical Clearance** — Doctor Cockpit (`/doctor`), Ambient Scribe (`/doctor/scribe`), Review Gate (`/doctor/review`) |
-| **Patient** | `patient@test.com` | `patientpassword123` | **Patient Portal** — Care Dashboard (`/patient`), Appointment Booking, PHR Viewer |
+| Role | Email | Phone | Password | Clearance & Access Route |
+| :--- | :--- | :--- | :--- | :--- |
+| **Global Super Administrator** | `superadmin@aihos.org` | `+919999000001` | `adminpassword123` | **Full Authority Across All Organizations** — Organization Management Console (`/admin/organizations`), System Admin (`/admin`) |
 
 > [!NOTE]
-> - Public registration (`/auth/register`) is strictly for Patients.
-> - Doctor, Nurse, and Staff accounts must be provisioned by an Administrator via `/admin/users`.
-> - Login (`/auth/login`) determines the user's role from their server-issued JWT and automatically routes them to the corresponding workspace.
+> - **Zero Dummy Data**: The Nhost database contains zero dummy records.
+> - **Organization Registration**: New healthcare facilities are set up via the **4-Step Organization Onboarding Wizard** at `/auth/register`. The registering user is established as that facility's lead Administrator.
+> - **Super Admin Authority**: Super Admin can create or delete any organization and its administrator via `/admin/organizations`.
+> - **Isolated Patient Portal**: Patients register exclusively at `/patient/register` (dual email + mobile credentials) and sign in at `/patient/login` with zero links to the institutional staff portal.
+> - **Clinician & Staff Accounts**: Doctors, Nurses, and Staff must be provisioned by their facility Administrator via `/admin/users`.
 
 ### Docker Compose Services
 - `redis` — Redis 7 with persistence and named volume `redis_data`

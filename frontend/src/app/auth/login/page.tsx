@@ -165,11 +165,10 @@ function LoginForm() {
                             <form onSubmit={handleSubmit} className="space-y-4">
                                 <Input
                                     id="email"
-                                    label="Email Address"
-                                    type="email"
-                                    autoComplete="email"
+                                    label="Institutional Email or Mobile Number"
+                                    type="text"
                                     required
-                                    placeholder="doctor@test.com"
+                                    placeholder="admin@hospital.org or phone"
                                     value={email}
                                     onChange={(e) => setEmail(e.target.value)}
                                     disabled={submitting || isLoading}
@@ -245,9 +244,9 @@ function LoginForm() {
                     {/* Secondary Navigation */}
                     <div className="text-center text-xs text-slate-500 dark:text-slate-400 space-y-2">
                         <p>
-                            Don't have an institutional credential yet?{' '}
+                            Want to register a new hospital or clinic?{' '}
                             <Link href="/auth/register" className="font-semibold text-blue-600 dark:text-blue-400 hover:underline">
-                                Register new account
+                                Register Organization & Admin Account
                             </Link>
                         </p>
                         <p>

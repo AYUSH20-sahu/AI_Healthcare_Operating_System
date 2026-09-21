@@ -144,12 +144,20 @@ export default function HomePage() {
                                     <span className="text-indigo-500">✓</span> Finalized prescription access
                                 </li>
                             </ul>
-                            <div className="mt-6">
+                            <div className="mt-6 flex flex-col gap-2">
                                 <a href="/patient" className="block">
                                     <Button variant="secondary" size="sm" fullWidth>
                                         Open Patient Portal →
                                     </Button>
                                 </a>
+                                <div className="flex items-center justify-between text-[11px] px-1 text-slate-400">
+                                    <a href="/patient/login" className="hover:text-teal-600 dark:hover:text-teal-400 underline">
+                                        Patient Sign In
+                                    </a>
+                                    <a href="/patient/register" className="hover:text-teal-600 dark:hover:text-teal-400 underline">
+                                        Register (Email & Phone)
+                                    </a>
+                                </div>
                             </div>
                         </CardContent>
                     </Card>

@@ -17,6 +17,7 @@ from typing import Dict, Optional, Set, Tuple
 
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
+import importlib
 from starlette.responses import JSONResponse, Response
 
 from app.core.exceptions import create_error_response
@@ -57,9 +58,9 @@ class RateLimiter:
 
     def _get_redis(self):
         try:
-            import redis
+            redis_mod = importlib.import_module("redis")
             from app.core.config import settings
-            r = redis.from_url(settings.REDIS_URL, decode_responses=True, socket_timeout=0.5)
+            r = redis_mod.from_url(settings.REDIS_URL, decode_responses=True, socket_timeout=0.5)
             r.ping()
             return r
         except Exception:

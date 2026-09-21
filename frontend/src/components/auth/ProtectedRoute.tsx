@@ -24,9 +24,18 @@ export function ProtectedRoute({
         if (!isLoading) {
             if (!isAuthenticated) {
                 const redirectParam = pathname ? `?redirect=${encodeURIComponent(pathname)}` : '';
-                router.replace(`/auth/login${redirectParam}`);
-            } else if (allowedRoles && user && !allowedRoles.includes(user.role)) {
-                router.replace('/auth/unauthorized');
+                if (pathname?.startsWith('/patient')) {
+                    router.replace(`/patient/login${redirectParam}`);
+                } else {
+                    router.replace(`/auth/login${redirectParam}`);
+                }
+            } else if (allowedRoles && user) {
+                const effectiveRoles = allowedRoles.includes('admin') && !allowedRoles.includes('super_admin')
+                    ? [...allowedRoles, 'super_admin']
+                    : allowedRoles;
+                if (!effectiveRoles.includes(user.role)) {
+                    router.replace('/auth/unauthorized');
+                }
             }
         }
     }, [isLoading, isAuthenticated, user, allowedRoles, router, pathname]);
@@ -53,8 +62,13 @@ export function ProtectedRoute({
         return null;
     }
 
-    if (allowedRoles && user && !allowedRoles.includes(user.role)) {
-        return null;
+    if (allowedRoles && user) {
+        const effectiveRoles = allowedRoles.includes('admin') && !allowedRoles.includes('super_admin')
+            ? [...allowedRoles, 'super_admin']
+            : allowedRoles;
+        if (!effectiveRoles.includes(user.role)) {
+            return null;
+        }
     }
 
     return <>{children}</>;

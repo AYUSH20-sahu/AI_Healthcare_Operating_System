@@ -17,21 +17,42 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models import AuditLog, AuditOutcome, Doctor, User, UserRole
 from app.services.auth.rbac import require_admin
-from app.services.auth.service import get_password_hash
+from app.services.auth.service import (
+    check_credentials_available,
+    get_password_hash,
+    normalize_phone,
+)
 
 router = APIRouter(prefix="/admin/users", tags=["admin-users"])
 
 
 class UserProvisionRequest(BaseModel):
-    """Schema for provisioning a user account by an administrator."""
+    """Schema for provisioning a clinician or lead account by an administrator (4-Step Process)."""
+    # Step 1: Personal & Demographics
     email: EmailStr
     password: str = Field(min_length=8)
     full_name: str
-    role: str = Field(..., description="Role: doctor, nurse, receptionist, admin")
-    specialty: Optional[str] = None
-    license_number: Optional[str] = None
-    hospital_affiliation: Optional[str] = None
+    role: str = Field(..., description="Role: doctor, head_physician, head_nurse, admin")
     phone: Optional[str] = None
+    emergency_contact_phone: Optional[str] = None
+
+    # Step 2: Professional Licensure & Credentials
+    license_number: Optional[str] = None
+    qualifications: Optional[str] = None
+    experience_years: Optional[int] = 0
+    specialty: Optional[str] = None
+
+    # Step 3: Departmental Assignment & Clinical Setup
+    department: Optional[str] = None
+    designation: Optional[str] = None
+    room_number: Optional[str] = None
+    shift: Optional[str] = None
+    hospital_affiliation: Optional[str] = None
+
+    # Step 4: Governance & Review
+    abdm_hpr_id: Optional[str] = None
+    clinical_privileges: Optional[list[str]] = None
+    background_verified: Optional[bool] = True
 
 
 class UserStatusUpdate(BaseModel):
@@ -48,6 +69,13 @@ class DoctorProfileSummary(BaseModel):
     license_number: str
     hospital_affiliation: Optional[str] = None
     phone: Optional[str] = None
+    department: Optional[str] = None
+    designation: Optional[str] = None
+    qualifications: Optional[str] = None
+    experience_years: Optional[int] = None
+    room_number: Optional[str] = None
+    shift: Optional[str] = None
+    is_head_physician: Optional[bool] = False
 
     class Config:
         from_attributes = True
@@ -58,8 +86,15 @@ class AdminUserResponse(BaseModel):
     email: str
     full_name: str
     role: str
+    phone: Optional[str] = None
     is_active: bool
     created_at: datetime
+    department: Optional[str] = None
+    designation: Optional[str] = None
+    qualifications: Optional[str] = None
+    experience_years: Optional[int] = None
+    room_number: Optional[str] = None
+    shift: Optional[str] = None
     doctor_profile: Optional[DoctorProfileSummary] = None
 
     class Config:
@@ -78,13 +113,18 @@ async def list_users(
     role: Optional[str] = Query(None, description="Filter by role"),
     is_active: Optional[bool] = Query(None, description="Filter by active status"),
     search: Optional[str] = Query(None, description="Search email or full name"),
+    department: Optional[str] = Query(None, description="Filter by department"),
     limit: int = Query(50, ge=1, le=100),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
     current_admin: User = Depends(require_admin),
 ):
-    """List all registered and provisioned users with administrative filtering."""
+    """List all registered and provisioned users with administrative filtering scoped to organization."""
     query = select(User)
+
+    # Multi-tenant: If not Super Admin, scope users strictly to Admin's organization
+    if current_admin.role != UserRole.SUPER_ADMIN and current_admin.organization_id:
+        query = query.where(User.organization_id == current_admin.organization_id)
 
     if role:
         try:
@@ -96,12 +136,16 @@ async def list_users(
     if is_active is not None:
         query = query.where(User.is_active == is_active)
 
+    if department:
+        query = query.where(User.department.ilike(f"%{department.strip()}%"))
+
     if search:
         search_pattern = f"%{search}%"
         query = query.where(
             or_(
                 User.email.ilike(search_pattern),
                 User.full_name.ilike(search_pattern),
+                User.phone.ilike(search_pattern),
             )
         )
 
@@ -110,16 +154,16 @@ async def list_users(
     total_result = await db.execute(count_query)
     total = total_result.scalar_one()
 
-    # Fetch paginated with doctor profiles
+    # Fetch paginated
     query = query.order_by(User.created_at.desc()).offset(offset).limit(limit)
     result = await db.execute(query)
     users = result.scalars().all()
 
-    # Pre-fetch doctor profiles for doctors
+    # Pre-fetch doctor profiles
     response_items = []
     for u in users:
         doc_summary = None
-        if u.role == UserRole.DOCTOR:
+        if u.role in (UserRole.DOCTOR, UserRole.HEAD_PHYSICIAN):
             doc_res = await db.execute(select(Doctor).where(Doctor.user_id == u.user_id))
             doc = doc_res.scalar_one_or_none()
             if doc:
@@ -129,6 +173,13 @@ async def list_users(
                     license_number=doc.license_number,
                     hospital_affiliation=doc.hospital_affiliation,
                     phone=doc.phone,
+                    department=doc.department,
+                    designation=doc.designation,
+                    qualifications=doc.qualifications,
+                    experience_years=doc.experience_years,
+                    room_number=doc.room_number,
+                    shift=doc.shift,
+                    is_head_physician=doc.is_head_physician,
                 )
 
         response_items.append(
@@ -137,8 +188,15 @@ async def list_users(
                 email=u.email,
                 full_name=u.full_name,
                 role=u.role.value if hasattr(u.role, "value") else str(u.role),
+                phone=u.phone,
                 is_active=u.is_active,
                 created_at=u.created_at,
+                department=u.department,
+                designation=u.designation,
+                qualifications=u.qualifications,
+                experience_years=u.experience_years,
+                room_number=u.room_number,
+                shift=u.shift,
                 doctor_profile=doc_summary,
             )
         )
@@ -157,10 +215,10 @@ async def provision_user(
     db: AsyncSession = Depends(get_db),
     current_admin: User = Depends(require_admin),
 ):
-    """Provision a new clinician or staff account.
+    """Provision a new clinician or departmental leadership account (4-Step Process).
     
-    Doctors and staff roles cannot register publicly; they must be provisioned
-    here by an authorized administrator with full audit logging.
+    Hospital Admins can create all Doctor profiles, only one Head Nurse, and only one Head Physician.
+    Junior staff are subsequently provisioned by their respective departmental heads.
     """
     # 1. Validate role
     try:
@@ -168,39 +226,58 @@ async def provision_user(
     except ValueError:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid role: '{provision_data.role}'. Allowed: doctor, nurse, receptionist, admin, patient",
+            detail=f"Invalid role: '{provision_data.role}'. Allowed for hospital provisioning: doctor, head_physician, head_nurse",
         )
 
-    # 1b. Enforce Super Admin Boundary (SEC-06)
-    if assigned_role == UserRole.ADMIN:
-        from app.core.config import settings
-        if current_admin.email.lower() != settings.SUPER_ADMIN_EMAIL.lower():
+    # 1b. Role constraints for Hospital Admin
+    if current_admin.role != UserRole.SUPER_ADMIN:
+        allowed_admin_roles = (UserRole.DOCTOR, UserRole.HEAD_PHYSICIAN, UserRole.HEAD_NURSE)
+        if assigned_role not in allowed_admin_roles:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Only the institutional Super Administrator can provision new Administrator accounts.",
+                detail=f"Hospital Admin can only provision Doctors, Head Physician, or Head Nurse. Selected: {assigned_role.value}",
             )
 
-    # 2. Check email uniqueness
-    existing_user = await db.execute(
-        select(User).where(User.email == provision_data.email)
-    )
-    if existing_user.scalar_one_or_none():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="A user with this email address is already registered",
+    # 1c. Enforce Only ONE Head Physician per organization
+    if assigned_role == UserRole.HEAD_PHYSICIAN:
+        existing_head_physician = await db.execute(
+            select(User).where(
+                User.organization_id == current_admin.organization_id,
+                User.role == UserRole.HEAD_PHYSICIAN,
+                User.is_active == True,
+            )
         )
+        if existing_head_physician.scalars().first():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="A Head Physician (Chief Medical Officer) has already been provisioned for this hospital. Only one Head Physician is permitted.",
+            )
 
-    # 3. If DOCTOR, validate license number and required clinical fields
-    if assigned_role == UserRole.DOCTOR:
+    # 1d. Enforce Only ONE Head Nurse per organization
+    if assigned_role == UserRole.HEAD_NURSE:
+        existing_head_nurse = await db.execute(
+            select(User).where(
+                User.organization_id == current_admin.organization_id,
+                User.role == UserRole.HEAD_NURSE,
+                User.is_active == True,
+            )
+        )
+        if existing_head_nurse.scalars().first():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="A Head Nurse (Nursing Superintendent) has already been provisioned for this hospital. Only one Head Nurse is permitted.",
+            )
+
+    # 2. Check credentials uniqueness across all account types (Universal Guard)
+    clean_phone = normalize_phone(provision_data.phone) if provision_data.phone else None
+    await check_credentials_available(db, email=provision_data.email, phone=clean_phone)
+
+    # 3. If DOCTOR or HEAD_PHYSICIAN, validate medical license number and required clinical fields
+    if assigned_role in (UserRole.DOCTOR, UserRole.HEAD_PHYSICIAN):
         if not provision_data.license_number:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="License number is required for doctor provisioning",
-            )
-        if not provision_data.specialty:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Specialty is required for doctor provisioning",
+                detail="Medical Council Registration / License number is required for doctor provisioning.",
             )
 
         existing_license = await db.execute(
@@ -209,32 +286,55 @@ async def provision_user(
         if existing_license.scalar_one_or_none():
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Medical license {provision_data.license_number} is already in use",
+                detail=f"Medical license {provision_data.license_number} is already in use by another practitioner.",
             )
 
-    # 4. Create User
+    # 4. If HEAD_NURSE, require nursing registration number
+    if assigned_role == UserRole.HEAD_NURSE:
+        if not provision_data.license_number:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Nursing Council Registration number is required for Head Nurse provisioning.",
+            )
+
+    # 5. Create User
     hashed_pwd = get_password_hash(provision_data.password)
     new_user = User(
         email=provision_data.email,
+        phone=clean_phone,
         hashed_password=hashed_pwd,
         full_name=provision_data.full_name,
         role=assigned_role,
+        organization_id=current_admin.organization_id,
+        department=provision_data.department,
+        designation=provision_data.designation or ("Chief Medical Officer" if assigned_role == UserRole.HEAD_PHYSICIAN else "Nursing Superintendent" if assigned_role == UserRole.HEAD_NURSE else "Consultant Doctor"),
+        qualifications=provision_data.qualifications,
+        experience_years=provision_data.experience_years,
+        room_number=provision_data.room_number,
+        shift=provision_data.shift or "Morning (08:00 - 16:00)",
         is_active=True,
     )
     db.add(new_user)
     await db.flush()
 
-    # 5. Create Doctor profile if applicable
+    # 6. Create Doctor profile if DOCTOR or HEAD_PHYSICIAN
     doc_summary = None
-    if assigned_role == UserRole.DOCTOR:
+    if assigned_role in (UserRole.DOCTOR, UserRole.HEAD_PHYSICIAN):
         new_doctor = Doctor(
             user_id=new_user.user_id,
             email=new_user.email,
             full_name=new_user.full_name,
-            specialty=provision_data.specialty,
+            specialty=provision_data.specialty or provision_data.department or "General Medicine",
             license_number=provision_data.license_number,
-            hospital_affiliation=provision_data.hospital_affiliation or "AI-HOS Central Health",
-            phone=provision_data.phone,
+            hospital_affiliation=provision_data.hospital_affiliation or "AI-HOS Medical Center",
+            phone=clean_phone,
+            department=provision_data.department,
+            designation=new_user.designation,
+            qualifications=provision_data.qualifications,
+            experience_years=provision_data.experience_years,
+            room_number=provision_data.room_number,
+            shift=new_user.shift,
+            is_head_physician=(assigned_role == UserRole.HEAD_PHYSICIAN),
         )
         db.add(new_doctor)
         await db.flush()
@@ -244,9 +344,16 @@ async def provision_user(
             license_number=new_doctor.license_number,
             hospital_affiliation=new_doctor.hospital_affiliation,
             phone=new_doctor.phone,
+            department=new_doctor.department,
+            designation=new_doctor.designation,
+            qualifications=new_doctor.qualifications,
+            experience_years=new_doctor.experience_years,
+            room_number=new_doctor.room_number,
+            shift=new_doctor.shift,
+            is_head_physician=new_doctor.is_head_physician,
         )
 
-    # 6. Immutable Audit Log
+    # 7. Immutable Audit Log
     audit_entry = AuditLog(
         user_id=current_admin.user_id,
         action="ADMIN_PROVISION_USER",
@@ -256,8 +363,10 @@ async def provision_user(
         details={
             "provisioned_email": new_user.email,
             "assigned_role": assigned_role.value,
+            "department": provision_data.department,
+            "designation": new_user.designation,
             "provisioned_by_admin": str(current_admin.user_id),
-            "license_number": provision_data.license_number if assigned_role == UserRole.DOCTOR else None,
+            "license_number": provision_data.license_number,
         },
     )
     db.add(audit_entry)
@@ -269,8 +378,15 @@ async def provision_user(
         email=new_user.email,
         full_name=new_user.full_name,
         role=new_user.role.value if hasattr(new_user.role, "value") else str(new_user.role),
+        phone=new_user.phone,
         is_active=new_user.is_active,
         created_at=new_user.created_at,
+        department=new_user.department,
+        designation=new_user.designation,
+        qualifications=new_user.qualifications,
+        experience_years=new_user.experience_years,
+        room_number=new_user.room_number,
+        shift=new_user.shift,
         doctor_profile=doc_summary,
     )
 

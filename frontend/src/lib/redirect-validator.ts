@@ -13,6 +13,8 @@ export function getDefaultRouteForRole(role?: string | null): string {
             return '/nurse';
         case 'patient':
             return '/patient';
+        case 'super_admin':
+            return '/admin/organizations';
         case 'admin':
             return '/admin';
         default:
@@ -56,8 +58,8 @@ export function validatePostLoginRedirect(redirectUrl: string | null | undefined
         return fallback;
     }
 
-    // Only admins can route to /admin
-    if (trimmed.startsWith('/admin') && userRole !== 'admin') {
+    // Only admins and super admins can route to /admin
+    if (trimmed.startsWith('/admin') && userRole !== 'admin' && userRole !== 'super_admin') {
         return fallback;
     }
 

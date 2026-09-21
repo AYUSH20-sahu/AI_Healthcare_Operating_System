@@ -41,6 +41,11 @@ class Permission(str, Enum):
     RECEPTIONIST_UPDATE_APPOINTMENTS = "receptionist:update_appointments"
     RECEPTIONIST_READ_PATIENTS = "receptionist:read_patients"
 
+    # Super Admin permissions (Multi-Tenant Cross-Organization Governance)
+    SUPER_ADMIN_MANAGE_ORGS = "super_admin:manage_orgs"
+    SUPER_ADMIN_DELETE_ORGS = "super_admin:delete_orgs"
+    SUPER_ADMIN_ALL = "super_admin:all"
+
 
 # Central permissions matrix: role -> set of permissions
 ROLE_PERMISSIONS: dict[UserRole, set[Permission]] = {
@@ -59,6 +64,15 @@ ROLE_PERMISSIONS: dict[UserRole, set[Permission]] = {
         # Doctors can also read their own patient data
         Permission.PATIENT_READ_OWN,
     },
+    UserRole.HEAD_PHYSICIAN: {
+        Permission.DOCTOR_READ_PATIENTS,
+        Permission.DOCTOR_CREATE_MEDICAL_RECORDS,
+        Permission.DOCTOR_UPDATE_MEDICAL_RECORDS,
+        Permission.DOCTOR_CREATE_PRESCRIPTIONS,
+        Permission.DOCTOR_READ_APPOINTMENTS,
+        Permission.DOCTOR_UPDATE_APPOINTMENTS,
+        Permission.PATIENT_READ_OWN,
+    },
     UserRole.ADMIN: {
         # Strict Administrative Governance boundary (HIPAA & ABDM principle of least privilege)
         Permission.ADMIN_READ_ALL,
@@ -67,7 +81,23 @@ ROLE_PERMISSIONS: dict[UserRole, set[Permission]] = {
         Permission.ADMIN_VIEW_AUDIT_LOGS,
         Permission.ADMIN_MANAGE_CONSENTS,
     },
+    UserRole.SUPER_ADMIN: {
+        Permission.ADMIN_READ_ALL,
+        Permission.ADMIN_WRITE_ALL,
+        Permission.ADMIN_MANAGE_USERS,
+        Permission.ADMIN_VIEW_AUDIT_LOGS,
+        Permission.ADMIN_MANAGE_CONSENTS,
+        Permission.SUPER_ADMIN_MANAGE_ORGS,
+        Permission.SUPER_ADMIN_DELETE_ORGS,
+        Permission.SUPER_ADMIN_ALL,
+    },
     UserRole.NURSE: {
+        Permission.NURSE_READ_PATIENTS,
+        Permission.NURSE_UPDATE_PATIENTS,
+        Permission.NURSE_READ_APPOINTMENTS,
+        Permission.PATIENT_READ_OWN,
+    },
+    UserRole.HEAD_NURSE: {
         Permission.NURSE_READ_PATIENTS,
         Permission.NURSE_UPDATE_PATIENTS,
         Permission.NURSE_READ_APPOINTMENTS,
@@ -120,16 +150,20 @@ def require_roles(*roles: UserRole):
 
 # Convenience dependencies for common role requirements
 require_patient = require_roles(UserRole.PATIENT)
-require_doctor = require_roles(UserRole.DOCTOR)
-require_admin = require_roles(UserRole.ADMIN)
-require_nurse = require_roles(UserRole.NURSE)
+require_doctor = require_roles(UserRole.DOCTOR, UserRole.HEAD_PHYSICIAN)
+require_head_physician = require_roles(UserRole.HEAD_PHYSICIAN)
+require_head_nurse = require_roles(UserRole.HEAD_NURSE)
+require_clinical_lead = require_roles(UserRole.HEAD_PHYSICIAN, UserRole.HEAD_NURSE, UserRole.ADMIN, UserRole.SUPER_ADMIN)
+require_super_admin = require_roles(UserRole.SUPER_ADMIN)
+require_admin = require_roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
+require_nurse = require_roles(UserRole.NURSE, UserRole.HEAD_NURSE)
 require_receptionist = require_roles(UserRole.RECEPTIONIST)
 
 # Doctor or admin
-require_doctor_or_admin = require_roles(UserRole.DOCTOR, UserRole.ADMIN)
+require_doctor_or_admin = require_roles(UserRole.DOCTOR, UserRole.HEAD_PHYSICIAN, UserRole.ADMIN, UserRole.SUPER_ADMIN)
 
 # Medical staff (doctor, nurse, admin)
-require_medical_staff = require_roles(UserRole.DOCTOR, UserRole.NURSE, UserRole.ADMIN)
+require_medical_staff = require_roles(UserRole.DOCTOR, UserRole.HEAD_PHYSICIAN, UserRole.NURSE, UserRole.HEAD_NURSE, UserRole.ADMIN, UserRole.SUPER_ADMIN)
 
 # Staff (doctor, nurse, admin, receptionist)
-require_staff = require_roles(UserRole.DOCTOR, UserRole.NURSE, UserRole.ADMIN, UserRole.RECEPTIONIST)
+require_staff = require_roles(UserRole.DOCTOR, UserRole.HEAD_PHYSICIAN, UserRole.NURSE, UserRole.HEAD_NURSE, UserRole.ADMIN, UserRole.RECEPTIONIST, UserRole.SUPER_ADMIN)

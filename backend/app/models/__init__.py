@@ -38,6 +38,9 @@ class UserRole(PyEnum):
     ADMIN = "admin"
     NURSE = "nurse"
     RECEPTIONIST = "receptionist"
+    SUPER_ADMIN = "super_admin"
+    HEAD_PHYSICIAN = "head_physician"
+    HEAD_NURSE = "head_nurse"
 
 
 class AppointmentStatus(PyEnum):
@@ -84,6 +87,53 @@ class AuditOutcome(PyEnum):
     PARTIAL = "partial"
 
 
+# FHIR: Organization
+class Organization(Base):
+    """Healthcare Organization / Hospital Facility.
+    
+    FHIR-R4 Mapping: Organization resource
+    Key FHIR fields: identifier, active, type, name, telecom, address
+    """
+    __tablename__ = "organizations"
+
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    name: Mapped[str] = mapped_column(String(255), unique=True, index=True)
+    code: Mapped[str] = mapped_column(String(50), unique=True, index=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    address: Mapped[str | None] = mapped_column(Text, nullable=True)
+    contact_email: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    contact_phone: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+
+    # Medical & Clinical Facility Configuration (Step 2)
+    facility_type: Mapped[str] = mapped_column(String(100), default="Multi-Specialty Hospital")
+    departments: Mapped[list[str]] = mapped_column(JSON, default=list)
+    total_beds: Mapped[int] = mapped_column(Integer, default=0)
+    icu_beds: Mapped[int] = mapped_column(Integer, default=0)
+    has_emergency: Mapped[bool] = mapped_column(Boolean, default=True)
+    has_ambulance: Mapped[bool] = mapped_column(Boolean, default=True)
+
+    # Regulatory & Licensing Credentials (Step 3)
+    license_number: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    abdm_facility_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    insurance_network_code: Mapped[str | None] = mapped_column(String(100), nullable=True)
+
+    # Operational Settings & Review Gate (Step 4)
+    emergency_hotline: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    operating_hours: Mapped[str] = mapped_column(String(100), default="24/7 Emergency & Inpatient")
+    clinical_review_policy: Mapped[str] = mapped_column(String(100), default="Strict Doctor Sign-Off Required")
+
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    users: Mapped[list["User"]] = relationship(
+        "User", back_populates="organization", cascade="all, delete-orphan", foreign_keys="User.organization_id"
+    )
+
+
 # FHIR: User (for authentication)
 class User(Base):
     """User authentication and authorization.
@@ -97,18 +147,33 @@ class User(Base):
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
+    phone: Mapped[str | None] = mapped_column(String(50), unique=True, index=True, nullable=True)
+    organization_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("organizations.organization_id", ondelete="CASCADE"), nullable=True, index=True
+    )
     hashed_password: Mapped[str] = mapped_column(String(255))
     full_name: Mapped[str] = mapped_column(String(255), index=True)
     role: Mapped[UserRole] = mapped_column(
         Enum(UserRole, values_callable=lambda x: [e.value for e in x]), default=UserRole.PATIENT, index=True
     )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+
+    # Institutional Staffing & Department Hierarchy (4-Step Provisioning)
+    department: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
+    designation: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    qualifications: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    experience_years: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    room_number: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    shift: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    supervisor_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.user_id"), nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationships
-    patient_profile: Mapped[Optional["Patient"]] = relationship(back_populates="user", uselist=False)
-    doctor_profile: Mapped[Optional["Doctor"]] = relationship(back_populates="user", uselist=False)
+    organization: Mapped[Optional["Organization"]] = relationship("Organization", back_populates="users", foreign_keys=[organization_id])
+    patient_profile: Mapped[Optional["Patient"]] = relationship(back_populates="user", uselist=False, cascade="all, delete-orphan")
+    doctor_profile: Mapped[Optional["Doctor"]] = relationship(back_populates="user", uselist=False, cascade="all, delete-orphan")
 
 
 # =============================================================================
@@ -140,9 +205,9 @@ class Patient(Base):
     )
     abha_address: Mapped[str | None] = mapped_column(String(255), unique=True, index=True)
     full_name: Mapped[str] = mapped_column(String(255), index=True)
-    date_of_birth: Mapped[Date] = mapped_column(Date)
-    gender: Mapped[str] = mapped_column(String(50))
-    phone: Mapped[str | None] = mapped_column(String(50))
+    date_of_birth: Mapped[Date | None] = mapped_column(Date, nullable=True)
+    gender: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    phone: Mapped[str | None] = mapped_column(String(50), index=True)
     email: Mapped[str | None] = mapped_column(String(255))
     address: Mapped[str | None] = mapped_column(Text)
     emergency_contact_name: Mapped[str | None] = mapped_column(String(255))
@@ -183,6 +248,17 @@ class Doctor(Base):
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
     full_name: Mapped[str] = mapped_column(String(255), index=True)
     phone: Mapped[str | None] = mapped_column(String(50))
+
+    # Institutional Staffing & Department Hierarchy
+    department: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
+    designation: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    qualifications: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    experience_years: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    room_number: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    shift: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    is_head_physician: Mapped[bool] = mapped_column(Boolean, default=False)
+    supervisor_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.user_id"), nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

@@ -170,7 +170,15 @@ async def list_doctors(
     current_user: User = Depends(get_current_active_user),
 ):
     """List doctors with pagination and optional specialty filter. Accessible to patients, doctors, and admins."""
-    if current_user.role not in (UserRole.ADMIN, UserRole.DOCTOR, UserRole.PATIENT):
+    if current_user.role not in (
+        UserRole.ADMIN,
+        UserRole.SUPER_ADMIN,
+        UserRole.DOCTOR,
+        UserRole.HEAD_PHYSICIAN,
+        UserRole.NURSE,
+        UserRole.HEAD_NURSE,
+        UserRole.PATIENT,
+    ):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Insufficient permissions to list doctors",
@@ -202,3 +210,142 @@ async def list_doctors(
         page_size=page_size,
         total_pages=total_pages,
     )
+
+
+from pydantic import BaseModel, EmailStr, Field
+from app.services.auth.rbac import require_head_physician
+from app.services.auth.service import check_credentials_available, get_password_hash, normalize_phone
+from app.models import AuditLog, AuditOutcome
+
+
+class JuniorPhysicianProvisionRequest(BaseModel):
+    """Schema for Head Physician to provision junior clinical staff within their department."""
+    email: EmailStr
+    password: str = Field(min_length=8)
+    full_name: str
+    license_number: str
+    qualifications: str
+    designation: str = "Junior Resident"
+    specialty: str | None = None
+    experience_years: int = 1
+    room_number: str | None = None
+    shift: str = "Morning (08:00 - 16:00)"
+    phone: str | None = None
+
+
+@router.get("/department-team")
+async def get_department_team(
+    db: AsyncSession = Depends(get_db),
+    current_head: User = Depends(require_head_physician),
+):
+    """Fetch clinical team members belonging strictly to the Head Physician's department."""
+    dept = current_head.department or "General Medicine"
+    query = select(Doctor).join(User, Doctor.user_id == User.user_id).where(
+        (Doctor.department == dept) | (Doctor.supervisor_id == current_head.user_id)
+    )
+    if current_head.organization_id:
+        query = query.where(User.organization_id == current_head.organization_id)
+
+    result = await db.execute(query.order_by(Doctor.is_head_physician.desc(), Doctor.full_name.asc()))
+    doctors = result.scalars().all()
+
+    return {
+        "department": dept,
+        "head_physician": {
+            "name": current_head.full_name,
+            "email": current_head.email,
+            "designation": current_head.designation,
+        },
+        "total_members": len(doctors),
+        "team": doctors,
+    }
+
+
+@router.post("/junior-staff", status_code=status.HTTP_201_CREATED)
+async def provision_junior_staff(
+    req: JuniorPhysicianProvisionRequest,
+    db: AsyncSession = Depends(get_db),
+    current_head: User = Depends(require_head_physician),
+):
+    """Head Physician provisions a junior physician or resident strictly scoped to their department."""
+    dept = current_head.department or "General Medicine"
+    clean_phone = normalize_phone(req.phone) if req.phone else None
+
+    # 1. Universal uniqueness validation across all account types
+    await check_credentials_available(db, email=req.email, phone=clean_phone)
+
+    # 2. Validate medical license uniqueness
+    existing_license = await db.execute(
+        select(Doctor).where(Doctor.license_number == req.license_number)
+    )
+    if existing_license.scalar_one_or_none():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Medical license {req.license_number} is already registered to another doctor.",
+        )
+
+    # 3. Create User account locked to Head Physician's department and supervisor
+    hashed_pwd = get_password_hash(req.password)
+    new_user = User(
+        email=req.email,
+        phone=clean_phone,
+        hashed_password=hashed_pwd,
+        full_name=req.full_name,
+        role=UserRole.DOCTOR,
+        organization_id=current_head.organization_id,
+        department=dept,
+        designation=req.designation,
+        qualifications=req.qualifications,
+        experience_years=req.experience_years,
+        room_number=req.room_number,
+        shift=req.shift,
+        supervisor_id=current_head.user_id,
+        is_active=True,
+    )
+    db.add(new_user)
+    await db.flush()
+
+    # 4. Create Doctor clinical profile
+    new_doctor = Doctor(
+        user_id=new_user.user_id,
+        email=new_user.email,
+        full_name=new_user.full_name,
+        specialty=req.specialty or dept,
+        license_number=req.license_number,
+        hospital_affiliation=current_head.doctor_profile.hospital_affiliation if current_head.doctor_profile else "AI-HOS Medical Center",
+        phone=clean_phone,
+        department=dept,
+        designation=req.designation,
+        qualifications=req.qualifications,
+        experience_years=req.experience_years,
+        room_number=req.room_number,
+        shift=req.shift,
+        is_head_physician=False,
+        supervisor_id=current_head.user_id,
+    )
+    db.add(new_doctor)
+    await db.flush()
+
+    # 5. Audit Logging
+    audit_entry = AuditLog(
+        user_id=current_head.user_id,
+        action="HEAD_PHYSICIAN_PROVISION_JUNIOR",
+        resource_type="doctors",
+        resource_id=new_doctor.doctor_id,
+        outcome=AuditOutcome.SUCCESS,
+        details={
+            "provisioned_email": new_user.email,
+            "department": dept,
+            "designation": req.designation,
+            "license_number": req.license_number,
+            "supervisor_id": str(current_head.user_id),
+        },
+    )
+    db.add(audit_entry)
+    await db.commit()
+    await db.refresh(new_doctor)
+
+    return {
+        "message": f"Successfully onboarded {req.full_name} ({req.designation}) into Department of {dept}.",
+        "doctor": new_doctor,
+    }

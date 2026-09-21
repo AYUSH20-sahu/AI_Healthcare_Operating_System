@@ -37,8 +37,8 @@ export function Sidebar({
 
     // Navigation configs tailored to each role
     const getNavItems = (): { section: string; items: NavItem[] }[] => {
-        if (role === 'nurse') {
-            return [
+        if (role === 'nurse' || role === 'head_nurse') {
+            const nurseNav = [
                 {
                     section: 'Nursing Workstation',
                     items: [
@@ -60,7 +60,7 @@ export function Sidebar({
                             name: 'Inpatient Beds & Vitals',
                             href: '/nurse',
                             badge: 'Rounds',
-                            badgeVariant: 'purple',
+                            badgeVariant: 'purple' as const,
                             icon: (
                                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
@@ -70,10 +70,31 @@ export function Sidebar({
                     ],
                 },
             ];
+
+            if (role === 'head_nurse') {
+                nurseNav.push({
+                    section: 'Departmental Leadership',
+                    items: [
+                        {
+                            name: 'Staff & Ward Onboarding',
+                            href: '/nurse/staff',
+                            badge: 'Head Nurse',
+                            badgeVariant: 'purple' as const,
+                            icon: (
+                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                                </svg>
+                            ),
+                        },
+                    ],
+                });
+            }
+
+            return nurseNav;
         }
 
-        if (role === 'doctor') {
-            return [
+        if (role === 'doctor' || role === 'head_physician') {
+            const docNav = [
                 {
                     section: 'Clinical Workstation',
                     items: [
@@ -90,7 +111,7 @@ export function Sidebar({
                             name: 'Ambient Scribe (Voice)',
                             href: '/doctor/scribe',
                             badge: 'AI LIVE',
-                            badgeVariant: 'purple',
+                            badgeVariant: 'purple' as const,
                             icon: (
                                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 100-6 3 3 0 000 6z" />
@@ -110,7 +131,7 @@ export function Sidebar({
                             name: 'Human Approval Gate (M23)',
                             href: '/doctor/approvals',
                             badge: 'M23',
-                            badgeVariant: 'warning',
+                            badgeVariant: 'warning' as const,
                             icon: (
                                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
@@ -135,7 +156,7 @@ export function Sidebar({
                             name: 'Schedule & Consultations',
                             href: '/doctor/consultations',
                             badge: 'Telehealth',
-                            badgeVariant: 'purple',
+                            badgeVariant: 'purple' as const,
                             icon: (
                                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -145,6 +166,27 @@ export function Sidebar({
                     ],
                 },
             ];
+
+            if (role === 'head_physician') {
+                docNav.push({
+                    section: 'Departmental Leadership',
+                    items: [
+                        {
+                            name: 'Clinical Team & Residents',
+                            href: '/doctor/staff',
+                            badge: 'Head Lead',
+                            badgeVariant: 'purple' as const,
+                            icon: (
+                                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                                </svg>
+                            ),
+                        },
+                    ],
+                });
+            }
+
+            return docNav;
         }
 
         if (role === 'patient') {
@@ -325,6 +367,17 @@ export function Sidebar({
             {
                 section: 'Governance & Infrastructure',
                 items: [
+                    {
+                        name: 'Organizations & Facilities',
+                        href: '/admin/organizations',
+                        badge: 'Multi-Tenant',
+                        badgeVariant: 'primary',
+                        icon: (
+                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                            </svg>
+                        ),
+                    },
                     {
                         name: 'User & Role Clearances',
                         href: '/admin/users',

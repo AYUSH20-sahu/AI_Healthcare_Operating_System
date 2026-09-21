@@ -13,7 +13,7 @@ import {
 import { Button, Card, CardContent, Badge, ErrorAlert } from '@/components/ui';
 
 export default function AdminPage() {
-    const { user } = useAuth();
+    const { user, isSuperAdmin } = useAuth();
     const [data, setData] = useState<OperationalDashboardData | null>(null);
     const [healthData, setHealthData] = useState<HealthStatusData | null>(null);
     const [telemetry, setTelemetry] = useState<TelemetryMetricsData | null>(null);
@@ -62,16 +62,24 @@ export default function AdminPage() {
                         <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white flex items-center gap-2">
                             <span>🏥 Hospital Operations Console</span>
                         </h1>
-                        <Badge variant="primary" className="text-xs uppercase font-bold tracking-wider">
-                            Executive Admin
+                        <Badge variant={isSuperAdmin ? 'primary' : 'outline'} className="text-xs uppercase font-bold tracking-wider">
+                            {isSuperAdmin ? 'Super Administrator' : 'Facility Admin'}
                         </Badge>
                     </div>
                     <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                        Logged in as <span className="font-semibold text-slate-700 dark:text-slate-200">{user?.full_name || 'Administrator'}</span> ({user?.email}) • Unified clinical throughput, real-time queue & telemetry
+                        Logged in as <span className="font-semibold text-slate-700 dark:text-slate-200">{user?.full_name || 'Administrator'}</span> ({user?.email}) • {isSuperAdmin ? 'Full authority across all healthcare facilities' : 'Scoped to assigned healthcare organization'}
                     </p>
                 </div>
 
                 <div className="flex items-center gap-2">
+                    {isSuperAdmin && (
+                        <Link href="/admin/organizations">
+                            <Button variant="primary" size="sm" className="text-xs bg-purple-600 hover:bg-purple-700 text-white border-0 shadow-md shadow-purple-500/20 flex items-center gap-1.5">
+                                <span>🏛️</span>
+                                <span>Manage Organizations</span>
+                            </Button>
+                        </Link>
+                    )}
                     <Button
                         variant="secondary"
                         size="sm"
