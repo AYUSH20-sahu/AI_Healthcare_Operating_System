@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { adminAuditApi, AuditLogItem, AuditLogListResponse } from '@/lib/api';
 import { Button, Card, CardContent, Badge } from '@/components/ui';
@@ -30,11 +30,7 @@ export default function AdminAuditPage() {
     // Selected log item for payload drawer inspection
     const [selectedLog, setSelectedLog] = useState<AuditLogItem | null>(null);
 
-    useEffect(() => {
-        loadLogs();
-    }, [page, resourceType, outcomeFilter, startDate, endDate]);
-
-    const loadLogs = async () => {
+    const loadLogs = useCallback(async () => {
         setIsLoading(true);
         try {
             const res = await adminAuditApi.listLogs({
@@ -52,7 +48,11 @@ export default function AdminAuditPage() {
         } finally {
             setIsLoading(false);
         }
-    };
+    }, [page, resourceType, outcomeFilter, startDate, endDate, searchTerm]);
+
+    useEffect(() => {
+        loadLogs();
+    }, [loadLogs]);
 
     const handleSearchSubmit = (e: React.FormEvent) => {
         e.preventDefault();

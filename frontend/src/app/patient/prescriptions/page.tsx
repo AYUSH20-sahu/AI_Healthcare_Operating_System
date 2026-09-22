@@ -35,7 +35,10 @@ export default function PatientPrescriptionsPage() {
             const res = await fetch(`${API_BASE}/prescriptions/${prescriptionId}/pdf`, {
                 headers: { Authorization: `Bearer ${token}` },
             });
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            if (!res.ok) {
+                const errData = await res.json().catch(() => null);
+                throw new Error(errData?.detail || `Failed to download PDF (HTTP ${res.status})`);
+            }
             const blob = await res.blob();
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -43,9 +46,9 @@ export default function PatientPrescriptionsPage() {
             a.download = `Prescription_${prescriptionId.slice(0, 8).toUpperCase()}_Dr_${doctorName.replace(/\s+/g, '_')}.pdf`;
             a.click();
             URL.revokeObjectURL(url);
-        } catch (err) {
+        } catch (err: any) {
             console.error('PDF download failed:', err);
-            alert('Could not generate PDF. Please try again.');
+            alert(err.message || 'Could not generate prescription PDF. Please try again.');
         } finally {
             setDownloadingId(null);
         }

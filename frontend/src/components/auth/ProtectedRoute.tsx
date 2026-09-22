@@ -23,6 +23,14 @@ export function ProtectedRoute({
     useEffect(() => {
         if (!isLoading) {
             if (!isAuthenticated) {
+                if (
+                    pathname?.startsWith('/patient/login') ||
+                    pathname?.startsWith('/patient/register') ||
+                    pathname?.startsWith('/auth/login') ||
+                    pathname?.startsWith('/auth/register')
+                ) {
+                    return;
+                }
                 const redirectParam = pathname ? `?redirect=${encodeURIComponent(pathname)}` : '';
                 if (pathname?.startsWith('/patient')) {
                     router.replace(`/patient/login${redirectParam}`);

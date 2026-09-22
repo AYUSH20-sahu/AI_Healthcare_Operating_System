@@ -38,6 +38,10 @@ class Settings(BaseSettings):
     # Super Admin Privilege Boundary (SEC-06)
     SUPER_ADMIN_EMAIL: str = "admin@test.com"
 
+    # Seeding & Demo accounts (development only)
+    SEED_INITIAL_ADMIN: bool = True
+    SEED_DEMO_USERS: bool = False
+
     # LLM
     LLM_PROVIDER: str = "openai"
     LLM_API_KEY: str | None = None
@@ -109,7 +113,7 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_production_settings(self):
-        if self.APP_ENV == "production":
+        if self.APP_ENV in ("production", "staging"):
             insecure_defaults = [
                 "aihos_dev_jwt_secret_key_change_in_production_min32chars!",
                 "dev_insecure_jwt_secret_change_in_production_min32chars",
@@ -121,7 +125,12 @@ class Settings(BaseSettings):
                 or len(self.JWT_SECRET_KEY) < 32
                 or any(self.JWT_SECRET_KEY.startswith(d) for d in insecure_defaults)
             ):
-                raise ValueError("JWT_SECRET_KEY must be set to a strong secret in production")
+                raise ValueError("CRITICAL: JWT_SECRET_KEY must be set to a strong secret in production/staging.")
+
+            # Ensure production DATABASE_URL is explicitly set and not localhost/default
+            insecure_db_patterns = ["localhost:5432/ai_hos", "postgres:postgres@localhost", "127.0.0.1:5432"]
+            if not self.DATABASE_URL or any(p in self.DATABASE_URL for p in insecure_db_patterns):
+                raise ValueError("CRITICAL: DATABASE_URL must be configured with a production database in production/staging.")
         return self
 
     model_config = SettingsConfigDict(

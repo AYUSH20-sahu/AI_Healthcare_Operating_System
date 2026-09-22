@@ -44,11 +44,12 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
 
 class RateLimiter:
-    """Thread-safe in-memory sliding-window rate limiter."""
+    """Thread-safe sliding-window rate limiter with Redis backend and in-memory fallback."""
 
     def __init__(self):
         # Maps (ip, category) -> deque of request timestamps
         self._history: Dict[Tuple[str, str], deque[float]] = {}
+        self._redis_client = None
         # Route categorization and limits: (max_requests, window_seconds)
         self.limits: Dict[str, Tuple[int, int]] = {
             "auth": (20, 60),      # 20 requests per minute for login/signup/otp
@@ -57,13 +58,22 @@ class RateLimiter:
         }
 
     def _get_redis(self):
+        if self._redis_client is not None:
+            return self._redis_client
         try:
             redis_mod = importlib.import_module("redis")
             from app.core.config import settings
-            r = redis_mod.from_url(settings.REDIS_URL, decode_responses=True, socket_timeout=0.5)
+            r = redis_mod.from_url(
+                settings.REDIS_URL,
+                decode_responses=True,
+                socket_timeout=0.5,
+                socket_connect_timeout=0.5,
+            )
             r.ping()
-            return r
+            self._redis_client = r
+            return self._redis_client
         except Exception:
+            self._redis_client = None
             return None
 
     def _get_category(self, path: str) -> str:
@@ -104,6 +114,7 @@ class RateLimiter:
                 remaining = max(0, max_requests - (count + 1))
                 return True, remaining, 0
             except Exception:
+                self._redis_client = None  # Reset client so next cycle recovers cleanly
                 pass  # Fall back to in-memory sliding window
 
         key = (client_ip, category)

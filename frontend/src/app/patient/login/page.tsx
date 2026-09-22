@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useState, Suspense } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth';
+import { validatePostLoginRedirect } from '@/lib/redirect-validator';
 import {
     Card,
     CardHeader,
@@ -20,9 +21,9 @@ type LoginMethod = 'email' | 'phone';
 function PatientLoginForm() {
     const router = useRouter();
     const searchParams = useSearchParams();
-    const redirectUrl = searchParams.get('redirect') || '/patient';
+    const rawRedirect = searchParams.get('redirect');
 
-    const { patientLogin, isLoading } = useAuth();
+    const { patientLogin, isLoading, isAuthenticated, isPatient } = useAuth();
     const [loginMethod, setLoginMethod] = useState<LoginMethod>('email');
     const [email, setEmail] = useState('');
     const [phone, setPhone] = useState('');
@@ -31,6 +32,13 @@ function PatientLoginForm() {
     const [rememberMe, setRememberMe] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [submitting, setSubmitting] = useState(false);
+
+    useEffect(() => {
+        if (!isLoading && isAuthenticated && isPatient) {
+            const destination = validatePostLoginRedirect(rawRedirect, 'patient');
+            router.replace(destination);
+        }
+    }, [isLoading, isAuthenticated, isPatient, rawRedirect, router]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -55,7 +63,8 @@ function PatientLoginForm() {
         try {
             setSubmitting(true);
             await patientLogin(identifier, password);
-            router.push(redirectUrl.startsWith('/patient') ? redirectUrl : '/patient');
+            const destination = validatePostLoginRedirect(rawRedirect, 'patient');
+            router.push(destination);
         } catch (err: unknown) {
             const message = err instanceof Error ? err.message : 'Invalid credentials. Please verify your details.';
             setError(message);

@@ -42,6 +42,16 @@ export function validatePostLoginRedirect(redirectUrl: string | null | undefined
         return fallback;
     }
 
+    // Reject redirecting back to login or registration pages to prevent infinite loops
+    if (
+        trimmed.startsWith('/patient/login') ||
+        trimmed.startsWith('/patient/register') ||
+        trimmed.startsWith('/auth/login') ||
+        trimmed.startsWith('/auth/register')
+    ) {
+        return fallback;
+    }
+
     // Role boundary validation:
     // Only doctors / physicians can route to /doctor
     if (trimmed.startsWith('/doctor') && userRole !== 'doctor' && userRole !== 'physician') {

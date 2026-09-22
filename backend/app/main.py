@@ -44,6 +44,21 @@ sentry_dsn = os.getenv("SENTRY_DSN") or settings.SENTRY_DSN
 if sentry_dsn and not sentry_dsn.startswith("your_sentry"):
     try:
         import sentry_sdk  # type: ignore
+
+        def _scrub_sensitive_data(event, hint):
+            # HIPAA & OWASP: Scrub sensitive authentication headers and credentials
+            if "request" in event:
+                req = event["request"]
+                if "headers" in req:
+                    for sensitive in ("authorization", "x-api-key", "cookie"):
+                        if sensitive in req["headers"]:
+                            req["headers"][sensitive] = "[FILTERED]"
+                if "data" in req and isinstance(req["data"], dict):
+                    for key in list(req["data"].keys()):
+                        if any(k in key.lower() for k in ("password", "token", "secret", "cvv")):
+                            req["data"][key] = "[FILTERED]"
+            return event
+
         sentry_init_kwargs = {
             "dsn": sentry_dsn,
             "send_default_pii": True,
@@ -53,6 +68,7 @@ if sentry_dsn and not sentry_dsn.startswith("your_sentry"):
             "profile_lifecycle": "trace",
             "environment": settings.APP_ENV,
             "release": "ai-hos@0.1.0",
+            "before_send": _scrub_sensitive_data,
         }
         try:
             sentry_sdk.init(**sentry_init_kwargs)
@@ -195,29 +211,31 @@ async def startup_event():
                     except Exception:
                         pass
 
-        # Ensure ONLY Global Super Administrator exists (Zero dummy data/organizations)
-        if AsyncSessionLocal:
+        # Ensure Global Super Administrator exists ONLY in development when explicitly enabled.
+        # CRITICAL-04 Remediation: Never overwrite passwords of existing accounts on restart.
+        if (
+            AsyncSessionLocal
+            and settings.APP_ENV == "development"
+            and getattr(settings, "SEED_INITIAL_ADMIN", True)
+        ):
             async with AsyncSessionLocal() as session:
-                super_admin_email = "superadmin@aihos.org"
+                super_admin_email = getattr(settings, "SUPER_ADMIN_EMAIL", "superadmin@aihos.org")
                 existing = await get_user_by_email(session, super_admin_email)
                 if not existing:
+                    initial_password = os.getenv("INITIAL_SUPER_ADMIN_PASSWORD", "adminpassword123")
                     await create_user(
                         session,
                         UserCreate(
                             email=super_admin_email,
-                            password="adminpassword123",
+                            password=initial_password,
                             full_name="AI-HOS Global Super Administrator",
                             phone="+919999000001",
                             role="super_admin",
                         ),
                         role="super_admin",
                     )
-                    print(f"[AI-HOS Startup] Provisioned Super Admin: {super_admin_email}")
-                else:
-                    existing.hashed_password = get_password_hash("adminpassword123")
-                    existing.role = UserRole.SUPER_ADMIN
-                    existing.is_active = True
-                    await session.commit()
+                    print(f"[AI-HOS Startup] Development Super Admin provisioned: {super_admin_email}")
+                # If existing, preserve its existing password and configuration untouched.
     except Exception as e:
         print(f"[AI-HOS Startup] Notice during startup initialization: {e}")
 
