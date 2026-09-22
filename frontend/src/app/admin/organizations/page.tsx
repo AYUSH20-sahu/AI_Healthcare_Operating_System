@@ -485,6 +485,7 @@ export default function AdminOrganizationsPage() {
                                     id="newAdminName"
                                     label="Administrator Full Name"
                                     required
+                                    allowedChars="alpha"
                                     placeholder="e.g. Dr. Sarah Connor"
                                     value={createForm.admin_name}
                                     onChange={(e) => setCreateForm({ ...createForm, admin_name: e.target.value })}
@@ -507,7 +508,9 @@ export default function AdminOrganizationsPage() {
                                         id="newAdminPhone"
                                         label="Admin Mobile Phone"
                                         type="tel"
-                                        placeholder="+91 98765 43210"
+                                        allowedChars="numeric"
+                                        maxLength={15}
+                                        placeholder="9876543210"
                                         value={createForm.admin_phone || ''}
                                         onChange={(e) => setCreateForm({ ...createForm, admin_phone: e.target.value })}
                                         disabled={createLoading}

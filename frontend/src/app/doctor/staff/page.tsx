@@ -322,6 +322,7 @@ export default function DoctorStaffManagementPage() {
                                 id="junior-name"
                                 label="Full Legal Name *"
                                 required
+                                allowedChars="alpha"
                                 placeholder="e.g. Dr. Aryan Khan, MD"
                                 value={formData.full_name}
                                 onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
@@ -341,8 +342,11 @@ export default function DoctorStaffManagementPage() {
                                 <Input
                                     id="junior-phone"
                                     label="Mobile Phone *"
+                                    type="tel"
+                                    allowedChars="numeric"
+                                    maxLength={15}
                                     required
-                                    placeholder="+919876543210"
+                                    placeholder="9876543210"
                                     value={formData.phone || ''}
                                     onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                                 />

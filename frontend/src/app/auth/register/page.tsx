@@ -356,7 +356,8 @@ export default function RegisterOrganizationPage() {
                                             id="adminName"
                                             label="Administrator Full Legal Name"
                                             required
-                                            placeholder="e.g. Dr. Arthur Pendelton"
+                                            allowedChars="alpha"
+                                            placeholder="e.g. Dr Arthur Pendelton"
                                             value={adminName}
                                             onChange={(e) => setAdminName(e.target.value)}
                                             disabled={submitting}
@@ -378,8 +379,10 @@ export default function RegisterOrganizationPage() {
                                                 id="phone"
                                                 label="Administrator Mobile Number"
                                                 type="tel"
+                                                allowedChars="numeric"
+                                                maxLength={15}
                                                 required
-                                                placeholder="+91 98765 43210"
+                                                placeholder="9876543210"
                                                 value={phone}
                                                 onChange={(e) => setPhone(e.target.value)}
                                                 disabled={submitting}

@@ -180,8 +180,10 @@ function PatientLoginForm() {
                                     id="patientPhone"
                                     label="Registered Mobile Phone Number"
                                     type="tel"
+                                    allowedChars="numeric"
+                                    maxLength={15}
                                     required
-                                    placeholder="+91 98765 43210"
+                                    placeholder="9876543210"
                                     value={phone}
                                     onChange={(e) => setPhone(e.target.value)}
                                     disabled={submitting || isLoading}

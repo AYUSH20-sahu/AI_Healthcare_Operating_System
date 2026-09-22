@@ -5,7 +5,7 @@ const nextConfig = {
         const rawBackendUrl =
             process.env.BACKEND_INTERNAL_URL ||
             process.env.NEXT_PUBLIC_API_URL ||
-            'http://ai-hos-backend:8000';
+            'http://localhost:8000';
         const backendBase = rawBackendUrl.replace(/\/api\/v1\/?$/, '').replace(/\/$/, '');
         return [
             {

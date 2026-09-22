@@ -2,6 +2,8 @@
 
 import React from 'react';
 
+export type AllowedChars = 'numeric' | 'alpha' | 'alphanumeric' | 'all';
+
 export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
     label?: string;
     error?: string;
@@ -9,6 +11,8 @@ export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> 
     leadingIcon?: React.ReactNode;
     trailingIcon?: React.ReactNode;
     onTrailingIconClick?: () => void;
+    allowedChars?: AllowedChars;
+    allowDecimal?: boolean;
 }
 
 export const Input = React.forwardRef<HTMLInputElement, InputProps>(
@@ -24,11 +28,111 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
             id,
             required,
             disabled,
+            allowedChars,
+            allowDecimal,
+            onKeyDown,
+            onChange,
+            onPaste,
             ...props
         },
         ref
     ) => {
         const inputId = id || (label ? label.toLowerCase().replace(/\s+/g, '-') : undefined);
+
+        // Password fields must allow all characters (letters, numbers, and symbols like @, #)
+        const isPassword = props.type === 'password' || id?.toLowerCase().includes('password');
+        const effectiveAllowed: AllowedChars = isPassword
+            ? 'all'
+            : allowedChars || (props.type === 'tel' || props.type === 'number' ? 'numeric' : 'all');
+
+        const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+            onKeyDown?.(e);
+            if (e.defaultPrevented || effectiveAllowed === 'all') return;
+
+            // Allow navigation and editing control keys
+            if (
+                e.key === 'Backspace' ||
+                e.key === 'Delete' ||
+                e.key === 'Tab' ||
+                e.key === 'Enter' ||
+                e.key === 'Escape' ||
+                e.key.startsWith('Arrow') ||
+                e.key === 'Home' ||
+                e.key === 'End' ||
+                e.ctrlKey ||
+                e.metaKey ||
+                e.altKey
+            ) {
+                return;
+            }
+
+            if (effectiveAllowed === 'numeric') {
+                if (allowDecimal && (e.key === '.' || e.key === 'Decimal')) {
+                    if (e.currentTarget.value.includes('.')) {
+                        e.preventDefault();
+                    }
+                    return;
+                }
+                if (!/^[0-9]$/.test(e.key)) {
+                    e.preventDefault();
+                }
+            } else if (effectiveAllowed === 'alpha') {
+                if (!/^[a-zA-Z\s]$/.test(e.key)) {
+                    e.preventDefault();
+                }
+            } else if (effectiveAllowed === 'alphanumeric') {
+                if (!/^[a-zA-Z0-9\s]$/.test(e.key)) {
+                    e.preventDefault();
+                }
+            }
+        };
+
+        const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+            let val = e.target.value;
+            if (effectiveAllowed === 'numeric') {
+                if (allowDecimal) {
+                    const parts = val.replace(/[^0-9.]/g, '').split('.');
+                    val = parts[0] + (parts.length > 1 ? '.' + parts.slice(1).join('') : '');
+                } else {
+                    val = val.replace(/\D/g, '');
+                }
+                if (props.maxLength && val.length > props.maxLength) {
+                    val = val.slice(0, props.maxLength);
+                }
+                e.target.value = val;
+            } else if (effectiveAllowed === 'alpha') {
+                val = val.replace(/[^a-zA-Z\s]/g, '');
+                e.target.value = val;
+            } else if (effectiveAllowed === 'alphanumeric') {
+                val = val.replace(/[^a-zA-Z0-9\s]/g, '');
+                e.target.value = val;
+            }
+
+            onChange?.(e);
+        };
+
+        const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+            onPaste?.(e);
+            if (e.defaultPrevented || effectiveAllowed === 'all') return;
+
+            const pasted = e.clipboardData.getData('text');
+            if (effectiveAllowed === 'numeric') {
+                const isValid = allowDecimal ? /^[0-9]*\.?[0-9]*$/.test(pasted) : /^[0-9]*$/.test(pasted);
+                if (!isValid) {
+                    e.preventDefault();
+                    const cleaned = allowDecimal
+                        ? pasted.replace(/[^0-9.]/g, '')
+                        : pasted.replace(/\D/g, '');
+                    document.execCommand?.('insertText', false, cleaned);
+                }
+            } else if (effectiveAllowed === 'alpha') {
+                if (!/^[a-zA-Z\s]*$/.test(pasted)) {
+                    e.preventDefault();
+                    const cleaned = pasted.replace(/[^a-zA-Z\s]/g, '');
+                    document.execCommand?.('insertText', false, cleaned);
+                }
+            }
+        };
 
         return (
             <div className="w-full space-y-1.5">
@@ -50,6 +154,27 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
                         ref={ref}
                         id={inputId}
                         disabled={disabled}
+                        onKeyDown={handleKeyDown}
+                        onChange={handleChange}
+                        onPaste={handlePaste}
+                        inputMode={
+                            props.inputMode ||
+                            (effectiveAllowed === 'numeric'
+                                ? allowDecimal
+                                    ? 'decimal'
+                                    : 'numeric'
+                                : undefined)
+                        }
+                        pattern={
+                            props.pattern ||
+                            (effectiveAllowed === 'numeric'
+                                ? allowDecimal
+                                    ? '[0-9]*\\.?[0-9]*'
+                                    : '[0-9]*'
+                                : effectiveAllowed === 'alpha'
+                                ? '[a-zA-Z\\s]*'
+                                : undefined)
+                        }
                         className={`w-full h-11 px-3.5 text-sm rounded-lg transition-colors duration-150
                             bg-white dark:bg-slate-900/80 text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500
                             border ${

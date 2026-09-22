@@ -698,6 +698,7 @@ export default function AdminUserManagementPage() {
                                             id="prov-name"
                                             label="Full Legal Name *"
                                             required
+                                            allowedChars="alpha"
                                             placeholder="e.g. Dr. Rajesh Verma, MD"
                                             value={provisionForm.full_name}
                                             onChange={(e) => setProvisionForm({ ...provisionForm, full_name: e.target.value })}
@@ -718,8 +719,11 @@ export default function AdminUserManagementPage() {
                                         <Input
                                             id="prov-phone"
                                             label="Mobile Phone Number *"
+                                            type="tel"
+                                            allowedChars="numeric"
+                                            maxLength={15}
                                             required
-                                            placeholder="+919876543210"
+                                            placeholder="9876543210"
                                             value={provisionForm.phone || ''}
                                             onChange={(e) => setProvisionForm({ ...provisionForm, phone: e.target.value })}
                                         />
@@ -727,7 +731,10 @@ export default function AdminUserManagementPage() {
                                         <Input
                                             id="prov-emergency"
                                             label="Emergency Contact Phone"
-                                            placeholder="+919876500000"
+                                            type="tel"
+                                            allowedChars="numeric"
+                                            maxLength={15}
+                                            placeholder="9876500000"
                                             value={provisionForm.emergency_contact_phone || ''}
                                             onChange={(e) => setProvisionForm({ ...provisionForm, emergency_contact_phone: e.target.value })}
                                         />
@@ -770,6 +777,7 @@ export default function AdminUserManagementPage() {
                                             id="prov-specialty"
                                             label="Specialty / Clinical Focus *"
                                             required
+                                            allowedChars="alpha"
                                             placeholder="e.g. Cardiology, Critical Care, Pediatrics"
                                             value={provisionForm.specialty || ''}
                                             onChange={(e) => setProvisionForm({ ...provisionForm, specialty: e.target.value })}
@@ -1095,6 +1103,7 @@ export default function AdminUserManagementPage() {
                                     <Input
                                         id="role-specialty"
                                         label="Clinical Specialty"
+                                        allowedChars="alpha"
                                         placeholder="e.g. Cardiology"
                                         value={roleSpecialty}
                                         onChange={(e) => setRoleSpecialty(e.target.value)}

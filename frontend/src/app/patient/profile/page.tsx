@@ -151,6 +151,7 @@ export default function PatientProfilePage() {
                                     </label>
                                     <Input
                                         value={fullName}
+                                        allowedChars="alpha"
                                         onChange={(e) => setFullName(e.target.value)}
                                         placeholder="John Doe"
                                         required
@@ -162,9 +163,12 @@ export default function PatientProfilePage() {
                                         Phone Number
                                     </label>
                                     <Input
+                                        type="tel"
+                                        allowedChars="numeric"
+                                        maxLength={15}
                                         value={phone}
                                         onChange={(e) => setPhone(e.target.value)}
-                                        placeholder="+91 98765 43210"
+                                        placeholder="9876543210"
                                     />
                                 </div>
 
@@ -210,6 +214,7 @@ export default function PatientProfilePage() {
                                     </label>
                                     <Input
                                         value={emergencyName}
+                                        allowedChars="alpha"
                                         onChange={(e) => setEmergencyName(e.target.value)}
                                         placeholder="Spouse / Parent / Next of Kin"
                                     />
@@ -220,9 +225,12 @@ export default function PatientProfilePage() {
                                         Emergency Phone Number
                                     </label>
                                     <Input
+                                        type="tel"
+                                        allowedChars="numeric"
+                                        maxLength={15}
                                         value={emergencyPhone}
                                         onChange={(e) => setEmergencyPhone(e.target.value)}
-                                        placeholder="+91 98765 00000"
+                                        placeholder="9876500000"
                                     />
                                 </div>
                             </div>

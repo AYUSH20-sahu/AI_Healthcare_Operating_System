@@ -121,6 +121,25 @@ function VitalsModal({ patient, onClose, onSave }: { patient: PatientBed; onClos
 
     const criticalAlert = status === 'critical';
 
+    const handleNumberKeyDown = (allowDecimal = false) => (e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (
+            e.key === 'Backspace' ||
+            e.key === 'Delete' ||
+            e.key === 'Tab' ||
+            e.key === 'Enter' ||
+            e.key.startsWith('Arrow') ||
+            e.ctrlKey ||
+            e.metaKey
+        ) return;
+        if (allowDecimal && (e.key === '.' || e.key === 'Decimal')) {
+            if (e.currentTarget.value.includes('.')) e.preventDefault();
+            return;
+        }
+        if (!/^[0-9]$/.test(e.key)) {
+            e.preventDefault();
+        }
+    };
+
     return (
         <Modal isOpen onClose={onClose} title={`Record Vitals — ${patient.patientName}`} size="lg">
             <div className="space-y-5">
@@ -130,18 +149,19 @@ function VitalsModal({ patient, onClose, onSave }: { patient: PatientBed; onClos
                         {patient.patientName.charAt(0)}
                     </div>
                     <div>
-                        <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{patient.patientName} · {patient.age}y {patient.gender}</p>
-                        <p className="text-xs text-slate-500">Bed {patient.bedNumber} · {patient.admittedFor}</p>
+                        <div className="font-semibold text-slate-900 dark:text-slate-100 text-sm">
+                            {patient.patientName} <span className="text-xs text-slate-400 font-normal">({patient.gender}, {patient.age}y)</span>
+                        </div>
+                        <div className="text-xs text-slate-500 dark:text-slate-400">
+                            {patient.ward} • Bed {patient.bedNumber} • ID: <span className="font-mono">{patient.patientId}</span>
+                        </div>
                     </div>
                 </div>
 
-                {/* Critical alert */}
                 {criticalAlert && (
-                    <div className="bg-rose-50 dark:bg-rose-900/20 border border-rose-200 dark:border-rose-800 rounded-xl p-3 flex items-center gap-2">
-                        <svg className="w-5 h-5 text-rose-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        <p className="text-sm font-semibold text-rose-700 dark:text-rose-300">⚠️ Critical values detected — notify attending physician immediately.</p>
+                    <div className="p-3 bg-rose-50 dark:bg-rose-900/30 border border-rose-200 dark:border-rose-800 rounded-xl text-rose-700 dark:text-rose-300 text-xs flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping shrink-0" />
+                        <strong>CRITICAL VITALS:</strong> Readings exceed safety thresholds. Senior physician notification will be triggered upon save.
                     </div>
                 )}
 
@@ -150,42 +170,48 @@ function VitalsModal({ patient, onClose, onSave }: { patient: PatientBed; onClos
                     <div>
                         <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5">Systolic BP (mmHg)</label>
                         <input id="vital-systolic" type="number" min={60} max={250} value={systolic}
-                            onChange={e => setSystolic(Number(e.target.value))}
+                            onKeyDown={handleNumberKeyDown(false)}
+                            onChange={e => setSystolic(Number(e.target.value.replace(/\D/g, '')))}
                             className={`w-full px-3 py-2 rounded-lg border text-sm font-mono ${systolic > 180 ? 'border-rose-400 bg-rose-50 dark:bg-rose-900/20' : systolic > 160 ? 'border-amber-400' : 'border-slate-200 dark:border-slate-700'} dark:bg-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500`}
                         />
                     </div>
                     <div>
                         <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5">Diastolic BP (mmHg)</label>
                         <input id="vital-diastolic" type="number" min={40} max={160} value={diastolic}
-                            onChange={e => setDiastolic(Number(e.target.value))}
+                            onKeyDown={handleNumberKeyDown(false)}
+                            onChange={e => setDiastolic(Number(e.target.value.replace(/\D/g, '')))}
                             className={`w-full px-3 py-2 rounded-lg border text-sm font-mono ${diastolic > 110 ? 'border-rose-400 bg-rose-50 dark:bg-rose-900/20' : 'border-slate-200 dark:border-slate-700'} dark:bg-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500`}
                         />
                     </div>
                     <div>
                         <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5">Pulse (bpm)</label>
                         <input id="vital-pulse" type="number" min={30} max={220} value={pulse}
-                            onChange={e => setPulse(Number(e.target.value))}
+                            onKeyDown={handleNumberKeyDown(false)}
+                            onChange={e => setPulse(Number(e.target.value.replace(/\D/g, '')))}
                             className={`w-full px-3 py-2 rounded-lg border text-sm font-mono ${pulse > 130 ? 'border-rose-400 bg-rose-50 dark:bg-rose-900/20' : pulse > 110 ? 'border-amber-400' : 'border-slate-200 dark:border-slate-700'} dark:bg-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500`}
                         />
                     </div>
                     <div>
                         <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5">SpO₂ (%)</label>
                         <input id="vital-spo2" type="number" min={50} max={100} value={spo2}
-                            onChange={e => setSpo2(Number(e.target.value))}
+                            onKeyDown={handleNumberKeyDown(false)}
+                            onChange={e => setSpo2(Number(e.target.value.replace(/\D/g, '')))}
                             className={`w-full px-3 py-2 rounded-lg border text-sm font-mono ${spo2 < 90 ? 'border-rose-400 bg-rose-50 dark:bg-rose-900/20' : spo2 < 94 ? 'border-amber-400' : 'border-slate-200 dark:border-slate-700'} dark:bg-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500`}
                         />
                     </div>
                     <div>
                         <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5">Temperature (°F)</label>
                         <input id="vital-temp" type="number" min={92} max={108} step={0.1} value={temperature}
-                            onChange={e => setTemperature(parseFloat(e.target.value))}
+                            onKeyDown={handleNumberKeyDown(true)}
+                            onChange={e => setTemperature(parseFloat(e.target.value) || 0)}
                             className={`w-full px-3 py-2 rounded-lg border text-sm font-mono ${temperature > 39.5 ? 'border-rose-400 bg-rose-50 dark:bg-rose-900/20' : temperature > 38.5 ? 'border-amber-400' : 'border-slate-200 dark:border-slate-700'} dark:bg-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500`}
                         />
                     </div>
                     <div>
                         <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1.5">Respiratory Rate (/min)</label>
                         <input id="vital-rr" type="number" min={8} max={60} value={respRate}
-                            onChange={e => setRespRate(Number(e.target.value))}
+                            onKeyDown={handleNumberKeyDown(false)}
+                            onChange={e => setRespRate(Number(e.target.value.replace(/\D/g, '')))}
                             className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 text-sm font-mono dark:bg-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
                         />
                     </div>

@@ -545,8 +545,30 @@ export default function PatientAbhaConsentPage() {
                                         </div>
                                         <input
                                             type="text"
+                                            inputMode="numeric"
+                                            pattern="[0-9]*"
                                             value={otpInput}
-                                            onChange={(e) => setOtpInput(e.target.value)}
+                                            onKeyDown={(e) => {
+                                                if (
+                                                    e.key === 'Backspace' ||
+                                                    e.key === 'Delete' ||
+                                                    e.key === 'Tab' ||
+                                                    e.key === 'Enter' ||
+                                                    e.key.startsWith('Arrow') ||
+                                                    e.ctrlKey ||
+                                                    e.metaKey
+                                                ) return;
+                                                if (!/^[0-9]$/.test(e.key)) e.preventDefault();
+                                            }}
+                                            onChange={(e) => setOtpInput(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                                            onPaste={(e) => {
+                                                const text = e.clipboardData.getData('text');
+                                                if (!/^\d*$/.test(text)) {
+                                                    e.preventDefault();
+                                                    const clean = text.replace(/\D/g, '').slice(0, 6);
+                                                    document.execCommand?.('insertText', false, clean);
+                                                }
+                                            }}
                                             maxLength={6}
                                             placeholder="123456"
                                             required
