@@ -172,8 +172,12 @@ class User(Base):
 
     # Relationships
     organization: Mapped[Optional["Organization"]] = relationship("Organization", back_populates="users", foreign_keys=[organization_id])
-    patient_profile: Mapped[Optional["Patient"]] = relationship(back_populates="user", uselist=False, cascade="all, delete-orphan")
-    doctor_profile: Mapped[Optional["Doctor"]] = relationship(back_populates="user", uselist=False, cascade="all, delete-orphan")
+    patient_profile: Mapped[Optional["Patient"]] = relationship(
+        "Patient", back_populates="user", uselist=False, cascade="all, delete-orphan", foreign_keys="Patient.user_id"
+    )
+    doctor_profile: Mapped[Optional["Doctor"]] = relationship(
+        "Doctor", back_populates="user", uselist=False, cascade="all, delete-orphan", foreign_keys="Doctor.user_id"
+    )
 
 
 # =============================================================================
@@ -216,7 +220,7 @@ class Patient(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationships
-    user: Mapped[Optional["User"]] = relationship(back_populates="patient_profile")
+    user: Mapped[Optional["User"]] = relationship("User", back_populates="patient_profile", foreign_keys=[user_id])
     appointments: Mapped[list["Appointment"]] = relationship(back_populates="patient")
     medical_records: Mapped[list["MedicalRecord"]] = relationship(back_populates="patient")
     prescriptions: Mapped[list["Prescription"]] = relationship(back_populates="patient")
@@ -263,7 +267,7 @@ class Doctor(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationships
-    user: Mapped[Optional["User"]] = relationship(back_populates="doctor_profile")
+    user: Mapped[Optional["User"]] = relationship("User", back_populates="doctor_profile", foreign_keys=[user_id])
     appointments: Mapped[list["Appointment"]] = relationship(back_populates="doctor")
     medical_records: Mapped[list["MedicalRecord"]] = relationship(back_populates="doctor")
     prescriptions: Mapped[list["Prescription"]] = relationship(back_populates="doctor")

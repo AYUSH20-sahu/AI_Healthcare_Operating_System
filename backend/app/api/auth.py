@@ -1,7 +1,7 @@
 """Auth API routes."""
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, model_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -50,8 +50,8 @@ class OrgRegisterRequest(BaseModel):
     # Step 2: Clinical Facility & Department Configuration
     facility_type: str = "Multi-Specialty Hospital"
     departments: list[str] = Field(default_factory=list)
-    total_beds: int = 0
-    icu_beds: int = 0
+    total_beds: int = Field(default=150, ge=1, le=10000, description="Total bed capacity (1 to 10,000)")
+    icu_beds: int = Field(default=24, ge=0, le=2500, description="Dedicated ICU beds (0 to 2,500)")
     has_emergency: bool = True
     has_ambulance: bool = True
 
@@ -64,6 +64,12 @@ class OrgRegisterRequest(BaseModel):
     emergency_hotline: str | None = None
     operating_hours: str = "24/7 Emergency & Inpatient"
     clinical_review_policy: str = "Strict Doctor Sign-Off Required"
+
+    @model_validator(mode="after")
+    def validate_beds(self):
+        if self.icu_beds > self.total_beds:
+            raise ValueError(f"Dedicated ICU bed count ({self.icu_beds}) cannot exceed total inpatient bed capacity ({self.total_beds}).")
+        return self
 
 
 @router.post("/patient/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)

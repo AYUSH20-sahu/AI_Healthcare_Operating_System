@@ -125,12 +125,16 @@ export default function RegisterOrganizationPage() {
             setError('Please select at least one clinical department.');
             return false;
         }
-        if (totalBeds < 1) {
-            setError('Total bed capacity must be at least 1.');
+        if (totalBeds < 1 || totalBeds > 10000) {
+            setError('Total bed capacity must be between 1 and 10,000 (largest hospital complex capacity limit).');
             return false;
         }
-        if (icuBeds < 0 || icuBeds > totalBeds) {
-            setError('ICU beds cannot exceed total bed capacity.');
+        if (icuBeds < 0 || icuBeds > 2500) {
+            setError('Dedicated ICU / Critical bed capacity cannot exceed 2,500.');
+            return false;
+        }
+        if (icuBeds > totalBeds) {
+            setError(`Dedicated ICU beds (${icuBeds}) cannot exceed total inpatient bed capacity (${totalBeds}).`);
             return false;
         }
         setError(null);
@@ -480,21 +484,43 @@ export default function RegisterOrganizationPage() {
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
                                         <Input
                                             id="totalBeds"
-                                            label="Total Inpatient Beds"
-                                            type="number"
-                                            min={1}
-                                            value={totalBeds.toString()}
-                                            onChange={(e) => setTotalBeds(parseInt(e.target.value) || 0)}
+                                            label="Total Inpatient Beds (Max 10,000)"
+                                            type="text"
+                                            inputMode="numeric"
+                                            allowedChars="numeric"
+                                            maxLength={5}
+                                            helperText="Standard hospital capacity: 1 – 10,000 beds"
+                                            value={totalBeds === 0 ? '' : totalBeds.toString()}
+                                            onChange={(e) => {
+                                                const raw = e.target.value.replace(/\D/g, '');
+                                                if (!raw) {
+                                                    setTotalBeds(0);
+                                                    return;
+                                                }
+                                                const val = parseInt(raw, 10);
+                                                setTotalBeds(Math.min(val, 10000));
+                                            }}
                                             disabled={submitting}
                                         />
 
                                         <Input
                                             id="icuBeds"
-                                            label="Dedicated ICU / Critical Beds"
-                                            type="number"
-                                            min={0}
-                                            value={icuBeds.toString()}
-                                            onChange={(e) => setIcuBeds(parseInt(e.target.value) || 0)}
+                                            label="Dedicated ICU / Critical Beds (Max 2,500)"
+                                            type="text"
+                                            inputMode="numeric"
+                                            allowedChars="numeric"
+                                            maxLength={4}
+                                            helperText="Critical care beds (0 – 2,500, cannot exceed total beds)"
+                                            value={icuBeds === 0 ? '' : icuBeds.toString()}
+                                            onChange={(e) => {
+                                                const raw = e.target.value.replace(/\D/g, '');
+                                                if (!raw) {
+                                                    setIcuBeds(0);
+                                                    return;
+                                                }
+                                                const val = parseInt(raw, 10);
+                                                setIcuBeds(Math.min(val, 2500));
+                                            }}
                                             disabled={submitting}
                                         />
                                     </div>
