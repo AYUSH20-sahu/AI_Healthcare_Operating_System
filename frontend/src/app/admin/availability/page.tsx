@@ -171,7 +171,7 @@ export default function AdminDoctorAvailabilityPage() {
                                             </Badge>
                                         </div>
                                         <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                                            {doc.hospital_affiliation || 'AI-HOS Health Center'} • {doc.email}
+                                            {doc.hospital_affiliation || 'Assigned Hospital'} • {doc.email}
                                         </p>
                                     </div>
 

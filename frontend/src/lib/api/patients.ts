@@ -17,6 +17,7 @@ export interface Patient {
     address: string | null;
     emergency_contact_name: string | null;
     emergency_contact_phone: string | null;
+    blood_group?: string | null;
     created_at: string;
     updated_at: string;
 }

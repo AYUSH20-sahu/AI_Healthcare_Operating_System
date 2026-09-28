@@ -34,42 +34,19 @@ export default function DoctorPrescriptionsPage() {
     // Prescription Draft State
     const [prescriptionId, setPrescriptionId] = useState<string | null>(null);
     const [draftStatus, setDraftStatus] = useState<string>('DRAFT');
-    const [medications, setMedications] = useState<Medication[]>([
-        {
-            name: 'Metoprolol Tartrate',
-            dosage: '50mg',
-            frequency: 'Twice daily',
-            duration: '30 days',
-            route: 'oral',
-            instructions: 'Take with or immediately following meals.',
-            quantity: 60,
-            refills: 1,
-        },
-        {
-            name: 'Atorvastatin Calcium',
-            dosage: '40mg',
-            frequency: 'Once daily at bedtime',
-            duration: '90 days',
-            route: 'oral',
-            instructions: 'Avoid grapefruit products during treatment.',
-            quantity: 90,
-            refills: 2,
-        },
-    ]);
+    const [medications, setMedications] = useState<Medication[]>([]);
     const [warnings, setWarnings] = useState<InteractionWarning[]>([]);
     const [hasWarnings, setHasWarnings] = useState<boolean>(false);
-    const [aiConfidence, setAiConfidence] = useState<number>(92);
-    const [clinicalBasis, setClinicalBasis] = useState<string>(
-        'Derived from consultation findings for Angina Pectoris / Coronary Artery Disease. Dosages calibrated against ACC/AHA guidelines.'
-    );
+    const [aiConfidence, setAiConfidence] = useState<number>(0);
+    const [clinicalBasis, setClinicalBasis] = useState<string>('');
     const [aiMetadata, setAiMetadata] = useState<AIMetadata>({
         provider: 'nvidia',
         model: 'nemotron-3-ultra-550b-a55b',
         fallback_used: false,
-        latency_ms: 280,
-        confidence: 0.92,
+        latency_ms: 0,
+        confidence: 0,
     });
-    const [notes, setNotes] = useState<string>('Patient advised to follow low-sodium diet and report any exertional symptoms.');
+    const [notes, setNotes] = useState<string>('');
 
     // UI Action States
     const [isDrafting, setIsDrafting] = useState(false);
@@ -110,20 +87,11 @@ export default function DoctorPrescriptionsPage() {
                         ? Math.floor((Date.now() - new Date(patient.date_of_birth).getTime()) / (365.25 * 24 * 60 * 60 * 1000))
                         : 58,
                     gender: patient.gender || 'male',
-                    blood_group: 'B+',
+                    blood_group: patient.blood_group || undefined,
                     abha_address: patient.abha_address || undefined,
                     phone: patient.phone || undefined,
-                    vitals: {
-                        bp: '138/86',
-                        hr: 78,
-                        spo2: 97,
-                        temp: 98.4,
-                    },
-                    allergies: [
-                        { substance: 'Penicillin', severity: 'critical', reaction: 'Anaphylaxis & severe hives' },
-                        { substance: 'Sulfa', severity: 'moderate', reaction: 'Maculopapular rash' },
-                    ],
-                    risk_flags: ['High Cardiovascular Risk', 'Penicillin Allergy Guard'],
+                    allergies: [],
+                    risk_flags: [],
                 });
 
                 // Restore active draft prescription if one exists
@@ -551,88 +519,98 @@ export default function DoctorPrescriptionsPage() {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-200 dark:divide-gray-800">
-                                {medications.map((med, index) => (
-                                    <tr key={index} className="hover:bg-gray-50/50 dark:hover:bg-gray-900/30">
-                                        <td className="px-3 py-2">
-                                            <input
-                                                type="text"
-                                                value={med.name}
-                                                onChange={(e) => handleMedicationChange(index, 'name', e.target.value)}
-                                                placeholder="e.g. Atorvastatin"
-                                                className="w-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded px-2.5 py-1 text-sm text-gray-900 dark:text-white focus:ring-1 focus:ring-purple-500"
-                                            />
-                                        </td>
-                                        <td className="px-3 py-2 w-28">
-                                            <input
-                                                type="text"
-                                                value={med.dosage}
-                                                onChange={(e) => handleMedicationChange(index, 'dosage', e.target.value)}
-                                                placeholder="e.g. 40mg"
-                                                className="w-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded px-2.5 py-1 text-sm text-gray-900 dark:text-white"
-                                            />
-                                        </td>
-                                        <td className="px-3 py-2 w-36">
-                                            <input
-                                                type="text"
-                                                value={med.frequency}
-                                                onChange={(e) => handleMedicationChange(index, 'frequency', e.target.value)}
-                                                placeholder="e.g. Once daily"
-                                                className="w-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded px-2.5 py-1 text-sm text-gray-900 dark:text-white"
-                                            />
-                                        </td>
-                                        <td className="px-3 py-2 w-28">
-                                            <input
-                                                type="text"
-                                                value={med.duration}
-                                                onChange={(e) => handleMedicationChange(index, 'duration', e.target.value)}
-                                                placeholder="e.g. 30 days"
-                                                className="w-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded px-2.5 py-1 text-sm text-gray-900 dark:text-white"
-                                            />
-                                        </td>
-                                        <td className="px-3 py-2 w-28">
-                                            <select
-                                                value={med.route || 'oral'}
-                                                onChange={(e) => handleMedicationChange(index, 'route', e.target.value)}
-                                                className="w-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded px-2 py-1 text-sm text-gray-900 dark:text-white"
-                                            >
-                                                <option value="oral">Oral</option>
-                                                <option value="sublingual">Sublingual</option>
-                                                <option value="inhalation">Inhalation</option>
-                                                <option value="topical">Topical</option>
-                                                <option value="IV">Intravenous</option>
-                                                <option value="SC">Subcutaneous</option>
-                                            </select>
-                                        </td>
-                                        <td className="px-3 py-2">
-                                            <input
-                                                type="text"
-                                                value={med.instructions || ''}
-                                                onChange={(e) => handleMedicationChange(index, 'instructions', e.target.value)}
-                                                placeholder="e.g. Take with meals"
-                                                className="w-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded px-2.5 py-1 text-sm text-gray-900 dark:text-white"
-                                            />
-                                        </td>
-                                        <td className="px-3 py-2 w-20 text-center">
-                                            <input
-                                                type="number"
-                                                min="0"
-                                                value={med.refills || 0}
-                                                onChange={(e) => handleMedicationChange(index, 'refills', parseInt(e.target.value) || 0)}
-                                                className="w-full text-center bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded px-1 py-1 text-sm text-gray-900 dark:text-white"
-                                            />
-                                        </td>
-                                        <td className="px-3 py-2 w-16 text-center">
-                                            <button
-                                                type="button"
-                                                onClick={() => handleRemoveMedication(index)}
-                                                className="text-red-500 hover:text-red-700 dark:hover:text-red-400 font-bold p-1"
-                                                title="Remove medication"
-                                            >
-                                                ✕
-                                            </button>
+                                {medications.length === 0 ? (
+                                    <tr>
+                                        <td colSpan={8} className="px-4 py-8 text-center text-xs text-gray-500 dark:text-gray-400">
+                                            No medications in this prescription order. Click &quot;➕ Add Medication&quot; or &quot;✨ Generate AI Draft&quot; to add line items.
                                         </td>
                                     </tr>
-                                ))}
+                                ) : (
+                                    medications.map((med, index) => (
+                                        <tr key={index} className="hover:bg-gray-50/50 dark:hover:bg-gray-900/30">
+                                            <td className="px-3 py-2">
+                                                <input
+                                                    type="text"
+                                                    value={med.name}
+                                                    onChange={(e) => handleMedicationChange(index, 'name', e.target.value)}
+                                                    placeholder="e.g. Atorvastatin"
+                                                    className="w-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded px-2.5 py-1 text-sm text-gray-900 dark:text-white focus:ring-1 focus:ring-purple-500"
+                                                />
+                                            </td>
+                                            <td className="px-3 py-2 w-28">
+                                                <input
+                                                    type="text"
+                                                    value={med.dosage}
+                                                    onChange={(e) => handleMedicationChange(index, 'dosage', e.target.value)}
+                                                    placeholder="e.g. 40mg"
+                                                    className="w-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded px-2.5 py-1 text-sm text-gray-900 dark:text-white"
+                                                />
+                                            </td>
+                                            <td className="px-3 py-2 w-36">
+                                                <input
+                                                    type="text"
+                                                    value={med.frequency}
+                                                    onChange={(e) => handleMedicationChange(index, 'frequency', e.target.value)}
+                                                    placeholder="e.g. Once daily"
+                                                    className="w-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded px-2.5 py-1 text-sm text-gray-900 dark:text-white"
+                                                />
+                                            </td>
+                                            <td className="px-3 py-2 w-28">
+                                                <input
+                                                    type="text"
+                                                    value={med.duration}
+                                                    onChange={(e) => handleMedicationChange(index, 'duration', e.target.value)}
+                                                    placeholder="e.g. 30 days"
+                                                    className="w-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded px-2.5 py-1 text-sm text-gray-900 dark:text-white"
+                                                />
+                                            </td>
+                                            <td className="px-3 py-2 w-28">
+                                                <select
+                                                    value={med.route || 'oral'}
+                                                    onChange={(e) => handleMedicationChange(index, 'route', e.target.value)}
+                                                    className="w-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded px-2 py-1 text-sm text-gray-900 dark:text-white"
+                                                >
+                                                    <option value="oral">Oral</option>
+                                                    <option value="sublingual">Sublingual</option>
+                                                    <option value="inhalation">Inhalation</option>
+                                                    <option value="topical">Topical</option>
+                                                    <option value="intravenous">IV</option>
+                                                    <option value="subcutaneous">SubQ</option>
+                                                    <option value="intramuscular">IM</option>
+                                                </select>
+                                            </td>
+                                            <td className="px-3 py-2">
+                                                <input
+                                                    type="text"
+                                                    value={med.instructions || ''}
+                                                    onChange={(e) => handleMedicationChange(index, 'instructions', e.target.value)}
+                                                    placeholder="e.g. Take with food"
+                                                    className="w-full bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded px-2.5 py-1 text-sm text-gray-900 dark:text-white"
+                                                />
+                                            </td>
+                                            <td className="px-3 py-2 w-20 text-center">
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    max="12"
+                                                    value={med.refills || 0}
+                                                    onChange={(e) => handleMedicationChange(index, 'refills', parseInt(e.target.value) || 0)}
+                                                    className="w-16 mx-auto bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded px-2 py-1 text-sm text-center text-gray-900 dark:text-white"
+                                                />
+                                            </td>
+                                            <td className="px-3 py-2 w-16 text-center">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleRemoveMedication(index)}
+                                                    className="text-red-500 hover:text-red-700 text-xs font-semibold px-2 py-1 rounded hover:bg-red-50 dark:hover:bg-red-950/40"
+                                                    title="Remove medication"
+                                                >
+                                                    ✕
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    ))
+                                )}
                             </tbody>
                         </table>
                     </div>

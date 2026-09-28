@@ -26,93 +26,9 @@ interface InpatientBed {
     status: 'Stable' | 'Attention' | 'Critical';
 }
 
-const INITIAL_BEDS: InpatientBed[] = [
-    {
-        bedNumber: 'ICU-04',
-        ward: 'Intensive Care Unit',
-        patientName: 'Rajesh Sharma',
-        uhid: 'UHID-88219',
-        age: 62,
-        gender: 'M',
-        admittedFor: 'Post-CABG Recovery',
-        attendingPhysician: 'Dr. Sarah Jenkins (Cardiology)',
-        vitals: {
-            bp: '138/88',
-            pulse: 94,
-            spo2: 95,
-            temp: 98.6,
-            lastChecked: '25 mins ago',
-        },
-        nextMedication: 'Heparin 5000 IU SC',
-        medicationDue: '16:00 (In 15m)',
-        status: 'Stable',
-    },
-    {
-        bedNumber: 'ICU-06',
-        ward: 'Intensive Care Unit',
-        patientName: 'Anita Desai',
-        uhid: 'UHID-90412',
-        age: 54,
-        gender: 'F',
-        admittedFor: 'Acute Pulmonary Edema',
-        attendingPhysician: 'Dr. Michael Chen (Pulmonology)',
-        vitals: {
-            bp: '165/102',
-            pulse: 118,
-            spo2: 89,
-            temp: 99.4,
-            lastChecked: '8 mins ago',
-            isCritical: true,
-        },
-        nextMedication: 'Furosemide 40mg IV Push',
-        medicationDue: 'Immediate',
-        status: 'Critical',
-    },
-    {
-        bedNumber: 'GW-201',
-        ward: 'General Ward - Wing B',
-        patientName: 'Vikram Patel',
-        uhid: 'UHID-71029',
-        age: 41,
-        gender: 'M',
-        admittedFor: 'Laparoscopic Appendectomy (Post-Op Day 1)',
-        attendingPhysician: 'Dr. Arvind Swaminathan (Surgery)',
-        vitals: {
-            bp: '120/78',
-            pulse: 74,
-            spo2: 98,
-            temp: 98.4,
-            lastChecked: '45 mins ago',
-        },
-        nextMedication: 'Paracetamol 1g IV Infusion',
-        medicationDue: '18:00',
-        status: 'Stable',
-    },
-    {
-        bedNumber: 'GW-204',
-        ward: 'General Ward - Wing B',
-        patientName: 'Sunita Verma',
-        uhid: 'UHID-66381',
-        age: 38,
-        gender: 'F',
-        admittedFor: 'Severe Dehydration & Gastroenteritis',
-        attendingPhysician: 'Dr. Priya Nair (Internal Medicine)',
-        vitals: {
-            bp: '105/65',
-            pulse: 88,
-            spo2: 99,
-            temp: 101.2,
-            lastChecked: '15 mins ago',
-        },
-        nextMedication: 'Ondansetron 4mg + RL 500ml',
-        medicationDue: '16:30',
-        status: 'Attention',
-    },
-];
-
 export default function NurseWorkstationPage() {
     const { user } = useAuth();
-    const [beds, setBeds] = useState<InpatientBed[]>(INITIAL_BEDS);
+    const [beds, setBeds] = useState<InpatientBed[]>([]);
     const [selectedBed, setSelectedBed] = useState<InpatientBed | null>(null);
     const [filterWard, setFilterWard] = useState<string>('all');
     const [isVitalsModalOpen, setIsVitalsModalOpen] = useState(false);
@@ -322,7 +238,20 @@ export default function NurseWorkstationPage() {
 
             {/* Inpatient Bed Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {filteredBeds.map((bed) => {
+                {filteredBeds.length === 0 ? (
+                    <Card className="border border-dashed border-slate-300 dark:border-slate-800 p-12 text-center col-span-1 md:col-span-2 bg-white dark:bg-slate-900">
+                        <div className="w-12 h-12 mx-auto rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400 flex items-center justify-center text-xl mb-3">
+                            🏥
+                        </div>
+                        <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                            No Inpatient Beds Currently Occupied
+                        </h3>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                            Admitted ward patients will appear here for vitals monitoring, nurse rounds, and medication handoffs.
+                        </p>
+                    </Card>
+                ) : (
+                    filteredBeds.map((bed) => {
                     const isCrit = bed.status === 'Critical';
                     return (
                         <Card
@@ -435,7 +364,7 @@ export default function NurseWorkstationPage() {
                             </CardContent>
                         </Card>
                     );
-                })}
+                }))}
             </div>
 
             {/* Vitals Recording Modal */}

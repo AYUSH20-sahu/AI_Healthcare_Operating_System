@@ -13,149 +13,13 @@ import { PatientSummary } from '@/components/PatientSummary';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 
-// Rich fallback data for realistic clinical simulation
-const DEFAULT_PATIENTS_DATA: QueuePatientItem[] = [
-    {
-        appointment_id: 'appt-1',
-        patient_id: 'pat-101',
-        full_name: 'Amit Kumar',
-        age: 39,
-        gender: 'Male',
-        blood_group: 'B+',
-        abha_address: 'amit.kumar@abdm',
-        phone: '+91-98765-11111',
-        scheduled_at: new Date(Date.now() + 1000 * 60 * 15).toISOString(),
-        duration_minutes: 30,
-        status: 'waiting',
-        triage_priority: 'urgent',
-        chief_complaint: 'Severe chest tightness radiating to left arm & palpitations',
-        vitals: { bp: '138/88', hr: 94, spo2: 97, temp: 98.6, glucose: 132 },
-        allergies: [{ substance: 'Penicillin', severity: 'critical', reaction: 'Anaphylaxis & severe hives' }],
-        risk_flags: ['High Cardiovascular Risk', 'Penicillin Allergy Guard', 'High BP'],
-    },
-    {
-        appointment_id: 'appt-2',
-        patient_id: 'pat-102',
-        full_name: 'Priya Sharma',
-        age: 34,
-        gender: 'Female',
-        blood_group: 'O+',
-        abha_address: 'priya.sharma@abdm',
-        phone: '+91-98765-22222',
-        scheduled_at: new Date(Date.now() + 1000 * 60 * 45).toISOString(),
-        duration_minutes: 20,
-        status: 'in_progress',
-        triage_priority: 'priority',
-        chief_complaint: 'Persistent nocturnal cough, wheezing, and fever for 4 days',
-        vitals: { bp: '124/80', hr: 78, spo2: 95, temp: 100.4, glucose: 110 },
-        allergies: [{ substance: 'Sulfa Drugs', severity: 'moderate', reaction: 'Maculopapular rash' }],
-        risk_flags: ['Asthma Exacerbation', 'Elevated Temperature'],
-    },
-    {
-        appointment_id: 'appt-3',
-        patient_id: 'pat-103',
-        full_name: 'Rahul Singh',
-        age: 46,
-        gender: 'Male',
-        blood_group: 'A+',
-        abha_address: 'rahul.singh@abdm',
-        phone: '+91-98765-33333',
-        scheduled_at: new Date(Date.now() + 1000 * 60 * 90).toISOString(),
-        duration_minutes: 30,
-        status: 'scheduled',
-        triage_priority: 'routine',
-        chief_complaint: 'Routine hypertension and type 2 diabetes prescription refill',
-        vitals: { bp: '130/84', hr: 72, spo2: 98, temp: 98.4, glucose: 145 },
-        allergies: [{ substance: 'NSAIDs', severity: 'moderate', reaction: 'Severe gastritis & epigastric pain' }],
-        risk_flags: ['Chronic T2DM', 'Hypertension Refill'],
-    },
-    {
-        appointment_id: 'appt-4',
-        patient_id: 'pat-104',
-        full_name: 'Anjali Gupta',
-        age: 29,
-        gender: 'Female',
-        blood_group: 'AB+',
-        abha_address: 'anjali.gupta@abdm',
-        phone: '+91-98765-44444',
-        scheduled_at: new Date(Date.now() + 1000 * 60 * 150).toISOString(),
-        duration_minutes: 20,
-        status: 'scheduled',
-        triage_priority: 'routine',
-        chief_complaint: 'Prenatal 2nd trimester routine checkup & ultrasound review',
-        vitals: { bp: '116/74', hr: 80, spo2: 99, temp: 98.6, glucose: 92 },
-        allergies: [],
-        risk_flags: ['Antenatal Care W24'],
-    },
-    {
-        appointment_id: 'appt-5',
-        patient_id: 'pat-105',
-        full_name: 'Suresh Nair',
-        age: 59,
-        gender: 'Male',
-        blood_group: 'O-',
-        abha_address: 'suresh.nair@abdm',
-        phone: '+91-98765-55555',
-        scheduled_at: new Date(Date.now() - 1000 * 60 * 60).toISOString(),
-        duration_minutes: 30,
-        status: 'completed',
-        triage_priority: 'followup',
-        chief_complaint: 'Post-coronary stent evaluation & lipid management review',
-        vitals: { bp: '128/82', hr: 68, spo2: 98, temp: 98.4, glucose: 118 },
-        allergies: [{ substance: 'Aspirin High Dose', severity: 'moderate', reaction: 'Bronchospasm' }],
-        risk_flags: ['Post-PCI', 'High Fall Risk'],
-    },
-];
-
-const DEFAULT_RECENT_CONSULTATIONS: RecentConsultationItem[] = [
-    {
-        record_id: 'rec-1',
-        patient_id: 'pat-101',
-        patient_name: 'Amit Kumar',
-        created_at: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
-        status: 'DRAFT',
-        chief_complaint: 'Acute substernal chest discomfort following physical exertion',
-        provisional_diagnosis: 'Atypical Angina Pectoris / Ischemic Heart Disease',
-        icd10_code: 'I20.9',
-        ai_confidence: 94,
-        ai_rationale: 'Derived from ambient consultation audio: patient reported retrosternal burning radiating to jaw, relieved by rest.',
-        prescriptions_summary: 'Sorbitrate 5mg SL PRN, Atorvastatin 40mg',
-    },
-    {
-        record_id: 'rec-2',
-        patient_id: 'pat-105',
-        patient_name: 'Suresh Nair',
-        created_at: new Date(Date.now() - 1000 * 60 * 75).toISOString(),
-        status: 'FINALIZED',
-        chief_complaint: 'Post-PCI routine 60-day follow-up',
-        provisional_diagnosis: 'Atherosclerotic heart disease of native coronary artery',
-        icd10_code: 'I25.10',
-        ai_confidence: 98,
-        ai_rationale: 'ECG normal sinus rhythm. Dual antiplatelet therapy well tolerated with no bleeding episodes.',
-        prescriptions_summary: 'Clopidogrel 75mg OD, Aspirin 75mg OD, Rosuvastatin 20mg HS',
-    },
-    {
-        record_id: 'rec-3',
-        patient_id: 'pat-103',
-        patient_name: 'Rahul Singh',
-        created_at: new Date(Date.now() - 1000 * 60 * 180).toISOString(),
-        status: 'FINALIZED',
-        chief_complaint: 'HbA1c quarterly review and diabetic polyneuropathy screening',
-        provisional_diagnosis: 'Type 2 Diabetes Mellitus with peripheral neuropathy',
-        icd10_code: 'E11.40',
-        ai_confidence: 91,
-        ai_rationale: 'HbA1c reported at 7.6%. Monofilament exam revealed decreased sensation in both halluces.',
-        prescriptions_summary: 'Metformin 1000mg BD, Pregabalin 75mg HS',
-    },
-];
-
 export default function DoctorDashboardPage() {
     const router = useRouter();
     const { user } = useAuth();
     const [doctor, setDoctor] = useState<Doctor | null>(null);
-    const [queue, setQueue] = useState<QueuePatientItem[]>(DEFAULT_PATIENTS_DATA);
+    const [queue, setQueue] = useState<QueuePatientItem[]>([]);
     const [activePatient, setActivePatient] = useState<PatientContextData | null>(null);
-    const [consultations, setConsultations] = useState<RecentConsultationItem[]>(DEFAULT_RECENT_CONSULTATIONS);
+    const [consultations, setConsultations] = useState<RecentConsultationItem[]>([]);
     const [loading, setLoading] = useState(true);
 
     // Interactive Action Modals
@@ -260,7 +124,7 @@ export default function DoctorDashboardPage() {
             waitingPatients: waiting,
             pendingAiReviews: pendingReviews,
             criticalAlertsCount: criticalAlerts,
-            averageConsultationMins: 14,
+            averageConsultationMins: completed > 0 ? 15 : 0,
         };
     }, [queue, consultations]);
 

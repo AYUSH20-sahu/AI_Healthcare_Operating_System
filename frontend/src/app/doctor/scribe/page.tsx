@@ -211,30 +211,20 @@ export default function DoctorScribePage() {
                     setPatient({
                         patient_id: target.patient_id,
                         full_name: target.full_name,
-                        age: 39,
-                        gender: target.gender || 'Male',
-                        blood_group: 'B+',
-                        abha_address: target.abha_address || 'amit.kumar@abdm',
+                        age: 35,
+                        gender: target.gender || 'Unknown',
+                        blood_group: target.blood_group || undefined,
+                        abha_address: target.abha_address || undefined,
                         phone: target.phone || undefined,
-                        vitals: { bp: '138/88', hr: 94, spo2: 97, temp: 98.6, glucose: 132 },
-                        allergies: [{ substance: 'Penicillin', severity: 'critical', reaction: 'Anaphylaxis & severe hives' }],
-                        risk_flags: ['High Cardiovascular Risk', 'Penicillin Allergy Guard', 'High BP'],
+                        allergies: [],
+                        risk_flags: [],
                     });
+                } else {
+                    setPatient(null);
                 }
             } catch (err) {
-                console.warn('Using structured patient context for ambient scribe:', err);
-                setPatient({
-                    patient_id: 'pat-101',
-                    full_name: 'Amit Kumar',
-                    age: 39,
-                    gender: 'Male',
-                    blood_group: 'B+',
-                    abha_address: 'amit.kumar@abdm',
-                    phone: '+91-98765-11111',
-                    vitals: { bp: '138/88', hr: 94, spo2: 97, temp: 98.6, glucose: 132 },
-                    allergies: [{ substance: 'Penicillin', severity: 'critical', reaction: 'Anaphylaxis & severe hives' }],
-                    risk_flags: ['High Cardiovascular Risk', 'Penicillin Allergy Guard', 'High BP'],
-                });
+                console.warn('Patient context load notice for ambient scribe:', err);
+                setPatient(null);
             }
         }
 

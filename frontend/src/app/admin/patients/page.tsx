@@ -108,7 +108,7 @@ export default function AdminPatientsOversightPage() {
                                 {activeCount}
                             </span>
                             <span className="text-xs text-slate-500">
-                                {patients.length > 0 ? Math.round((activeCount / patients.length) * 100) : 100}% Active
+                                {patients.length > 0 ? Math.round((activeCount / patients.length) * 100) : 0}% Active
                             </span>
                         </div>
                     </CardContent>
@@ -131,13 +131,15 @@ export default function AdminPatientsOversightPage() {
                 <Card className="border-slate-200 dark:border-slate-800">
                     <CardContent className="p-4">
                         <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">
-                            Hospital Admission Status
+                            Hospital Inpatient Census
                         </span>
                         <div className="flex items-baseline gap-2 mt-1">
                             <span className="text-2xl font-bold text-slate-900 dark:text-white">
-                                92% OPD
+                                {patients.length > 0 ? `${patients.length} Registered` : '0 Inpatients'}
                             </span>
-                            <span className="text-xs text-slate-500">8% Inpatient</span>
+                            <span className="text-xs text-slate-500">
+                                {patients.length > 0 ? 'Outpatient Census' : 'No active inpatient admissions'}
+                            </span>
                         </div>
                     </CardContent>
                 </Card>

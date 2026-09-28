@@ -37,35 +37,11 @@ interface RoundTask {
     dueBy: string;
 }
 
-// ─── Mock data ────────────────────────────────────────────────────────────────
+// ─── Shift Task Rosters ───────────────────────────────────────────────────────
 
-const NOW = new Date();
-const pastTime = (mins: number) => {
-    const d = new Date(NOW.getTime() - mins * 60000);
-    return d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
-};
-const futureTime = (mins: number) => {
-    const d = new Date(NOW.getTime() + mins * 60000);
-    return d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
-};
+const INITIAL_MED_TASKS: MedTask[] = [];
 
-const INITIAL_MED_TASKS: MedTask[] = [
-    { id: 'm1', patientName: 'Anita Desai', patientId: 'UHID-90412', bedNumber: 'ICU-06', ward: 'Intensive Care Unit', medication: 'Furosemide 40mg', dose: '40 mg', route: 'IV Push', dueTime: pastTime(20), overdue: true, priority: 'stat', status: 'pending', prescribedBy: 'Dr. Michael Chen' },
-    { id: 'm2', patientName: 'Rajesh Sharma', patientId: 'UHID-88219', bedNumber: 'ICU-04', ward: 'Intensive Care Unit', medication: 'Heparin 5000 IU', dose: '5000 IU', route: 'Subcutaneous', dueTime: futureTime(15), overdue: false, priority: 'routine', status: 'pending', prescribedBy: 'Dr. Sarah Jenkins' },
-    { id: 'm3', patientName: 'Sunita Nair', patientId: 'UHID-80027', bedNumber: 'OBS-01', ward: 'Obs & Gynae Ward', medication: 'Labetalol 200mg', dose: '200 mg', route: 'Oral', dueTime: futureTime(30), overdue: false, priority: 'urgent', status: 'pending', prescribedBy: 'Dr. Lakshmi Venkatesh' },
-    { id: 'm4', patientName: 'Vikram Patel', patientId: 'UHID-71029', bedNumber: 'GW-201', ward: 'General Ward B', medication: 'Metronidazole 500mg', dose: '500 mg', route: 'IV Infusion (30 min)', dueTime: pastTime(5), overdue: true, priority: 'routine', status: 'pending', prescribedBy: 'Dr. Arvind Swaminathan' },
-    { id: 'm5', patientName: 'Meena Krishnan', patientId: 'UHID-65311', bedNumber: 'GW-204', ward: 'General Ward B', medication: 'Insulin Actrapid 6U', dose: '6 Units', route: 'Subcutaneous', dueTime: futureTime(5), overdue: false, priority: 'urgent', status: 'pending', prescribedBy: 'Dr. Priya Rao', notes: 'Check capillary glucose before administering' },
-    { id: 'm6', patientName: 'Pooja Gupta', patientId: 'UHID-81104', bedNumber: 'OBS-03', ward: 'Obs & Gynae Ward', medication: 'Tramadol 50mg', dose: '50 mg', route: 'IV (PRN Pain)', dueTime: futureTime(60), overdue: false, priority: 'routine', status: 'administered', prescribedBy: 'Dr. Lakshmi Venkatesh' },
-];
-
-const INITIAL_ROUND_TASKS: RoundTask[] = [
-    { id: 'r1', patientName: 'Anita Desai', bedNumber: 'ICU-06', task: 'Reposition patient (2-hourly turn)', category: 'positioning', status: 'pending', dueBy: pastTime(10) },
-    { id: 'r2', patientName: 'Rajesh Sharma', bedNumber: 'ICU-04', task: 'Check IV site & dressing', category: 'iv', status: 'done', dueBy: pastTime(30) },
-    { id: 'r3', patientName: 'Vikram Patel', bedNumber: 'GW-201', task: 'Wound dressing change (abdominal)', category: 'wound', status: 'pending', dueBy: futureTime(20) },
-    { id: 'r4', patientName: 'Meena Krishnan', bedNumber: 'GW-204', task: 'Capillary blood glucose check', category: 'assessment', status: 'pending', dueBy: futureTime(5) },
-    { id: 'r5', patientName: 'Sunita Nair', bedNumber: 'OBS-01', task: 'Foetal heart rate monitoring (CTG)', category: 'assessment', status: 'done', dueBy: pastTime(15) },
-    { id: 'r6', patientName: 'Pooja Gupta', bedNumber: 'OBS-03', task: 'Uterine fundus palpation & lochia check', category: 'assessment', status: 'pending', dueBy: futureTime(30) },
-];
+const INITIAL_ROUND_TASKS: RoundTask[] = [];
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -211,119 +187,140 @@ export default function NurseTasksPage() {
             {/* Medication Tasks */}
             {activeTab === 'meds' && (
                 <div className="space-y-3">
-                    {medTasks
-                        .sort((a, b) => {
-                            const order: Record<Priority, number> = { stat: 0, urgent: 1, routine: 2 };
-                            if (a.overdue && !b.overdue) return -1;
-                            if (!a.overdue && b.overdue) return 1;
-                            return order[a.priority] - order[b.priority];
-                        })
-                        .map(task => (
-                            <div
-                                key={task.id}
-                                className={`rounded-xl border p-4 transition-all ${
-                                    task.status !== 'pending'
-                                        ? 'opacity-50 border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/20'
-                                        : task.overdue
-                                        ? 'border-rose-200 dark:border-rose-800 bg-rose-50/30 dark:bg-rose-900/10'
-                                        : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/40'
-                                }`}
-                            >
-                                <div className="flex items-start justify-between gap-3">
-                                    <div className="min-w-0 flex-1">
-                                        <div className="flex items-center gap-2 flex-wrap mb-1">
-                                            <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${priorityColor(task.priority)}`}>
-                                                {task.priority === 'stat' ? '⚡ STAT' : task.priority}
-                                            </span>
-                                            {task.overdue && task.status === 'pending' && (
-                                                <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-700 animate-pulse">
-                                                    OVERDUE
-                                                </span>
-                                            )}
-                                            {task.status !== 'pending' && (
-                                                <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${
-                                                    task.status === 'administered' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
-                                                }`}>
-                                                    {task.status}
-                                                </span>
-                                            )}
-                                        </div>
-                                        <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{task.medication} — {task.dose} {task.route}</p>
-                                        <p className="text-xs text-slate-500 mt-0.5">
-                                            {task.patientName} · Bed {task.bedNumber} · Due: <span className={task.overdue && task.status === 'pending' ? 'text-rose-600 font-semibold' : ''}>{task.dueTime}</span>
-                                        </p>
-                                        <p className="text-xs text-slate-400 mt-0.5">Prescribed by {task.prescribedBy}</p>
-                                        {task.notes && <p className="text-xs text-amber-600 dark:text-amber-400 mt-1 font-medium">⚠ {task.notes}</p>}
-                                    </div>
-                                    {task.status === 'pending' && (
-                                        <button
-                                            id={`med-action-${task.id}`}
-                                            type="button"
-                                            onClick={() => setActiveTaskModal(task)}
-                                            className="shrink-0 px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold transition-colors"
-                                        >
-                                            Action
-                                        </button>
-                                    )}
-                                </div>
+                    {medTasks.length === 0 ? (
+                        <div className="p-12 text-center border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-2xl bg-white/50 dark:bg-slate-900/20">
+                            <div className="w-12 h-12 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center mx-auto mb-3 text-2xl">
+                                💊
                             </div>
-                        ))
-                    }
+                            <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">No Medication Administration Tasks Pending</p>
+                            <p className="text-xs text-slate-500 mt-1">There are no scheduled medication doses due for active inpatients during this shift.</p>
+                        </div>
+                    ) : (
+                        medTasks
+                            .sort((a, b) => {
+                                const order: Record<Priority, number> = { stat: 0, urgent: 1, routine: 2 };
+                                if (a.overdue && !b.overdue) return -1;
+                                if (!a.overdue && b.overdue) return 1;
+                                return order[a.priority] - order[b.priority];
+                            })
+                            .map(task => (
+                                <div
+                                    key={task.id}
+                                    className={`rounded-xl border p-4 transition-all ${
+                                        task.status !== 'pending'
+                                            ? 'opacity-50 border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/20'
+                                            : task.overdue
+                                            ? 'border-rose-200 dark:border-rose-800 bg-rose-50/30 dark:bg-rose-900/10'
+                                            : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/40'
+                                    }`}
+                                >
+                                    <div className="flex items-start justify-between gap-3">
+                                        <div className="min-w-0 flex-1">
+                                            <div className="flex items-center gap-2 flex-wrap mb-1">
+                                                <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${priorityColor(task.priority)}`}>
+                                                    {task.priority === 'stat' ? '⚡ STAT' : task.priority}
+                                                </span>
+                                                {task.overdue && task.status === 'pending' && (
+                                                    <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-700 animate-pulse">
+                                                        OVERDUE
+                                                    </span>
+                                                )}
+                                                {task.status !== 'pending' && (
+                                                    <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${
+                                                        task.status === 'administered' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
+                                                    }`}>
+                                                        {task.status}
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{task.medication} — {task.dose} {task.route}</p>
+                                            <p className="text-xs text-slate-500 mt-0.5">
+                                                {task.patientName} · Bed {task.bedNumber} · Due: <span className={task.overdue && task.status === 'pending' ? 'text-rose-600 font-semibold' : ''}>{task.dueTime}</span>
+                                            </p>
+                                            <p className="text-xs text-slate-400 mt-0.5">Prescribed by {task.prescribedBy}</p>
+                                            {task.notes && <p className="text-xs text-amber-600 dark:text-amber-400 mt-1 font-medium">⚠ {task.notes}</p>}
+                                        </div>
+                                        {task.status === 'pending' && (
+                                            <button
+                                                id={`med-action-${task.id}`}
+                                                type="button"
+                                                onClick={() => setActiveTaskModal(task)}
+                                                className="shrink-0 px-3 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold transition-colors"
+                                            >
+                                                Action
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                            ))
+                    )}
                 </div>
             )}
 
             {/* Ward Round Tasks */}
             {activeTab === 'rounds' && (
                 <div className="space-y-3">
-                    <p className="text-xs text-slate-400 italic">Tap the checkbox to mark round tasks complete.</p>
-                    {roundTasks.map(task => (
-                        <div
-                            key={task.id}
-                            className={`rounded-xl border p-4 flex items-start gap-3 transition-all ${
-                                task.status === 'done'
-                                    ? 'opacity-50 border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/20'
-                                    : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/40'
-                            }`}
-                        >
-                            <button
-                                id={`round-toggle-${task.id}`}
-                                type="button"
-                                onClick={() => toggleRound(task.id)}
-                                className={`mt-0.5 w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${
-                                    task.status === 'done'
-                                        ? 'bg-emerald-500 border-emerald-500'
-                                        : 'border-slate-300 dark:border-slate-600 hover:border-blue-500'
-                                }`}
-                            >
-                                {task.status === 'done' && (
-                                    <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                                    </svg>
-                                )}
-                            </button>
-                            <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2 mb-1">
-                                    <div className="w-5 h-5 text-slate-400 dark:text-slate-500 shrink-0">
-                                        {categoryIcon(task.category)}
+                    {roundTasks.length === 0 ? (
+                        <div className="p-12 text-center border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-2xl bg-white/50 dark:bg-slate-900/20">
+                            <div className="w-12 h-12 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center mx-auto mb-3 text-2xl">
+                                📋
+                            </div>
+                            <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">No Ward Round Checklists Pending</p>
+                            <p className="text-xs text-slate-500 mt-1">Routine turn, IV check, and dressing rounds will be populated upon patient admission.</p>
+                        </div>
+                    ) : (
+                        <>
+                            <p className="text-xs text-slate-400 italic">Tap the checkbox to mark round tasks complete.</p>
+                            {roundTasks.map(task => (
+                                <div
+                                    key={task.id}
+                                    className={`rounded-xl border p-4 flex items-start gap-3 transition-all ${
+                                        task.status === 'done'
+                                            ? 'opacity-50 border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/20'
+                                            : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/40'
+                                    }`}
+                                >
+                                    <button
+                                        id={`round-toggle-${task.id}`}
+                                        type="button"
+                                        onClick={() => toggleRound(task.id)}
+                                        className={`mt-0.5 w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${
+                                            task.status === 'done'
+                                                ? 'bg-emerald-500 border-emerald-500'
+                                                : 'border-slate-300 dark:border-slate-600 hover:border-blue-500'
+                                        }`}
+                                    >
+                                        {task.status === 'done' && (
+                                            <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                            </svg>
+                                        )}
+                                    </button>
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <div className="w-5 h-5 text-slate-400 dark:text-slate-500 shrink-0">
+                                                {categoryIcon(task.category)}
+                                            </div>
+                                            <span className="text-[10px] font-semibold uppercase text-slate-400 tracking-wider">{task.category}</span>
+                                        </div>
+                                        <p className={`text-sm font-medium ${task.status === 'done' ? 'line-through text-slate-400' : 'text-slate-900 dark:text-slate-100'}`}>
+                                            {task.task}
+                                        </p>
+                                        <p className="text-xs text-slate-500 mt-0.5">{task.patientName} · Bed {task.bedNumber} · Due by {task.dueBy}</p>
                                     </div>
-                                    <span className="text-[10px] font-semibold uppercase text-slate-400 tracking-wider">{task.category}</span>
                                 </div>
-                                <p className={`text-sm font-medium ${task.status === 'done' ? 'line-through text-slate-400' : 'text-slate-900 dark:text-slate-100'}`}>
-                                    {task.task}
-                                </p>
-                                <p className="text-xs text-slate-500 mt-0.5">{task.patientName} · Bed {task.bedNumber} · Due by {task.dueBy}</p>
-                            </div>
-                        </div>
-                    ))}
-                    {roundTasks.every(t => t.status === 'done') && (
-                        <div className="text-center py-8">
-                            <div className="w-14 h-14 rounded-2xl bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center mx-auto mb-3">
-                                <svg className="w-7 h-7 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                </svg>
-                            </div>
-                            <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-300">All ward round tasks complete!</p>
-                        </div>
+                            ))}
+                            {roundTasks.length > 0 && roundTasks.every(t => t.status === 'done') && (
+                                <div className="text-center py-8">
+                                    <div className="w-14 h-14 rounded-2xl bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center mx-auto mb-3">
+                                        <svg className="w-7 h-7 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
+                                    </div>
+                                    <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-300">All ward round tasks complete!</p>
+                                </div>
+                            )}
+                        </>
                     )}
                 </div>
             )}

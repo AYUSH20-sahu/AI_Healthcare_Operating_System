@@ -41,16 +41,10 @@ interface PatientBed {
     status: 'stable' | 'attention' | 'critical';
 }
 
-// ─── Mock patient beds ────────────────────────────────────────────────────────
+// ─── Patient beds roster ─────────────────────────────────────────────────────────
 
-const PATIENT_BEDS: PatientBed[] = [
-    { bedNumber: 'ICU-04', ward: 'Intensive Care Unit', patientName: 'Rajesh Sharma', patientId: 'UHID-88219', age: 62, gender: 'M', admittedFor: 'Post-CABG Recovery', attendingPhysician: 'Dr. Sarah Jenkins', status: 'stable' },
-    { bedNumber: 'ICU-06', ward: 'Intensive Care Unit', patientName: 'Anita Desai', patientId: 'UHID-90412', age: 54, gender: 'F', admittedFor: 'Acute Pulmonary Edema', attendingPhysician: 'Dr. Michael Chen', status: 'critical' },
-    { bedNumber: 'GW-201', ward: 'General Ward B', patientName: 'Vikram Patel', patientId: 'UHID-71029', age: 41, gender: 'M', admittedFor: 'Post-Appendectomy (Day 1)', attendingPhysician: 'Dr. Arvind Swaminathan', status: 'attention' },
-    { bedNumber: 'GW-204', ward: 'General Ward B', patientName: 'Meena Krishnan', patientId: 'UHID-65311', age: 33, gender: 'F', admittedFor: 'Type 1 DM Crisis', attendingPhysician: 'Dr. Priya Rao', status: 'stable' },
-    { bedNumber: 'OBS-01', ward: 'Obs & Gynae Ward', patientName: 'Sunita Nair', patientId: 'UHID-80027', age: 28, gender: 'F', admittedFor: 'Antepartum Hypertension', attendingPhysician: 'Dr. Lakshmi Venkatesh', status: 'attention' },
-    { bedNumber: 'OBS-03', ward: 'Obs & Gynae Ward', patientName: 'Pooja Gupta', patientId: 'UHID-81104', age: 26, gender: 'F', admittedFor: 'Post-CS Day 2', attendingPhysician: 'Dr. Lakshmi Venkatesh', status: 'stable' },
-];
+const PATIENT_BEDS: PatientBed[] = [];
+
 
 // ─── Helper functions ─────────────────────────────────────────────────────────
 
@@ -265,7 +259,7 @@ export default function NurseVitalsPage() {
     const [historyBed, setHistoryBed] = useState<PatientBed | null>(null);
     const [vitalHistory, setVitalHistory] = useState<Record<string, VitalReading[]>>({});
 
-    const wards = ['all', ...Array.from(new Set(PATIENT_BEDS.map(b => b.ward)))];
+    const wards = ['all', ...Array.from(new Set(beds.map(b => b.ward)))];
 
     const filteredBeds = selectedWard === 'all' ? beds : beds.filter(b => b.ward === selectedWard);
 
@@ -346,7 +340,16 @@ export default function NurseVitalsPage() {
 
             {/* Patient Bed Cards */}
             <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
-                {filteredBeds.map(bed => {
+                {filteredBeds.length === 0 ? (
+                    <div className="p-12 text-center border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-2xl bg-white/50 dark:bg-slate-900/20 col-span-full">
+                        <div className="w-12 h-12 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center mx-auto mb-3 text-2xl">
+                            🩺
+                        </div>
+                        <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">No Inpatient Beds Currently Occupied</p>
+                        <p className="text-xs text-slate-500 mt-1">All ward beds are vacant or awaiting inpatient admission.</p>
+                    </div>
+                ) : (
+                    filteredBeds.map(bed => {
                     const v = bed.latestVitals;
                     const history = vitalHistory[bed.bedNumber] || [];
                     return (
@@ -431,7 +434,8 @@ export default function NurseVitalsPage() {
                             </div>
                         </div>
                     );
-                })}
+                })
+                )}
             </div>
 
             {/* Record Vitals Modal */}

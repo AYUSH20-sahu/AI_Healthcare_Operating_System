@@ -123,12 +123,14 @@ export default function AdminDoctorsOversightPage() {
                         </span>
                         <div className="mt-1 flex items-baseline justify-between">
                             <span className="text-2xl font-bold text-slate-900 dark:text-white">
-                                {specialties.length || 4}
+                                {specialties.length}
                             </span>
-                            <span className="text-xs font-mono text-slate-500">Departments</span>
+                            <span className="text-xs font-mono text-slate-500">Active Specialties</span>
                         </div>
-                        <span className="text-xs text-slate-500 dark:text-slate-400 mt-1 block">
-                            Cardiology, Internal Medicine, Pediatrics, etc.
+                        <span className="text-xs text-slate-500 dark:text-slate-400 mt-1 block truncate">
+                            {specialties.length > 0
+                                ? specialties.slice(0, 3).join(', ') + (specialties.length > 3 ? '...' : '')
+                                : 'No physician specialties registered yet'}
                         </span>
                     </CardContent>
                 </Card>
@@ -140,12 +142,14 @@ export default function AdminDoctorsOversightPage() {
                         </span>
                         <div className="mt-1 flex items-baseline justify-between">
                             <span className="text-2xl font-bold text-emerald-600 dark:text-emerald-400 font-mono">
-                                100%
+                                {doctors.length > 0 ? '100%' : 'N/A'}
                             </span>
-                            <Badge variant="success" size="sm">Gated</Badge>
+                            <Badge variant={doctors.length > 0 ? 'success' : 'outline'} size="sm">
+                                {doctors.length > 0 ? 'Gated' : 'No Staff'}
+                            </Badge>
                         </div>
                         <span className="text-xs text-slate-500 dark:text-slate-400 mt-1 block">
-                            All drafts electronically signed by physicians
+                            {doctors.length > 0 ? 'All drafts electronically signed by physicians' : 'No prescribers onboarded yet'}
                         </span>
                     </CardContent>
                 </Card>
@@ -157,12 +161,12 @@ export default function AdminDoctorsOversightPage() {
                         </span>
                         <div className="mt-1 flex items-baseline justify-between">
                             <span className="text-2xl font-bold text-slate-900 dark:text-white font-mono">
-                                {doctors.filter((d) => d.doctor_profile?.license_number).length} / {doctors.length || 1}
+                                {doctors.filter((d) => d.doctor_profile?.license_number).length} / {doctors.length}
                             </span>
                             <Badge variant="primary" size="sm">MCI / NMC</Badge>
                         </div>
                         <span className="text-xs text-slate-500 dark:text-slate-400 mt-1 block">
-                            Credentialed medical licenses verified
+                            {doctors.length > 0 ? 'Credentialed medical licenses verified' : 'Awaiting physician onboarding'}
                         </span>
                     </CardContent>
                 </Card>
@@ -241,10 +245,10 @@ export default function AdminDoctorsOversightPage() {
                                             </Badge>
                                         </td>
                                         <td className="px-4 py-3.5 font-mono text-slate-700 dark:text-slate-300">
-                                            {doc.doctor_profile?.license_number || 'MCI-REC-VALIDATED'}
+                                            {doc.doctor_profile?.license_number || 'Pending License'}
                                         </td>
                                         <td className="px-4 py-3.5 text-slate-600 dark:text-slate-300">
-                                            {doc.doctor_profile?.hospital_affiliation || 'AI-HOS Central Apex'}
+                                            {doc.doctor_profile?.hospital_affiliation || 'Main Facility'}
                                         </td>
                                         <td className="px-4 py-3.5">
                                             <span className="inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 font-medium">

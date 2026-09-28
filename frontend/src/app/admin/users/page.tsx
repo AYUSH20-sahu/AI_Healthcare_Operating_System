@@ -82,7 +82,7 @@ export default function AdminUserManagementPage() {
         designation: 'Consultant Physician',
         room_number: '',
         shift: 'Morning (08:00 - 16:00)',
-        hospital_affiliation: 'AI-HOS Medical Center',
+        hospital_affiliation: '',
         abdm_hpr_id: '',
         background_verified: true,
     };

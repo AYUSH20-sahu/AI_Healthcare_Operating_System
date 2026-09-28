@@ -17,7 +17,6 @@ interface AgentNode {
     fallbackProvider: string;
     status: 'ACTIVE' | 'STANDBY' | 'DEGRADED';
     governanceGate: string;
-    latencyMs: number;
 }
 
 const CLINICAL_AGENTS: AgentNode[] = [
@@ -29,7 +28,6 @@ const CLINICAL_AGENTS: AgentNode[] = [
         fallbackProvider: 'Gemini 1.5 Flash (Fallback)',
         status: 'ACTIVE',
         governanceGate: 'Mandatory Physician Signature Required (Unfinalized Draft)',
-        latencyMs: 820,
     },
     {
         id: 'agent-rx-02',
@@ -39,7 +37,6 @@ const CLINICAL_AGENTS: AgentNode[] = [
         fallbackProvider: 'Gemini 1.5 Flash (Fallback)',
         status: 'ACTIVE',
         governanceGate: 'Immutable Pharmacological Safety Check & Doctor Approval',
-        latencyMs: 460,
     },
     {
         id: 'agent-intake-03',
@@ -49,7 +46,6 @@ const CLINICAL_AGENTS: AgentNode[] = [
         fallbackProvider: 'Gemini 1.5 Flash (Audio/Text)',
         status: 'ACTIVE',
         governanceGate: 'Nurse / Triage Clinician Review Gate',
-        latencyMs: 650,
     },
     {
         id: 'agent-guard-04',
@@ -59,7 +55,6 @@ const CLINICAL_AGENTS: AgentNode[] = [
         fallbackProvider: 'Gemini 1.5 Flash (Fallback)',
         status: 'ACTIVE',
         governanceGate: 'Physician In-the-Loop Override Required',
-        latencyMs: 910,
     },
 ];
 
@@ -118,9 +113,9 @@ export default function AgentMeshMonitorPage() {
     const primaryLlm = healthData?.ai_provider_mesh?.primary_llm || 'nvidia';
     const fallbackLlm = healthData?.ai_provider_mesh?.fallback_llm || 'gemini';
 
-    const nonAiP95 = telemetry?.latency_percentiles?.non_ai_endpoints?.p95 ?? 45.2;
+    const nonAiP95 = telemetry?.latency_percentiles?.non_ai_endpoints?.p95 ?? (telemetry?.latency_metrics?.non_ai_api?.p95 ?? 0);
     const nonAiTarget = telemetry?.nfr_targets?.non_ai_api_p95_ms ?? 500;
-    const aiTurnP95 = telemetry?.latency_percentiles?.ai_turn_completion?.p95 ?? 1420;
+    const aiTurnP95 = telemetry?.latency_percentiles?.ai_turn_completion?.p95 ?? (telemetry?.latency_metrics?.ai_conversational_turn?.p95 ?? 0);
     const aiTurnTarget = telemetry?.nfr_targets?.ai_conversational_turn_p95_ms ?? 3000;
     const totalCalls = telemetry?.ai_call_metrics?.total_ai_calls ?? 0;
     const fallbackCount = telemetry?.ai_call_metrics?.fallback_count ?? 0;
@@ -316,8 +311,8 @@ export default function AgentMeshMonitorPage() {
                             <h3 className="text-sm font-semibold text-slate-900 dark:text-white flex items-center gap-2">
                                 <span>⚡ Core API Latency (NFR Non-AI Target)</span>
                             </h3>
-                            <Badge variant={nonAiP95 <= nonAiTarget ? 'success' : 'error'} className="text-xs">
-                                {nonAiP95 <= nonAiTarget ? 'SLA Compliant' : 'Breach Warning'}
+                            <Badge variant={nonAiP95 > 0 ? (nonAiP95 <= nonAiTarget ? 'success' : 'error') : 'outline'} className="text-xs">
+                                {nonAiP95 > 0 ? (nonAiP95 <= nonAiTarget ? 'SLA Compliant' : 'Breach Warning') : 'No Traffic Recorded'}
                             </Badge>
                         </div>
                     </CardHeader>
@@ -338,9 +333,9 @@ export default function AgentMeshMonitorPage() {
                         <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-2.5 overflow-hidden">
                             <div
                                 className={`h-2.5 rounded-full transition-all duration-500 ${
-                                    nonAiP95 <= nonAiTarget ? 'bg-emerald-500' : 'bg-rose-500'
+                                    nonAiP95 > 0 ? (nonAiP95 <= nonAiTarget ? 'bg-emerald-500' : 'bg-rose-500') : 'bg-slate-300 dark:bg-slate-700'
                                 }`}
-                                style={{ width: `${Math.min(100, (nonAiP95 / nonAiTarget) * 100)}%` }}
+                                style={{ width: `${nonAiP95 > 0 ? Math.min(100, (nonAiP95 / nonAiTarget) * 100) : 0}%` }}
                             />
                         </div>
 
@@ -374,8 +369,8 @@ export default function AgentMeshMonitorPage() {
                             <h3 className="text-sm font-semibold text-slate-900 dark:text-white flex items-center gap-2">
                                 <span>🧠 AI Conversational Turn Latency</span>
                             </h3>
-                            <Badge variant={aiTurnP95 <= aiTurnTarget ? 'success' : 'error'} className="text-xs">
-                                {aiTurnP95 <= aiTurnTarget ? 'SLA Compliant' : 'Breach Warning'}
+                            <Badge variant={aiTurnP95 > 0 ? (aiTurnP95 <= aiTurnTarget ? 'success' : 'error') : 'outline'} className="text-xs">
+                                {aiTurnP95 > 0 ? (aiTurnP95 <= aiTurnTarget ? 'SLA Compliant' : 'Breach Warning') : 'No Inferences Yet'}
                             </Badge>
                         </div>
                     </CardHeader>
@@ -396,9 +391,9 @@ export default function AgentMeshMonitorPage() {
                         <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-2.5 overflow-hidden">
                             <div
                                 className={`h-2.5 rounded-full transition-all duration-500 ${
-                                    aiTurnP95 <= aiTurnTarget ? 'bg-blue-500' : 'bg-rose-500'
+                                    aiTurnP95 > 0 ? (aiTurnP95 <= aiTurnTarget ? 'bg-blue-500' : 'bg-rose-500') : 'bg-slate-300 dark:bg-slate-700'
                                 }`}
-                                style={{ width: `${Math.min(100, (aiTurnP95 / aiTurnTarget) * 100)}%` }}
+                                style={{ width: `${aiTurnP95 > 0 ? Math.min(100, (aiTurnP95 / aiTurnTarget) * 100) : 0}%` }}
                             />
                         </div>
 

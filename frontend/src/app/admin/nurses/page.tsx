@@ -27,17 +27,14 @@ export default function AdminNursesOversightPage() {
         }
     };
 
-    // Department mock metadata for institutional representation
+    // Institutional hospital ward categories
     const wards = ['Emergency & Triage', 'Intensive Care Unit (ICU)', 'Cardiology Inpatient', 'General Surgery', 'Pediatrics Ward', 'Outpatient Triage'];
 
-    const getAssignedWard = (index: number) => wards[index % wards.length];
-    const getShift = (index: number): string => {
-        const shifts = ['Morning (07:00 - 15:00)', 'Evening (15:00 - 23:00)', 'Night (23:00 - 07:00)'];
-        return shifts[index % shifts.length];
-    };
+    const getAssignedWard = (nurse: AdminUser) => nurse.department || 'Unassigned Ward';
+    const getShift = (nurse: AdminUser): string => nurse.shift || 'General Shift';
 
-    const filteredNurses = nurses.filter((n, idx) => {
-        const ward = getAssignedWard(idx);
+    const filteredNurses = nurses.filter((n) => {
+        const ward = getAssignedWard(n);
         const matchesSearch =
             n.full_name.toLowerCase().includes(search.toLowerCase()) ||
             n.email.toLowerCase().includes(search.toLowerCase()) ||
@@ -52,6 +49,12 @@ export default function AdminNursesOversightPage() {
         { value: 'all', label: 'All Wards' },
         ...wards.map((w) => ({ value: w, label: w })),
     ];
+
+    const staffedWardsCount = wards.filter((w) => {
+        return nurses.some((n) => n.department?.toLowerCase() === w.toLowerCase());
+    }).length;
+
+    const staffingIndexPercent = wards.length > 0 ? Math.round((staffedWardsCount / wards.length) * 100) : 0;
 
     return (
         <div className="space-y-6 pb-16 max-w-7xl mx-auto">
@@ -118,7 +121,9 @@ export default function AdminNursesOversightPage() {
                             <span className="text-2xl font-bold text-blue-600 dark:text-blue-400">
                                 {activeCount}
                             </span>
-                            <span className="text-xs text-slate-500">across 6 wards</span>
+                            <span className="text-xs text-slate-500">
+                                {staffedWardsCount} of {wards.length} wards covered
+                            </span>
                         </div>
                     </CardContent>
                 </Card>
@@ -130,9 +135,11 @@ export default function AdminNursesOversightPage() {
                         </span>
                         <div className="flex items-baseline gap-2 mt-1">
                             <span className="text-2xl font-bold text-slate-900 dark:text-white">
-                                4 : 1
+                                {activeCount > 0 ? `${activeCount} Staff` : 'N/A'}
                             </span>
-                            <span className="text-xs text-emerald-600 font-medium">NABH Compliant</span>
+                            <span className={`text-xs font-medium ${activeCount > 0 ? 'text-emerald-600' : 'text-slate-400'}`}>
+                                {activeCount > 0 ? 'On Active Duty Roster' : 'No staff on active duty'}
+                            </span>
                         </div>
                     </CardContent>
                 </Card>
@@ -143,10 +150,12 @@ export default function AdminNursesOversightPage() {
                             Ward Staffing Index
                         </span>
                         <div className="flex items-baseline gap-2 mt-1">
-                            <span className="text-2xl font-bold text-emerald-600">
-                                98.4%
+                            <span className={`text-2xl font-bold ${staffingIndexPercent > 0 ? 'text-emerald-600' : 'text-amber-500'}`}>
+                                {staffingIndexPercent}%
                             </span>
-                            <span className="text-xs text-slate-500">Optimal coverage</span>
+                            <span className="text-xs text-slate-500">
+                                {staffingIndexPercent > 0 ? 'Optimal coverage' : 'Awaiting nurse onboarding'}
+                            </span>
                         </div>
                     </CardContent>
                 </Card>
@@ -164,32 +173,47 @@ export default function AdminNursesOversightPage() {
                                 Operational capacity distribution managed by Nursing Superintendent & Administration
                             </p>
                         </div>
-                        <Badge variant="outline" className="text-xs">
-                            Active 24/7 Coverage
+                        <Badge variant={nurses.length > 0 ? 'outline' : 'warning'} className="text-xs">
+                            {nurses.length > 0 ? 'Active 24/7 Coverage' : 'Awaiting Staffing'}
                         </Badge>
                     </div>
                 </CardHeader>
                 <CardContent className="p-5">
                     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-                        {wards.map((ward, idx) => (
-                            <div
-                                key={ward}
-                                className="p-3 bg-white dark:bg-slate-800/80 rounded-xl border border-slate-200 dark:border-slate-700/60 shadow-xs"
-                            >
-                                <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider truncate">
-                                    {ward}
-                                </p>
-                                <p className="text-lg font-bold text-slate-900 dark:text-white mt-1">
-                                    {Math.max(1, Math.round((nurses.length * (6 - idx)) / 15))} Nurses
-                                </p>
-                                <div className="flex items-center gap-1.5 mt-2">
-                                    <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                                    <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">
-                                        Covered
-                                    </span>
+                        {wards.map((ward) => {
+                            const wardCount = nurses.filter((n) => n.department?.toLowerCase() === ward.toLowerCase()).length;
+                            const isCovered = wardCount > 0;
+
+                            return (
+                                <div
+                                    key={ward}
+                                    className="p-3 bg-white dark:bg-slate-800/80 rounded-xl border border-slate-200 dark:border-slate-700/60 shadow-xs"
+                                >
+                                    <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider truncate">
+                                        {ward}
+                                    </p>
+                                    <p className={`text-lg font-bold mt-1 ${isCovered ? 'text-slate-900 dark:text-white' : 'text-slate-400 dark:text-slate-500'}`}>
+                                        {wardCount} Nurses
+                                    </p>
+                                    <div className="flex items-center gap-1.5 mt-2">
+                                        <div
+                                            className={`w-2 h-2 rounded-full ${
+                                                isCovered ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'
+                                            }`}
+                                        />
+                                        <span
+                                            className={`text-[10px] font-medium ${
+                                                isCovered
+                                                    ? 'text-emerald-600 dark:text-emerald-400'
+                                                    : 'text-amber-600 dark:text-amber-400'
+                                            }`}
+                                        >
+                                            {isCovered ? 'Covered' : 'Unstaffed'}
+                                        </span>
+                                    </div>
                                 </div>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 </CardContent>
             </Card>
@@ -262,8 +286,8 @@ export default function AdminNursesOversightPage() {
                                     </tr>
                                 ) : (
                                     filteredNurses.map((nurse, idx) => {
-                                        const ward = getAssignedWard(idx);
-                                        const shift = getShift(idx);
+                                        const ward = getAssignedWard(nurse);
+                                        const shift = getShift(nurse);
                                         return (
                                             <tr
                                                 key={nurse.user_id || idx}

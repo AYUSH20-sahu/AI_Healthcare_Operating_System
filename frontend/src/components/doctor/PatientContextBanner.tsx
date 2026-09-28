@@ -24,10 +24,10 @@ export interface PatientContextData {
     full_name: string;
     age: number;
     gender: string;
-    blood_group: string;
-    abha_address?: string;
-    phone?: string;
-    vitals: PatientVitals;
+    blood_group?: string | undefined;
+    abha_address?: string | undefined;
+    phone?: string | undefined;
+    vitals?: PatientVitals | undefined;
     allergies: PatientAllergy[];
     risk_flags: string[];
 }
@@ -82,7 +82,7 @@ export function PatientContextBanner({
     };
 
     // Calculate BP status
-    const [sys] = patient.vitals.bp.split('/').map(n => parseInt(n, 10));
+    const [sys] = patient.vitals?.bp ? patient.vitals.bp.split('/').map(n => parseInt(n, 10)) : [0];
     const isBpElevated = !isNaN(sys) && sys >= 130;
 
     return (
@@ -178,81 +178,87 @@ export function PatientContextBanner({
             </div>
 
             {/* Vitals & Telemetry Strip */}
-            <div className="px-4 sm:px-5 py-3 bg-slate-50/80 dark:bg-slate-900/60 flex flex-wrap items-center justify-between gap-3 text-xs">
-                <div className="flex flex-wrap items-center gap-4 sm:gap-6">
-                    {/* BP */}
-                    <div className="flex items-center gap-1.5">
-                        <span className="text-slate-500 dark:text-slate-400">BP:</span>
-                        <span className={`font-semibold font-mono ${isBpElevated ? 'text-rose-600 dark:text-rose-400 font-bold' : 'text-slate-900 dark:text-slate-100'}`}>
-                            {patient.vitals.bp} mmHg
-                        </span>
-                        {isBpElevated && (
-                            <span className="px-1.5 py-0.2 text-[10px] bg-rose-100 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 rounded font-medium">
-                                High
+            {patient.vitals ? (
+                <div className="px-4 sm:px-5 py-3 bg-slate-50/80 dark:bg-slate-900/60 flex flex-wrap items-center justify-between gap-3 text-xs">
+                    <div className="flex flex-wrap items-center gap-4 sm:gap-6">
+                        {/* BP */}
+                        <div className="flex items-center gap-1.5">
+                            <span className="text-slate-500 dark:text-slate-400">BP:</span>
+                            <span className={`font-semibold font-mono ${isBpElevated ? 'text-rose-600 dark:text-rose-400 font-bold' : 'text-slate-900 dark:text-slate-100'}`}>
+                                {patient.vitals.bp} mmHg
                             </span>
+                            {isBpElevated && (
+                                <span className="px-1.5 py-0.2 text-[10px] bg-rose-100 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 rounded font-medium">
+                                    High
+                                </span>
+                            )}
+                        </div>
+
+                        {/* HR */}
+                        <div className="flex items-center gap-1.5">
+                            <span className="text-slate-500 dark:text-slate-400">HR:</span>
+                            <span className="font-semibold font-mono text-slate-900 dark:text-slate-100">
+                                {patient.vitals.hr} bpm
+                            </span>
+                        </div>
+
+                        {/* SpO2 */}
+                        <div className="flex items-center gap-1.5">
+                            <span className="text-slate-500 dark:text-slate-400">SpO2:</span>
+                            <span className="font-semibold font-mono text-emerald-600 dark:text-emerald-400">
+                                {patient.vitals.spo2}%
+                            </span>
+                        </div>
+
+                        {/* Temp */}
+                        <div className="flex items-center gap-1.5">
+                            <span className="text-slate-500 dark:text-slate-400">Temp:</span>
+                            <span className="font-semibold font-mono text-slate-900 dark:text-slate-100">
+                                {patient.vitals.temp} °F
+                            </span>
+                        </div>
+
+                        {/* Blood Glucose */}
+                        {patient.vitals.glucose && (
+                            <div className="flex items-center gap-1.5">
+                                <span className="text-slate-500 dark:text-slate-400">Glucose:</span>
+                                <span className="font-semibold font-mono text-slate-900 dark:text-slate-100">
+                                    {patient.vitals.glucose} mg/dL
+                                </span>
+                            </div>
                         )}
                     </div>
 
-                    {/* HR */}
-                    <div className="flex items-center gap-1.5">
-                        <span className="text-slate-500 dark:text-slate-400">HR:</span>
-                        <span className="font-semibold font-mono text-slate-900 dark:text-slate-100">
-                            {patient.vitals.hr} bpm
-                        </span>
-                    </div>
-
-                    {/* SpO2 */}
-                    <div className="flex items-center gap-1.5">
-                        <span className="text-slate-500 dark:text-slate-400">SpO2:</span>
-                        <span className="font-semibold font-mono text-emerald-600 dark:text-emerald-400">
-                            {patient.vitals.spo2}%
-                        </span>
-                    </div>
-
-                    {/* Temp */}
-                    <div className="flex items-center gap-1.5">
-                        <span className="text-slate-500 dark:text-slate-400">Temp:</span>
-                        <span className="font-semibold font-mono text-slate-900 dark:text-slate-100">
-                            {patient.vitals.temp} °F
-                        </span>
-                    </div>
-
-                    {/* Blood Glucose */}
-                    {patient.vitals.glucose && (
-                        <div className="flex items-center gap-1.5">
-                            <span className="text-slate-500 dark:text-slate-400">Glucose:</span>
-                            <span className="font-semibold font-mono text-slate-900 dark:text-slate-100">
-                                {patient.vitals.glucose} mg/dL
+                    {/* Primary Safety Alert Capsules */}
+                    <div className="flex flex-wrap items-center gap-1.5">
+                        {patient.allergies.map((allergy, i) => (
+                            <span
+                                key={i}
+                                className={`px-2 py-0.5 text-[11px] font-semibold rounded-full flex items-center gap-1 border ${
+                                    allergy.severity === 'critical'
+                                        ? 'bg-rose-100 dark:bg-rose-950/70 text-rose-800 dark:text-rose-300 border-rose-300 dark:border-rose-900/60'
+                                        : 'bg-amber-100 dark:bg-amber-950/70 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-900/60'
+                                }`}
+                            >
+                                <span>⚠️ Allergy: {allergy.substance}</span>
                             </span>
-                        </div>
-                    )}
-                </div>
+                        ))}
 
-                {/* Primary Safety Alert Capsules */}
-                <div className="flex flex-wrap items-center gap-1.5">
-                    {patient.allergies.map((allergy, i) => (
-                        <span
-                            key={i}
-                            className={`px-2 py-0.5 text-[11px] font-semibold rounded-full flex items-center gap-1 border ${
-                                allergy.severity === 'critical'
-                                    ? 'bg-rose-100 dark:bg-rose-950/70 text-rose-800 dark:text-rose-300 border-rose-300 dark:border-rose-900/60'
-                                    : 'bg-amber-100 dark:bg-amber-950/70 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-900/60'
-                            }`}
-                        >
-                            <span>⚠️ Allergy: {allergy.substance}</span>
-                        </span>
-                    ))}
-
-                    {patient.risk_flags.map((risk, i) => (
-                        <span
-                            key={i}
-                            className="px-2 py-0.5 text-[11px] font-medium rounded-full bg-indigo-100 dark:bg-indigo-950/70 text-indigo-800 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-900/60"
-                        >
-                            🛡️ {risk}
-                        </span>
-                    ))}
+                        {patient.risk_flags.map((risk, i) => (
+                            <span
+                                key={i}
+                                className="px-2 py-0.5 text-[11px] font-medium rounded-full bg-indigo-100 dark:bg-indigo-950/70 text-indigo-800 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-900/60"
+                            >
+                                🛡️ {risk}
+                            </span>
+                        ))}
+                    </div>
                 </div>
-            </div>
+            ) : (
+                <div className="px-4 sm:px-5 py-2.5 bg-slate-50/50 dark:bg-slate-900/40 text-xs text-slate-400 italic">
+                    No bedside telemetry recorded yet for this patient.
+                </div>
+            )}
 
             {/* Expandable Safety Details Drawer */}
             {isExpanded && (

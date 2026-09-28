@@ -27,58 +27,9 @@ interface AssignedPatient {
     isolationPrecautions?: string;
 }
 
-// ─── Mock data ────────────────────────────────────────────────────────────────
+// ─── Patient Data ─────────────────────────────────────────────────────────────
 
-const ASSIGNED_PATIENTS: AssignedPatient[] = [
-    {
-        patientId: 'UHID-88219', patientName: 'Rajesh Sharma', age: 62, gender: 'M',
-        bedNumber: 'ICU-04', ward: 'Intensive Care Unit', admittedFor: 'Post-CABG Recovery',
-        attendingPhysician: 'Dr. Sarah Jenkins (Cardiology)', admitDate: '2025-09-18', day: 3,
-        status: 'stable', lastVitals: { bp: '138/88', pulse: 94, spo2: 95, temp: 98.6 },
-        pendingMeds: 1, pendingRounds: 0, diet: 'Cardiac Diet (Low Sodium)',
-        allergies: ['Penicillin', 'Aspirin'], codeStatus: 'Full Code',
-    },
-    {
-        patientId: 'UHID-90412', patientName: 'Anita Desai', age: 54, gender: 'F',
-        bedNumber: 'ICU-06', ward: 'Intensive Care Unit', admittedFor: 'Acute Pulmonary Edema',
-        attendingPhysician: 'Dr. Michael Chen (Pulmonology)', admitDate: '2025-09-21', day: 1,
-        status: 'critical', lastVitals: { bp: '165/102', pulse: 118, spo2: 89, temp: 99.4 },
-        pendingMeds: 2, pendingRounds: 1, diet: 'Fluid Restricted (1L/day)',
-        allergies: ['Sulfa'], codeStatus: 'Full Code', isolationPrecautions: 'Contact',
-    },
-    {
-        patientId: 'UHID-71029', patientName: 'Vikram Patel', age: 41, gender: 'M',
-        bedNumber: 'GW-201', ward: 'General Ward B', admittedFor: 'Post-Appendectomy (Day 1)',
-        attendingPhysician: 'Dr. Arvind Swaminathan (Surgery)', admitDate: '2025-09-20', day: 2,
-        status: 'attention', lastVitals: { bp: '122/78', pulse: 88, spo2: 97, temp: 99.2 },
-        pendingMeds: 1, pendingRounds: 1, diet: 'Clear Liquids progressing to soft',
-        allergies: [], codeStatus: 'Full Code',
-    },
-    {
-        patientId: 'UHID-65311', patientName: 'Meena Krishnan', age: 33, gender: 'F',
-        bedNumber: 'GW-204', ward: 'General Ward B', admittedFor: 'Type 1 DM Ketoacidosis',
-        attendingPhysician: 'Dr. Priya Rao (Endocrinology)', admitDate: '2025-09-19', day: 3,
-        status: 'stable', lastVitals: { bp: '118/74', pulse: 76, spo2: 98, temp: 98.4 },
-        pendingMeds: 1, pendingRounds: 0, diet: 'ADA Diabetic Diet',
-        allergies: ['Ibuprofen'], codeStatus: 'Full Code',
-    },
-    {
-        patientId: 'UHID-80027', patientName: 'Sunita Nair', age: 28, gender: 'F',
-        bedNumber: 'OBS-01', ward: 'Obs & Gynae Ward', admittedFor: 'Antepartum Hypertension (34 weeks)',
-        attendingPhysician: 'Dr. Lakshmi Venkatesh (Obs & Gyn)', admitDate: '2025-09-20', day: 2,
-        status: 'attention', lastVitals: { bp: '152/96', pulse: 82, spo2: 98, temp: 98.6 },
-        pendingMeds: 1, pendingRounds: 1, diet: 'Low Salt Maternity Diet',
-        allergies: [], codeStatus: 'Full Code',
-    },
-    {
-        patientId: 'UHID-81104', patientName: 'Pooja Gupta', age: 26, gender: 'F',
-        bedNumber: 'OBS-03', ward: 'Obs & Gynae Ward', admittedFor: 'Post-Caesarean Section (Day 2)',
-        attendingPhysician: 'Dr. Lakshmi Venkatesh (Obs & Gyn)', admitDate: '2025-09-19', day: 3,
-        status: 'stable', lastVitals: { bp: '115/70', pulse: 74, spo2: 99, temp: 98.2 },
-        pendingMeds: 0, pendingRounds: 1, diet: 'Soft Diet — Lactation Support',
-        allergies: [], codeStatus: 'Full Code',
-    },
-];
+const ASSIGNED_PATIENTS: AssignedPatient[] = [];
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 

@@ -7,6 +7,7 @@ import {
     DraftItem,
     Medication,
 } from '@/lib/api';
+import { useAuth } from '@/lib/auth';
 import { Button } from '@/components/ui/Button';
 import { Card, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -14,6 +15,7 @@ import { Modal } from '@/components/ui/Modal';
 import { Alert } from '@/components/ui/Alert';
 
 function DoctorApprovalGateContent() {
+    const { user } = useAuth();
     const router = useRouter();
     const searchParams = useSearchParams();
     const queryType = searchParams.get('type') || 'medical_record';
@@ -33,42 +35,19 @@ function DoctorApprovalGateContent() {
     // Selected Item Detail State
     const [currentStatus, setCurrentStatus] = useState<string>('DRAFT');
     const [finalizedTimestamp, setFinalizedTimestamp] = useState<string | null>(null);
-    const [reviewerName, setReviewerName] = useState<string>('Dr. Rajesh Sharma');
+    const [reviewerName, setReviewerName] = useState<string>(user?.full_name || '');
 
     // Editable Medical Record State
-    const [chiefComplaint, setChiefComplaint] = useState<string>('Chest pain on exertion radiating to left arm');
-    const [assessment, setAssessment] = useState<string>('Angina Pectoris / Coronary Artery Disease');
-    const [icd10Code, setIcd10Code] = useState<string>('I20.9');
-    const [planText, setPlanText] = useState<string>('Start Metoprolol 50mg BID, Atorvastatin 40mg QHS. Schedule stress ECG.');
-    const [aiConfidence, setAiConfidence] = useState<number>(94);
-    const [clinicalBasis, setClinicalBasis] = useState<string>(
-        'Spoken dialogue noted exertional tightness and relief upon rest. Aligns with stable angina protocol.'
-    );
+    const [chiefComplaint, setChiefComplaint] = useState<string>('');
+    const [assessment, setAssessment] = useState<string>('');
+    const [icd10Code, setIcd10Code] = useState<string>('');
+    const [planText, setPlanText] = useState<string>('');
+    const [aiConfidence, setAiConfidence] = useState<number>(0);
+    const [clinicalBasis, setClinicalBasis] = useState<string>('');
 
     // Editable Prescription State
-    const [medications, setMedications] = useState<Medication[]>([
-        {
-            name: 'Metoprolol Tartrate',
-            dosage: '50mg',
-            frequency: 'Twice daily',
-            duration: '30 days',
-            route: 'oral',
-            instructions: 'Take with food.',
-            quantity: 60,
-            refills: 1,
-        },
-        {
-            name: 'Atorvastatin Calcium',
-            dosage: '40mg',
-            frequency: 'Once daily at bedtime',
-            duration: '90 days',
-            route: 'oral',
-            instructions: 'Avoid grapefruit products.',
-            quantity: 90,
-            refills: 2,
-        },
-    ]);
-    const [notes, setNotes] = useState<string>('Low-sodium diet recommended. Follow up in clinic in 2 weeks.');
+    const [medications, setMedications] = useState<Medication[]>([]);
+    const [notes, setNotes] = useState<string>('');
 
     // Modal & Action States
     const [showApproveModal, setShowApproveModal] = useState<boolean>(false);
@@ -515,15 +494,28 @@ function DoctorApprovalGateContent() {
                 </div>
 
                 {/* Right Column: Contextual Review & Attestation Gate */}
-                <div className="lg:col-span-8 space-y-4">
-                    {/* Status & Review Header */}
-                    <div className={`p-4 rounded-xl border flex flex-wrap items-center justify-between gap-3 ${
-                        isFinalized
-                            ? 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-300 dark:border-emerald-800 text-emerald-900 dark:text-emerald-200'
-                            : isRejected
-                            ? 'bg-rose-50 dark:bg-rose-950/30 border-rose-300 dark:border-rose-800 text-rose-900 dark:text-rose-200'
-                            : 'bg-amber-50 dark:bg-amber-950/30 border-amber-300 dark:border-amber-800 text-amber-900 dark:text-amber-200'
-                    }`}>
+                {!selectedDraftId ? (
+                    <div className="lg:col-span-8">
+                        <Card className="border border-slate-200 dark:border-slate-800 p-12 text-center bg-white dark:bg-slate-900 shadow-sm">
+                            <div className="w-14 h-14 rounded-2xl bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400 flex items-center justify-center mx-auto mb-4 text-2xl">
+                                ⚖️
+                            </div>
+                            <h3 className="text-base font-bold text-slate-900 dark:text-white">No Draft Selected for Review</h3>
+                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-sm mx-auto">
+                                Select a pending draft item from the queue on the left to inspect clinical provenance, make edits, and attest final approval.
+                            </p>
+                        </Card>
+                    </div>
+                ) : (
+                    <div className="lg:col-span-8 space-y-4">
+                        {/* Status & Review Header */}
+                        <div className={`p-4 rounded-xl border flex flex-wrap items-center justify-between gap-3 ${
+                            isFinalized
+                                ? 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-300 dark:border-emerald-800 text-emerald-900 dark:text-emerald-200'
+                                : isRejected
+                                ? 'bg-rose-50 dark:bg-rose-950/30 border-rose-300 dark:border-rose-800 text-rose-900 dark:text-rose-200'
+                                : 'bg-amber-50 dark:bg-amber-950/30 border-amber-300 dark:border-amber-800 text-amber-900 dark:text-amber-200'
+                        }`}>
                         <div className="flex items-center gap-3">
                             <span className="text-2xl">{isFinalized ? '🔒' : isRejected ? '❌' : '⏳'}</span>
                             <div>
@@ -820,7 +812,8 @@ function DoctorApprovalGateContent() {
                         </div>
                     </div>
                 </div>
-            </div>
+            )}
+        </div>
 
             {/* Confirmation Modal: Approve */}
             <Modal

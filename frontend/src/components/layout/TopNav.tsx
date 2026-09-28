@@ -21,30 +21,15 @@ export function TopNav({ collapsed, onMenuClick }: TopNavProps) {
     const abdmRef = useRef<HTMLDivElement>(null);
     const alertsRef = useRef<HTMLDivElement>(null);
 
-    // Mock notification alerts list for demonstration
-    const [notifications] = useState([
-        {
-            id: 'n1',
-            title: 'Critical Vital Flag',
-            desc: 'Patient SpO2 dropped below 90% in Triage Room 3',
-            time: '5m ago',
-            type: 'critical',
-        },
-        {
-            id: 'n2',
-            title: 'Interaction Warning',
-            desc: 'Drug-drug conflict detected: Warfarin + Aspirin',
-            time: '22m ago',
-            type: 'warning',
-        },
-        {
-            id: 'n3',
-            title: 'ABHA Consent Granted',
-            desc: 'Patient authorized digital EHR transfer via ABDM Gateway',
-            time: '1h ago',
-            type: 'info',
-        },
-    ]);
+    interface NotificationAlert {
+        id: string;
+        title: string;
+        desc: string;
+        time: string;
+        type: string;
+    }
+
+    const [notifications] = useState<NotificationAlert[]>([]);
 
     useEffect(() => {
         const handleClickOutside = (e: MouseEvent) => {
@@ -173,7 +158,9 @@ export function TopNav({ collapsed, onMenuClick }: TopNavProps) {
                             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
                             </svg>
-                            <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-rose-500 ring-2 ring-white dark:ring-slate-900" />
+                            {notifications.length > 0 && (
+                                <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-rose-500 ring-2 ring-white dark:ring-slate-900" />
+                            )}
                         </button>
 
                         {alertsOpen && (
@@ -184,21 +171,29 @@ export function TopNav({ collapsed, onMenuClick }: TopNavProps) {
                                         {notifications.length} Pending
                                     </span>
                                 </div>
-                                <div className="divide-y divide-slate-100 dark:divide-slate-800 max-h-72 overflow-y-auto">
-                                    {notifications.map((n) => (
-                                        <div key={n.id} className="p-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors space-y-1">
-                                            <div className="flex items-center justify-between">
-                                                <span className={`font-semibold ${
-                                                    n.type === 'critical' ? 'text-rose-600 dark:text-rose-400' : 'text-slate-800 dark:text-slate-200'
-                                                }`}>
-                                                    {n.title}
-                                                </span>
-                                                <span className="text-[10px] text-slate-400">{n.time}</span>
+                                {notifications.length === 0 ? (
+                                    <div className="p-6 text-center text-xs text-slate-500 dark:text-slate-400">
+                                        <span className="text-xl block mb-1.5">🔔</span>
+                                        <p className="font-semibold text-slate-800 dark:text-slate-200">No Active Clinical Alerts</p>
+                                        <p className="text-[11px] text-slate-400 mt-1">Telemetry parameters and drug interaction checks are all normal.</p>
+                                    </div>
+                                ) : (
+                                    <div className="divide-y divide-slate-100 dark:divide-slate-800 max-h-72 overflow-y-auto">
+                                        {notifications.map((n) => (
+                                            <div key={n.id} className="p-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors space-y-1">
+                                                <div className="flex items-center justify-between">
+                                                    <span className={`font-semibold ${
+                                                        n.type === 'critical' ? 'text-rose-600 dark:text-rose-400' : 'text-slate-800 dark:text-slate-200'
+                                                    }`}>
+                                                        {n.title}
+                                                    </span>
+                                                    <span className="text-[10px] text-slate-400">{n.time}</span>
+                                                </div>
+                                                <p className="text-slate-500 dark:text-slate-400 leading-relaxed">{n.desc}</p>
                                             </div>
-                                            <p className="text-slate-500 dark:text-slate-400 leading-relaxed">{n.desc}</p>
-                                        </div>
-                                    ))}
-                                </div>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
                         )}
                     </div>

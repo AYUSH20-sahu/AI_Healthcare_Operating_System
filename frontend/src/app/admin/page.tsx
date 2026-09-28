@@ -9,6 +9,8 @@ import {
     observabilityApi,
     HealthStatusData,
     TelemetryMetricsData,
+    adminOrganizationsApi,
+    Organization,
 } from '@/lib/api';
 import { Button, Card, CardContent, Badge, ErrorAlert } from '@/components/ui';
 
@@ -17,6 +19,7 @@ export default function AdminPage() {
     const [data, setData] = useState<OperationalDashboardData | null>(null);
     const [healthData, setHealthData] = useState<HealthStatusData | null>(null);
     const [telemetry, setTelemetry] = useState<TelemetryMetricsData | null>(null);
+    const [organization, setOrganization] = useState<Organization | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<any>(null);
 
@@ -28,7 +31,7 @@ export default function AdminPage() {
         setIsLoading(true);
         setError(null);
         try {
-            const [dashRes, healthRes, metricsRes] = await Promise.all([
+            const [dashRes, healthRes, metricsRes, orgRes] = await Promise.all([
                 adminOperationsApi.getDashboard().catch((err) => {
                     console.warn('Dashboard fetch notice:', err);
                     return null;
@@ -41,10 +44,12 @@ export default function AdminPage() {
                     console.warn('Telemetry metrics notice:', err);
                     return null;
                 }),
+                adminOrganizationsApi.getMyOrg().catch(() => null),
             ]);
             if (dashRes) setData(dashRes);
             if (healthRes) setHealthData(healthRes);
             if (metricsRes) setTelemetry(metricsRes);
+            if (orgRes) setOrganization(orgRes);
         } catch (err: any) {
             console.error('Failed to load operational telemetry:', err);
             setError(err);
@@ -174,22 +179,22 @@ export default function AdminPage() {
                         </div>
                         <div className="mt-3 flex items-baseline gap-2">
                             <span className="text-3xl font-bold text-slate-900 dark:text-white">
-                                {isLoading ? '...' : `${telemetry?.latency_metrics.non_ai_api.p95 ?? 14}ms`}
+                                {isLoading ? '...' : `${telemetry?.latency_metrics.non_ai_api.p95 != null ? Math.round(telemetry.latency_metrics.non_ai_api.p95) : 0}ms`}
                             </span>
                             <Badge
                                 variant={
-                                    (telemetry?.latency_metrics.non_ai_api.p95 ?? 14) <= 500
+                                    (telemetry?.latency_metrics.non_ai_api.p95 ?? 0) <= 500
                                         ? 'success'
                                         : 'error'
                                 }
                                 className="text-[10px]"
                             >
-                                {(telemetry?.latency_metrics.non_ai_api.p95 ?? 14) <= 500 ? 'Target <500ms Met' : 'Above Target'}
+                                {(telemetry?.latency_metrics.non_ai_api.p95 ?? 0) <= 500 ? 'Target <500ms Met' : 'Above Target'}
                             </Badge>
                         </div>
                         <div className="mt-2 pt-2 border-t border-slate-100 dark:border-slate-800 text-[11px] text-slate-500 dark:text-slate-400 flex justify-between">
-                            <span>P50: {telemetry?.latency_metrics.non_ai_api.p50 ?? 8}ms</span>
-                            <span>Samples: {telemetry?.latency_metrics.non_ai_api.samples ?? 1}</span>
+                            <span>P50: {telemetry?.latency_metrics.non_ai_api.p50 != null ? Math.round(telemetry.latency_metrics.non_ai_api.p50) : 0}ms</span>
+                            <span>Samples: {telemetry?.latency_metrics.non_ai_api.samples ?? 0}</span>
                         </div>
                     </CardContent>
                 </Card>
@@ -207,17 +212,17 @@ export default function AdminPage() {
                         </div>
                         <div className="mt-3 flex items-baseline gap-2">
                             <span className="text-3xl font-bold text-slate-900 dark:text-white">
-                                {isLoading ? '...' : `${telemetry?.latency_metrics.ai_conversational_turn.p95 ?? 850}ms`}
+                                {isLoading ? '...' : `${telemetry?.latency_metrics.ai_conversational_turn.p95 != null ? Math.round(telemetry.latency_metrics.ai_conversational_turn.p95) : 0}ms`}
                             </span>
                             <Badge
                                 variant={
-                                    (telemetry?.latency_metrics.ai_conversational_turn.p95 ?? 850) <= 3000
+                                    (telemetry?.latency_metrics.ai_conversational_turn.p95 ?? 0) <= 3000
                                         ? 'success'
                                         : 'error'
                                 }
                                 className="text-[10px]"
                             >
-                                {(telemetry?.latency_metrics.ai_conversational_turn.p95 ?? 850) <= 3000 ? 'Target <3s Met' : 'Degraded'}
+                                {(telemetry?.latency_metrics.ai_conversational_turn.p95 ?? 0) <= 3000 ? 'Target <3s Met' : 'Degraded'}
                             </Badge>
                         </div>
                         <div className="mt-2 pt-2 border-t border-slate-100 dark:border-slate-800 text-[11px] text-slate-500 dark:text-slate-400 flex justify-between">
@@ -342,7 +347,7 @@ export default function AdminPage() {
                                         />
                                     </div>
                                     <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
-                                        Ping: <span className="font-mono font-medium text-slate-700 dark:text-slate-300">{healthData?.database.latency_ms ?? 1.1}ms</span> • {healthData?.database.details || 'Async connection pool active'}
+                                        Ping: <span className="font-mono font-medium text-slate-700 dark:text-slate-300">{healthData?.database.latency_ms != null ? Math.round(healthData.database.latency_ms * 10) / 10 : 0}ms</span> • {healthData?.database.details || 'Async connection pool active'}
                                     </p>
                                 </div>
 
@@ -421,42 +426,69 @@ export default function AdminPage() {
                     </Card>
                 </div>
 
-                {/* Transparent Future Roadmap Capabilities (5 Cols) */}
+                {/* Live Facility Infrastructure & Operational Capacity (5 Cols) */}
                 <div className="lg:col-span-5 space-y-4">
-                    <Card className="border border-amber-200 dark:border-amber-900/40 bg-gradient-to-br from-amber-50/40 via-white to-orange-50/30 dark:from-slate-900 dark:to-slate-800/60 shadow-sm">
-                        <CardContent className="p-6 space-y-3.5">
-                            <div className="flex items-center justify-between border-b border-amber-200 dark:border-amber-900/60 pb-2.5">
-                                <h3 className="text-xs font-bold uppercase tracking-wider text-amber-900 dark:text-amber-300 flex items-center gap-1.5">
-                                    <span>🔬 Enterprise Sensor Roadmap</span>
-                                </h3>
-                                <Badge variant="warning" className="text-[10px]">
-                                    Hardware Pending
+                    <Card className="border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-sm">
+                        <CardContent className="p-6 space-y-4">
+                            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+                                <div>
+                                    <h3 className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-white flex items-center gap-1.5">
+                                        <span>🏛️ Facility Infrastructure & Bed Capacity</span>
+                                    </h3>
+                                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                                        {organization?.name || 'Registered Healthcare Facility'}
+                                    </p>
+                                </div>
+                                <Badge variant="primary" className="text-[10px] uppercase font-mono">
+                                    {organization?.code || 'MAIN'}
                                 </Badge>
                             </div>
 
-                            <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-                                In strict adherence to AI-HOS governance specifications, non-operational hardware telemetry metrics are transparently disclosed rather than fabricated:
-                            </p>
-
-                            <div className="space-y-2 text-xs">
-                                <div className="p-2.5 rounded-lg bg-white/80 dark:bg-slate-800/80 border border-amber-200/60 dark:border-slate-700">
-                                    <div className="flex items-center justify-between font-bold text-slate-900 dark:text-white">
-                                        <span>IoT Hospital Bed Occupancy</span>
-                                        <span className="text-[10px] text-amber-700 dark:text-amber-400 font-mono">Q4 Sensor Mesh</span>
+                            <div className="grid grid-cols-2 gap-3 text-xs">
+                                <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60">
+                                    <div className="text-slate-500 dark:text-slate-400 text-[10px] uppercase font-semibold">Total Inpatient Beds</div>
+                                    <div className="text-xl font-bold text-slate-900 dark:text-white mt-1">
+                                        {organization?.total_beds ?? 0}
                                     </div>
-                                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                                        Physical pressure mat sensors will stream real-time ward occupancy.
-                                    </p>
+                                    <div className="text-[10px] text-slate-500 mt-0.5">Licensed Capacity</div>
                                 </div>
 
-                                <div className="p-2.5 rounded-lg bg-white/80 dark:bg-slate-800/80 border border-amber-200/60 dark:border-slate-700">
-                                    <div className="flex items-center justify-between font-bold text-slate-900 dark:text-white">
-                                        <span>Predictive ED Latency Model</span>
-                                        <span className="text-[10px] text-amber-700 dark:text-amber-400 font-mono">In ML Validation</span>
+                                <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60">
+                                    <div className="text-slate-500 dark:text-slate-400 text-[10px] uppercase font-semibold">ICU & Critical Beds</div>
+                                    <div className="text-xl font-bold text-purple-600 dark:text-purple-400 mt-1">
+                                        {organization?.icu_beds ?? 0}
                                     </div>
-                                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                                        Multi-variant queuing theory model for emergency room intake.
-                                    </p>
+                                    <div className="text-[10px] text-slate-500 mt-0.5">Dedicated Intensive Care</div>
+                                </div>
+                            </div>
+
+                            <div className="space-y-2 text-xs">
+                                <div className="p-2.5 rounded-lg bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 flex items-center justify-between">
+                                    <span className="text-slate-600 dark:text-slate-300 font-medium">Facility Classification:</span>
+                                    <Badge variant="outline" className="text-[10px]">
+                                        {organization?.facility_type || 'General Hospital'}
+                                    </Badge>
+                                </div>
+
+                                <div className="p-2.5 rounded-lg bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 flex items-center justify-between">
+                                    <span className="text-slate-600 dark:text-slate-300 font-medium">Emergency Trauma Wing:</span>
+                                    <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+                                        {organization?.has_emergency ? '✓ 24/7 Level 1 Active' : 'Not Configured'}
+                                    </span>
+                                </div>
+
+                                <div className="p-2.5 rounded-lg bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 flex items-center justify-between">
+                                    <span className="text-slate-600 dark:text-slate-300 font-medium">Ambulance Fleet Dispatch:</span>
+                                    <span className="text-xs font-semibold text-blue-600 dark:text-blue-400">
+                                        {organization?.has_ambulance ? '✓ ALS / BLS Dispatch Ready' : 'Not Configured'}
+                                    </span>
+                                </div>
+
+                                <div className="p-2.5 rounded-lg bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 flex items-center justify-between">
+                                    <span className="text-slate-600 dark:text-slate-300 font-medium">Clinical Specialties:</span>
+                                    <span className="text-xs font-mono font-bold text-slate-900 dark:text-white">
+                                        {organization?.departments?.length ?? 0} Departments
+                                    </span>
                                 </div>
                             </div>
                         </CardContent>
