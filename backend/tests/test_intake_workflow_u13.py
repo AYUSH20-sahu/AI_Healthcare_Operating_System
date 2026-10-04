@@ -20,8 +20,6 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import (
-    IntakeSession,
-    IntakeStatus,
     Patient,
     User,
     UserRole,

@@ -18,8 +18,6 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import (
-    Appointment,
-    AppointmentStatus,
     Doctor,
     IntakeSession,
     IntakeStatus,

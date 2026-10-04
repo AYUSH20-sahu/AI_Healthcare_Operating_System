@@ -1,10 +1,8 @@
 import logging
-import os
-import shutil
 import uuid
-from datetime import date, datetime
+from datetime import datetime
 from pathlib import Path
-from typing import List, Optional
+from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile, status

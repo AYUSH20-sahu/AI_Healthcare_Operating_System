@@ -3,6 +3,7 @@
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -13,8 +14,14 @@ from app.api.schemas.doctor import (
     DoctorUpdate,
 )
 from app.database import get_db
-from app.models import Doctor, User, UserRole
-from app.services.auth.service import get_current_active_user
+from app.models import AuditLog, AuditOutcome, Doctor, User, UserRole
+from app.services.auth.rbac import require_head_physician
+from app.services.auth.service import (
+    check_credentials_available,
+    get_current_active_user,
+    get_password_hash,
+    normalize_phone,
+)
 
 router = APIRouter(prefix="/doctors", tags=["doctors"])
 
@@ -212,10 +219,6 @@ async def list_doctors(
     )
 
 
-from pydantic import BaseModel, EmailStr, Field
-from app.services.auth.rbac import require_head_physician
-from app.services.auth.service import check_credentials_available, get_password_hash, normalize_phone
-from app.models import AuditLog, AuditOutcome
 
 
 class JuniorPhysicianProvisionRequest(BaseModel):

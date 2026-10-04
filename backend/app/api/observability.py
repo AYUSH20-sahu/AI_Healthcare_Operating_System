@@ -6,10 +6,9 @@ Endpoints:
 """
 
 from datetime import datetime, timezone
-import os
 from typing import Any, Dict
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
 from app.core.config import settings

@@ -51,10 +51,8 @@ async def main():
 
     from app.models import (
         Base,
-        Organization,
         User,
         UserRole,
-        Doctor,
     )
     from app.services.auth.service import get_password_hash
 

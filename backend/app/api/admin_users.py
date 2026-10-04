@@ -244,7 +244,7 @@ async def provision_user(
             select(User).where(
                 User.organization_id == current_admin.organization_id,
                 User.role == UserRole.HEAD_PHYSICIAN,
-                User.is_active == True,
+                User.is_active,
             )
         )
         if existing_head_physician.scalars().first():
@@ -259,7 +259,7 @@ async def provision_user(
             select(User).where(
                 User.organization_id == current_admin.organization_id,
                 User.role == UserRole.HEAD_NURSE,
-                User.is_active == True,
+                User.is_active,
             )
         )
         if existing_head_nurse.scalars().first():

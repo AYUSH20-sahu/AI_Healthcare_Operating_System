@@ -18,9 +18,8 @@ Tests covered:
 11. Unauthenticated Requests: 401 Unauthorized for unauthenticated requests.
 """
 
-import io
 import uuid
-from datetime import date, datetime
+from datetime import date
 import pytest
 import pytest_asyncio
 from httpx import AsyncClient
@@ -29,18 +28,11 @@ from sqlalchemy import select
 
 from app.models import (
     IntakeSession,
-    IntakeStatus,
     Patient,
     User,
     UserRole,
 )
 from app.services.auth.service import create_access_token, get_password_hash
-from app.services.providers import (
-    SUPPORTED_LANGUAGES,
-    MockSTTProvider,
-    MockTTSProvider,
-    registry,
-)
 
 
 @pytest_asyncio.fixture
@@ -118,18 +110,18 @@ async def test_get_supported_languages_configuration(client: AsyncClient):
     assert data["default_language"] == "en"
 
     # Check Validated tier
-    val_codes = [l["code"] for l in data["validated_languages"]]
+    val_codes = [lang["code"] for lang in data["validated_languages"]]
     assert "en" in val_codes
     assert "hi" in val_codes
 
     # Check Experimental tier
-    exp_codes = [l["code"] for l in data["experimental_languages"]]
+    exp_codes = [lang["code"] for lang in data["experimental_languages"]]
     assert "ta" in exp_codes
     assert "te" in exp_codes
     assert "es" in exp_codes
 
     # Verify language metadata structure
-    en_meta = next(l for l in data["validated_languages"] if l["code"] == "en")
+    en_meta = next(lang for lang in data["validated_languages"] if lang["code"] == "en")
     assert en_meta["name"] == "English"
     assert en_meta["stt_supported"] is True
     assert en_meta["tts_supported"] is True

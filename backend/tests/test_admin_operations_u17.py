@@ -24,7 +24,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import (
     Appointment,
     AppointmentStatus,
-    AuditLog,
     Doctor,
     Patient,
     User,

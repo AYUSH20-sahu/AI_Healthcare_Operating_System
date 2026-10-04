@@ -1,14 +1,15 @@
 """Script to create/update an Admin user in PostgreSQL and verify authentication."""
 
 import asyncio
+import importlib.util
 import os
+from pathlib import Path
+import urllib.parse
 import uuid
 import bcrypt
-from sqlalchemy import select, update
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
-
-from pathlib import Path
 
 # Load .env / .env.local
 root_dir = Path(__file__).resolve().parent.parent
@@ -28,17 +29,13 @@ DB_URL = os.getenv(
     "DATABASE_URL",
     "postgresql+asyncpg://postgres:postgres@localhost:5432/ai_hos"
 )
-try:
-    import asyncpg
+if importlib.util.find_spec("asyncpg") is not None:
     DRIVER_PREFIX = "postgresql+asyncpg://"
-except ImportError:
-    try:
-        import psycopg
-        DRIVER_PREFIX = "postgresql+psycopg://"
-    except ImportError:
-        DRIVER_PREFIX = "postgresql+asyncpg://"
+elif importlib.util.find_spec("psycopg") is not None:
+    DRIVER_PREFIX = "postgresql+psycopg://"
+else:
+    DRIVER_PREFIX = "postgresql+asyncpg://"
 
-import urllib.parse
 if "://" in DB_URL:
     scheme, rest = DB_URL.split("://", 1)
     if rest.count("@") > 1:
@@ -156,7 +153,7 @@ async def main():
         print(f"✓ [Admin Setup] Verified Super Admin: {super_email}")
 
         # Verify authentication
-        print(f"\n[Auth Check] Verifying password verification logic...")
+        print("\n[Auth Check] Verifying password verification logic...")
         is_valid = check_hash(ADMIN_PASSWORD, admin_user.hashed_password)
         print(f"  Password match: {is_valid}")
         assert is_valid is True, "Password check failed!"
@@ -168,16 +165,16 @@ async def main():
             "email": admin_user.email,
             "role": admin_user.role.value,
         })
-        print(f"  Access Token generated successfully!")
+        print("  Access Token generated successfully!")
         print(f"  Token: {token[:25]}...")
 
-        print(f"\n==================================================")
-        print(f"✓ ADMIN CREDENTIALS ACTIVE & VERIFIED:")
+        print("\n==================================================")
+        print("✓ ADMIN CREDENTIALS ACTIVE & VERIFIED:")
         print(f"  Email:    {ADMIN_EMAIL} (and {alt_email})")
         print(f"  Password: {ADMIN_PASSWORD}")
-        print(f"  Role:     ADMIN (Level 4 Clearance)")
-        print(f"  Status:   ACTIVE")
-        print(f"==================================================")
+        print("  Role:     ADMIN (Level 4 Clearance)")
+        print("  Status:   ACTIVE")
+        print("==================================================")
 
     await engine.dispose()
 

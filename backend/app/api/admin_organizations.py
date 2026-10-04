@@ -21,7 +21,6 @@ from app.services.auth.service import (
     check_credentials_available,
     create_user,
     get_current_active_user,
-    get_user_by_email,
     normalize_phone,
 )
 

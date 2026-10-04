@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/lib/auth';
 import { Button, Card, CardContent, Badge, Input, Modal } from '@/components/ui';
 import { nurseWorkstationApi, InpatientBedData } from '@/lib/api/nurses';
+import { useWardTelemetry, TelemetryVitalsPayload } from '@/lib/hooks/useWardTelemetry';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -343,6 +344,52 @@ export default function NurseVitalsPage() {
         }
     }, []);
 
+    const handleLiveTelemetry = useCallback((payload: TelemetryVitalsPayload) => {
+        if (!payload.bed_id && !payload.bed_number) return;
+        setBeds(prev => prev.map(b => {
+            if (b.bedId === payload.bed_id || b.bedNumber === payload.bed_number) {
+                const reading: VitalReading = {
+                    id: `vit-live-${Date.now()}`,
+                    patientName: payload.patient_name || b.patientName,
+                    patientId: b.patientId,
+                    bedNumber: payload.bed_number || b.bedNumber,
+                    ward: payload.ward || b.ward,
+                    age: b.age,
+                    gender: b.gender,
+                    admittedFor: b.admittedFor,
+                    systolic: payload.systolic || 120,
+                    diastolic: payload.diastolic || 80,
+                    pulse: payload.pulse || 72,
+                    spo2: payload.spo2 || 98,
+                    temperature: payload.temp || 98.6,
+                    respiratoryRate: payload.respiratory_rate || 16,
+                    painScore: payload.pain_score || 0,
+                    recordedAt: payload.vitals_last_checked || new Date().toISOString(),
+                    recordedBy: payload.recorded_by || 'Staff Nurse',
+                    status: (payload.clinical_status?.toLowerCase() as VitalReading['status']) || 'stable',
+                };
+
+                setVitalHistory(hPrev => ({
+                    ...hPrev,
+                    [b.bedNumber]: [reading, ...(hPrev[b.bedNumber] || [])].slice(0, 15),
+                }));
+
+                return {
+                    ...b,
+                    latestVitals: reading,
+                    status: (payload.clinical_status?.toLowerCase() as PatientBed['status']) || 'stable',
+                };
+            }
+            return b;
+        }));
+    }, []);
+
+    const { isConnected: isTelemetryLive } = useWardTelemetry({
+        ward: selectedWard === 'all' ? 'icu' : selectedWard,
+        enabled: true,
+        onVitalsUpdated: handleLiveTelemetry,
+    });
+
     useEffect(() => {
         fetchBeds();
         const timer = setInterval(fetchBeds, 30000);
@@ -415,6 +462,14 @@ export default function NurseVitalsPage() {
                     </p>
                 </div>
                 <div className="flex items-center gap-3">
+                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${
+                        isTelemetryLive
+                            ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30'
+                            : 'bg-slate-500/10 text-slate-500 dark:text-slate-400 border-slate-500/30'
+                    }`}>
+                        <span className={`w-2 h-2 rounded-full ${isTelemetryLive ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`} />
+                        {isTelemetryLive ? 'Live Bedside Stream' : 'Syncing (30s)'}
+                    </span>
                     {criticalCount > 0 && (
                         <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-rose-100 dark:bg-rose-900/40 border border-rose-200 dark:border-rose-800 animate-pulse">
                             <span className="w-2 h-2 rounded-full bg-rose-500"></span>

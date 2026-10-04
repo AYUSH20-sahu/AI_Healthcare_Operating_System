@@ -16,19 +16,15 @@ Tests covered:
 """
 
 import io
-import os
 import pytest
 import pytest_asyncio
-from datetime import date, datetime
+from datetime import date
 from httpx import AsyncClient
-from pathlib import Path
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import (
     Doctor,
-    MedicineReminder,
     Patient,
-    PatientReport,
     User,
     UserRole,
 )

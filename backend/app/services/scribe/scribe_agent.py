@@ -8,10 +8,9 @@ Persistence of the draft medical record is handled exclusively by the Core API.
 
 import json
 import logging
-import os
 import re
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import Any
 
 from app.services.orchestrator import AgentBase, TaskType, get_orchestrator
 from app.services.providers import (

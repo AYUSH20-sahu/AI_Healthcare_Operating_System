@@ -15,7 +15,6 @@ Tests the 10 mandatory criteria specified in Milestone U-11:
 
 import pytest
 import pytest_asyncio
-from datetime import datetime
 from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession

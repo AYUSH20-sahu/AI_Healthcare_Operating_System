@@ -9,7 +9,6 @@ Provides:
 - Clean separation from compliance audit_logs
 """
 
-import asyncio
 from collections import deque
 from contextvars import ContextVar
 from datetime import datetime, timezone
@@ -18,7 +17,7 @@ import logging
 import math
 import os
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 import uuid
 
 from starlette.middleware.base import BaseHTTPMiddleware

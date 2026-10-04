@@ -172,7 +172,6 @@ KNOWN_INTERACTIONS: dict[tuple[str, str], dict] = {
     ("levothyroxine", "proton pump inhibitor"): {"severity": "minor", "description": "PPIs raise gastric pH, mildly reducing levothyroxine absorption.", "recommendation": "Monitor TSH; take levothyroxine on empty stomach 30–60 min before PPI."},
 
     # ─── GI MEDICATIONS ────────────────────────────────────────────────────────
-    ("clopidogrel", "omeprazole"): {"severity": "moderate", "description": "Omeprazole inhibits CYP2C19 activation of clopidogrel, reducing antiplatelet efficacy.", "recommendation": "Use pantoprazole or famotidine as PPI; avoid omeprazole/esomeprazole with clopidogrel."},
     ("antacids", "ciprofloxacin"): {"severity": "moderate", "description": "Polyvalent cations (Al, Mg, Ca) chelate fluoroquinolones, reducing oral bioavailability by up to 90%.", "recommendation": "Take ciprofloxacin 2h before or 6h after antacid."},
     ("antacids", "tetracycline"): {"severity": "moderate", "description": "Chelation of tetracycline by antacid cations reduces bioavailability.", "recommendation": "Separate by at least 2h."},
 

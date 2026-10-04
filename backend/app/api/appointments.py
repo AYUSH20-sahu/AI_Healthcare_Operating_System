@@ -1,5 +1,8 @@
+import logging
 from datetime import date, datetime, time, timedelta
 from uuid import UUID
+
+logger = logging.getLogger("ai_hos.appointments")
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import and_, func, select
@@ -298,6 +301,26 @@ async def create_appointment(
     db.add(appointment)
     await db.commit()
     await db.refresh(appointment)
+
+    try:
+        from app.core.websocket_manager import queue_manager
+        org_key = str(current_user.organization_id or "default").lower().strip()
+        await queue_manager.broadcast(
+            f"queue:{org_key}",
+            {
+                "event": "QUEUE_STATUS_UPDATED",
+                "organization_id": org_key,
+                "appointment_id": str(appointment.appointment_id),
+                "patient_name": patient.full_name,
+                "doctor_name": doctor.full_name,
+                "old_status": None,
+                "new_status": appointment.status.value if hasattr(appointment.status, "value") else str(appointment.status),
+                "scheduled_at": appointment.scheduled_at.isoformat(),
+            },
+        )
+    except Exception as ws_err:
+        logger.warning(f"Queue broadcast notice: {ws_err}")
+
     return appointment
 
 
@@ -417,6 +440,24 @@ async def update_appointment(
     
     await db.commit()
     await db.refresh(appointment)
+
+    try:
+        from app.core.websocket_manager import queue_manager
+        org_key = str(current_user.organization_id or "default").lower().strip()
+        await queue_manager.broadcast(
+            f"queue:{org_key}",
+            {
+                "event": "QUEUE_STATUS_UPDATED",
+                "organization_id": org_key,
+                "appointment_id": str(appointment.appointment_id),
+                "old_status": None,
+                "new_status": appointment.status.value if hasattr(appointment.status, "value") else str(appointment.status),
+                "scheduled_at": appointment.scheduled_at.isoformat(),
+            },
+        )
+    except Exception as ws_err:
+        logger.warning(f"Queue broadcast notice: {ws_err}")
+
     return appointment
 
 

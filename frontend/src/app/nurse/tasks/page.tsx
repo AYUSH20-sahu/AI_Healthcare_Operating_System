@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/lib/auth';
 import { Card, CardContent, Badge, Modal, Button } from '@/components/ui';
 import { nurseWorkstationApi, ShiftTaskData } from '@/lib/api/nurses';
+import { useWardTelemetry, TelemetryVitalsPayload } from '@/lib/hooks/useWardTelemetry';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -154,6 +155,19 @@ export default function NurseTasksPage() {
         }
     }, []);
 
+    const handleTelemetryTaskUpdate = useCallback((payload: TelemetryVitalsPayload) => {
+        if (payload.event === 'TASK_UPDATED' || payload.event === 'MEDICATION_ADMINISTERED') {
+            loadTasks();
+        }
+    }, [loadTasks]);
+
+    const { isConnected: isTasksStreamLive } = useWardTelemetry({
+        ward: 'icu',
+        enabled: true,
+        onTaskUpdated: handleTelemetryTaskUpdate,
+        onMedicationAdministered: handleTelemetryTaskUpdate,
+    });
+
     useEffect(() => {
         loadTasks();
         const interval = setInterval(loadTasks, 30000);
@@ -192,9 +206,21 @@ export default function NurseTasksPage() {
     return (
         <div className="space-y-6">
             {/* Header */}
-            <div>
-                <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100">Medication Tasks & Ward Rounds</h1>
-                <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Shift task board — track administered medications and ward round checklists</p>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                    <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100">Medication Tasks & Ward Rounds</h1>
+                    <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Shift task board — track administered medications and ward round checklists</p>
+                </div>
+                <div className="flex items-center gap-2">
+                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${
+                        isTasksStreamLive
+                            ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30'
+                            : 'bg-slate-500/10 text-slate-500 dark:text-slate-400 border-slate-500/30'
+                    }`}>
+                        <span className={`w-2 h-2 rounded-full ${isTasksStreamLive ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`} />
+                        {isTasksStreamLive ? 'Shift Task Stream Live' : 'Syncing (30s)'}
+                    </span>
+                </div>
             </div>
 
             {/* Stats */}

@@ -7,7 +7,6 @@ from uuid import UUID
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from app.database import AsyncSessionLocal
 from app.models import AuditLog, AuditOutcome
 
 

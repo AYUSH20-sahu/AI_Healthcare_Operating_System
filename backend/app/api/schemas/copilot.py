@@ -1,7 +1,6 @@
 """Doctor Copilot API Pydantic schemas."""
 
-from typing import Any, Optional
-from uuid import UUID
+from typing import Any
 from pydantic import BaseModel, Field
 
 

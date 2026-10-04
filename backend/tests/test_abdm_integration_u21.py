@@ -15,8 +15,7 @@ Tests covered:
 12. Unauthenticated Requests: 401 Unauthorized when missing authorization token.
 """
 
-import uuid
-from datetime import date, datetime
+from datetime import date
 import pytest
 import pytest_asyncio
 from httpx import AsyncClient

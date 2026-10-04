@@ -6,7 +6,6 @@ Non-supported hardware/predictive metrics are explicitly disclosed as roadmap ca
 """
 
 import logging
-import uuid
 from datetime import date, datetime, time, timedelta
 from typing import Any, Dict, List, Optional
 from uuid import UUID
@@ -143,7 +142,7 @@ async def get_operational_dashboard(
     user_counts = {role.value if hasattr(role, "value") else str(role): count for role, count in users_by_role_res.all()}
 
     total_users = sum(user_counts.values())
-    active_users = (await db.execute(select(func.count(User.user_id)).where(User.is_active == True))).scalar_one() or 0
+    active_users = (await db.execute(select(func.count(User.user_id)).where(User.is_active))).scalar_one() or 0
 
     users_summary = {
         "total_users": total_users,
@@ -452,7 +451,7 @@ async def get_doctors_availability_matrix(
             raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD.")
 
     # 1. Fetch doctors
-    doc_query = select(Doctor).join(User, Doctor.user_id == User.user_id).where(User.is_active == True)
+    doc_query = select(Doctor).join(User, Doctor.user_id == User.user_id).where(User.is_active)
     if specialty and specialty.lower() != "all":
         doc_query = doc_query.where(Doctor.specialty.ilike(specialty))
     doc_query = doc_query.order_by(Doctor.full_name.asc())

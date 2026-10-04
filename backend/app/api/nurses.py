@@ -5,8 +5,6 @@ import uuid
 from datetime import datetime, timedelta
 from typing import Optional
 
-logger = logging.getLogger("ai_hos.nurses")
-
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy import desc, func, or_, select
@@ -28,6 +26,8 @@ from app.services.auth.service import (
     get_password_hash,
     normalize_phone,
 )
+
+logger = logging.getLogger("ai_hos.nurses")
 
 router = APIRouter(prefix="/nurses", tags=["nurses"])
 
@@ -816,23 +816,23 @@ async def get_bed_vitals_history(
 
     return [
         {
-            "id": str(l.log_id),
-            "bedId": str(l.bed_id),
-            "bp": l.bp,
-            "systolic": l.systolic,
-            "diastolic": l.diastolic,
-            "pulse": l.pulse,
-            "spo2": l.spo2,
-            "temperature": l.temp,
-            "respiratoryRate": l.respiratory_rate,
-            "painScore": l.pain_score,
-            "status": l.status,
-            "isCritical": l.is_critical,
-            "notes": l.notes,
-            "recordedBy": l.recorded_by,
-            "recordedAt": l.recorded_at.isoformat(),
+            "id": str(log_entry.log_id),
+            "bedId": str(log_entry.bed_id),
+            "bp": log_entry.bp,
+            "systolic": log_entry.systolic,
+            "diastolic": log_entry.diastolic,
+            "pulse": log_entry.pulse,
+            "spo2": log_entry.spo2,
+            "temperature": log_entry.temp,
+            "respiratoryRate": log_entry.respiratory_rate,
+            "painScore": log_entry.pain_score,
+            "status": log_entry.status,
+            "isCritical": log_entry.is_critical,
+            "notes": log_entry.notes,
+            "recordedBy": log_entry.recorded_by,
+            "recordedAt": log_entry.recorded_at.isoformat(),
         }
-        for l in logs
+        for log_entry in logs
     ]
 
 

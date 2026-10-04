@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { doctorsApi, patientsApi, appointmentsApi, Doctor, Patient, Appointment } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
+import { useQueueStream, QueueStreamPayload } from '@/lib/hooks/useQueueStream';
 import { PatientContextBanner, PatientContextData } from '@/components/doctor/PatientContextBanner';
 import { QuickActionBar } from '@/components/doctor/QuickActionBar';
 import { DoctorStatsOverview, DoctorStats } from '@/components/doctor/DoctorStatsOverview';
@@ -75,6 +76,27 @@ export default function DoctorDashboardPage() {
 
         fetchDoctorContext();
     }, [user]);
+
+    const handleQueueStream = useCallback((payload: QueueStreamPayload) => {
+        if (!payload.appointment_id) return;
+        setQueue((prev) =>
+            prev.map((item) => {
+                if (item.appointment_id === payload.appointment_id) {
+                    return {
+                        ...item,
+                        status: (payload.new_status as any) || item.status,
+                    };
+                }
+                return item;
+            })
+        );
+    }, []);
+
+    const { isConnected: isQueueLive } = useQueueStream({
+        organizationId: user?.organization_id || 'default',
+        enabled: true,
+        onQueueUpdated: handleQueueStream,
+    });
 
     // Auto-select first patient as active context
     useEffect(() => {

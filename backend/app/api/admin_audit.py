@@ -5,7 +5,6 @@ Complies with FHIR-R4 AuditEvent specification, HIPAA security rules, and ABDM g
 Access is strictly restricted to system administrators.
 """
 
-import uuid
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 from uuid import UUID
@@ -16,7 +15,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models import AuditLog, AuditOutcome, User, UserRole
+from app.models import AuditLog, AuditOutcome, User
 from app.services.auth.rbac import require_admin
 
 router = APIRouter(prefix="/admin/audit", tags=["admin-audit"])

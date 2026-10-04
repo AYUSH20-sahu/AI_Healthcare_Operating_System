@@ -153,10 +153,8 @@ app.include_router(websockets.router, prefix="/api/v1")
 @app.on_event("startup")
 async def startup_event():
     """Ensure database connection initialized and default test personas & organizations exist."""
-    from sqlalchemy import select
     from app.database import AsyncSessionLocal, init_db
-    from app.models import Organization, UserRole
-    from app.services.auth.service import UserCreate, create_user, get_password_hash, get_user_by_email
+    from app.services.auth.service import UserCreate, create_user, get_user_by_email
 
     try:
         init_db()

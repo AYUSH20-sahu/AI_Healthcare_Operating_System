@@ -18,7 +18,7 @@ from typing import Dict, Optional, Set, Tuple
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 import importlib
-from starlette.responses import JSONResponse, Response
+from starlette.responses import Response
 
 from app.core.exceptions import create_error_response
 

@@ -7,8 +7,7 @@ Explicitly tests:
 4. Full-stack FastAPI route integration and RBAC security.
 """
 
-import json
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 import pytest
 import pytest_asyncio
 from httpx import AsyncClient
@@ -26,7 +25,6 @@ from app.services.orchestrator import (
 from app.services.providers import (
     FallbackLLMProvider,
     LLMMessage,
-    LLMResponse,
     MockLLMProvider,
 )
 

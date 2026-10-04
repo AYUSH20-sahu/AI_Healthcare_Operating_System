@@ -5,7 +5,6 @@ SOAP synthesis, provider failover telemetry, and human review fallback.
 """
 
 import uuid
-from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -20,7 +19,6 @@ from app.database import get_db
 from app.models import User, UserRole
 from app.services.auth.audit import log_audit_event
 from app.services.auth.service import get_current_active_user
-from app.services.copilot.copilot_agent import copilot_agent
 from app.services.orchestrator import (
     TaskRequest,
     TaskResult,

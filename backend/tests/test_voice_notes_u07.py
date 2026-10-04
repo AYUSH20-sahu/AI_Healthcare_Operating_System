@@ -13,7 +13,6 @@ Validates:
 """
 
 from io import BytesIO
-from uuid import uuid4
 import pytest
 from sqlalchemy import select
 
@@ -160,7 +159,7 @@ class TestMilestoneU07VoiceNoteWorkflow:
         logs = audit_res.scalars().all()
         assert len(logs) > 0
         matched = any(
-            l.details and l.details.get("file_name") == "audit_test.wav"
-            for l in logs
+            log_entry.details and log_entry.details.get("file_name") == "audit_test.wav"
+            for log_entry in logs
         )
         assert matched is True

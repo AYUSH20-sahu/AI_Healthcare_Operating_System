@@ -10,7 +10,7 @@ Provides endpoints for:
 from typing import Any, Dict, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -202,7 +202,7 @@ async def consent_manager_notification_webhook(
 
     # Try to find a matching Consent record by request_id or artefact_id
     try:
-        from app.models import Consent, AuditLog
+        from app.models import Consent
         consent_query = await db.execute(
             sa_select(Consent).where(Consent.consent_request_id == request_id)
         )

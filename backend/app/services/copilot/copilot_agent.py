@@ -7,10 +7,9 @@ and differential diagnoses via the provider adapter layer.
 
 import json
 import logging
-import os
 import re
-from dataclasses import asdict, dataclass, field
-from typing import Any, Optional
+from dataclasses import dataclass, field
+from typing import Any
 
 from app.services.orchestrator import AgentBase, TaskType, get_orchestrator
 from app.services.providers import LLMMessage, LLMResponse, get_llm_provider

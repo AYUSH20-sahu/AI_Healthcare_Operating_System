@@ -19,7 +19,6 @@ AI-HOS Unified Master Prompt v6 (Milestone U-24):
 """
 
 from datetime import date, datetime, timedelta
-import io
 import uuid
 import pytest
 import pytest_asyncio
@@ -27,10 +26,6 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import (
-    Appointment,
-    AppointmentStatus,
-    Consent,
-    ConsentScope,
     Doctor,
     MedicalRecord,
     MedicalRecordStatus,

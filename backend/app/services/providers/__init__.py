@@ -12,14 +12,9 @@ import os
 import time
 from abc import ABC, abstractmethod
 from collections.abc import AsyncIterator
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Optional
-
-if TYPE_CHECKING:
-    import google.generativeai as genai
-    from groq import AsyncGroq
-    from openai import AsyncOpenAI
+from typing import Any
 
 logger = logging.getLogger("ai_providers")
 

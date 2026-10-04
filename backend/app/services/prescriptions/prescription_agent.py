@@ -9,8 +9,8 @@ Persistence of the draft prescription is handled exclusively by the Core API.
 import json
 import logging
 import re
-from dataclasses import dataclass, field
-from typing import Any, Optional
+from dataclasses import dataclass
+from typing import Any
 
 from app.services.orchestrator import AgentBase, TaskType, get_orchestrator
 from app.services.providers import (

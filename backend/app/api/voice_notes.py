@@ -1,7 +1,6 @@
 """Voice Notes API routes."""
 
 import os
-import shutil
 from datetime import datetime
 from pathlib import Path
 from uuid import UUID
@@ -45,7 +44,6 @@ from app.models import (
 from app.services.auth.audit import log_audit_event
 from app.services.auth.service import get_current_active_user
 from app.services.orchestrator import TaskRequest, TaskType, get_orchestrator
-from app.services.scribe.scribe_agent import scribe_agent
 
 router = APIRouter(prefix="/voice-notes", tags=["voice-notes"])
 

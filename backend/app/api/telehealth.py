@@ -4,15 +4,14 @@ Provides endpoints for daily doctor scheduling, active consultation room context
 red-flag detection integration from U-13 intake summaries, and real-time consultation lifecycle.
 """
 
-from datetime import date, datetime, time, timedelta
-import asyncio
+from datetime import date, datetime, time
 import json
 import re
 from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect, status
-from sqlalchemy import and_, desc, select
+from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.schemas.telehealth import (

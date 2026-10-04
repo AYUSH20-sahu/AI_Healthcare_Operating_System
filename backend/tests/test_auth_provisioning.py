@@ -19,8 +19,6 @@ Validates all 16 acceptance criteria defined in lines 670-686 of Master Prompt v
 16. Administrative actions are logged in immutable audit_logs.
 """
 
-from uuid import uuid4
-
 import pytest
 from sqlalchemy import select
 

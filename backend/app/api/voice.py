@@ -5,11 +5,10 @@ multilingual language configuration (Validated: EN, HI; Experimental: TA, TE, BN
 and language-aware speech transcription & synthesis.
 """
 
-import base64
 import logging
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Response, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile, status
 from pydantic import BaseModel, Field
 
 from app.models import User
@@ -18,7 +17,6 @@ from app.services.providers import (
     SUPPORTED_LANGUAGES,
     get_stt_provider,
     get_tts_provider,
-    registry,
 )
 
 logger = logging.getLogger("aihos.voice")

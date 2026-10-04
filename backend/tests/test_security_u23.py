@@ -1,8 +1,7 @@
 """Comprehensive Security Hardening Test Suite (Milestone U-23)."""
 
-from datetime import timedelta
 import pytest
-from httpx import AsyncClient
+from httpx import ASGITransport, AsyncClient
 
 from app.core.security import (
     rate_limiter,
@@ -25,7 +24,7 @@ def reset_limiter():
 @pytest.mark.asyncio
 async def test_security_headers_present():
     """Verify standard defense-in-depth OWASP security headers on all responses."""
-    async with AsyncClient(app=app, base_url="http://test") as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         res = await client.get("/health")
         assert res.status_code == 200
         headers = res.headers
@@ -41,7 +40,7 @@ async def test_security_headers_present():
 @pytest.mark.asyncio
 async def test_cors_preflight_and_headers():
     """Verify CORS middleware responds with authorized origin and exposed headers."""
-    async with AsyncClient(app=app, base_url="http://test") as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         res = await client.options(
             "/api/v1/patients/",
             headers={
@@ -60,7 +59,7 @@ async def test_cors_preflight_and_headers():
 @pytest.mark.asyncio
 async def test_rate_limiting_enforcement():
     """Verify rate limiter middleware triggers HTTP 429 when threshold exceeded."""
-    async with AsyncClient(app=app, base_url="http://test") as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         # Auth limit is 20 requests per minute
         # Send 25 rapid requests from the same test client
         hit_429 = False
@@ -102,7 +101,7 @@ async def test_password_strength_enforcement():
     assert valid_ok is True
 
     # 4. API level test
-    async with AsyncClient(app=app, base_url="http://test") as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         res = await client.post(
             "/api/v1/auth/signup",
             json={
@@ -121,7 +120,7 @@ async def test_jwt_token_type_hardening():
     # Generate a refresh token
     refresh_tok = create_refresh_token(data={"sub": "00000000-0000-0000-0000-000000000001", "role": "patient"})
 
-    async with AsyncClient(app=app, base_url="http://test") as client:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         # Attempt to access /auth/me with refresh token
         res = await client.get(
             "/api/v1/auth/me",

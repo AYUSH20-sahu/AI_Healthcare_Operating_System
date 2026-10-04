@@ -17,7 +17,7 @@ Tests covered:
 """
 
 import uuid
-from datetime import date, datetime, timedelta
+from datetime import date
 import pytest
 import pytest_asyncio
 from httpx import AsyncClient
@@ -27,8 +27,6 @@ from sqlalchemy import select
 from app.models import (
     AuditLog,
     AuditOutcome,
-    Consent,
-    ConsentScope,
     Doctor,
     Patient,
     User,

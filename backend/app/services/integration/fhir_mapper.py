@@ -10,7 +10,6 @@ All transformations are computed on-demand within this integration service bound
 
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
-from uuid import UUID
 
 from app.models import (
     Appointment,

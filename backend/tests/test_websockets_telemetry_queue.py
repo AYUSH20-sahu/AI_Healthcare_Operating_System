@@ -4,6 +4,7 @@ Tests TelemetryConnectionManager, QueueConnectionManager, WebSocket token authen
 live bedside telemetry broadcasts, and real-time OPD queue status events.
 """
 
+import asyncio
 from uuid import uuid4
 import pytest
 from httpx import AsyncClient
@@ -12,7 +13,7 @@ from starlette.testclient import TestClient
 
 from app.core.websocket_manager import ConnectionManager, queue_manager, telemetry_manager
 from app.main import app
-from app.models import User, UserRole, InpatientBed
+from app.models import User, UserRole
 from app.services.auth.service import create_access_token, get_password_hash
 
 
@@ -148,3 +149,53 @@ def test_queue_broadcast_ws_handshake(nurse_ws_token: str):
 
         ws.send_text("ping")
         assert ws.receive_text() == "pong"
+
+
+def test_ward_telemetry_live_broadcast_delivery(nurse_ws_token: str):
+    """Verify connected WebSocket receives broadcast when vitals are pushed."""
+    client = TestClient(app)
+    with client.websocket_connect(f"/api/v1/ws/telemetry/ward/icu?token={nurse_ws_token}") as ws:
+        welcome = ws.receive_json()
+        assert welcome["event"] == "CONNECTED"
+
+        # Dispatch async broadcast via telemetry_manager
+        payload = {
+            "event": "VITALS_UPDATED",
+            "ward": "icu",
+            "bed_number": "ICU-BED-01",
+            "patient_name": "Test Inpatient",
+            "pulse": 88,
+            "spo2": 99,
+            "clinical_status": "stable",
+            "is_critical": False,
+        }
+        asyncio.run(telemetry_manager.broadcast("telemetry:icu", payload))
+
+        # Receive streamed event
+        received = ws.receive_json()
+        assert received["event"] == "VITALS_UPDATED"
+        assert received["bed_number"] == "ICU-BED-01"
+        assert received["pulse"] == 88
+        assert received["spo2"] == 99
+
+
+def test_queue_live_broadcast_delivery(nurse_ws_token: str):
+    """Verify connected WebSocket receives broadcast when queue status is updated."""
+    client = TestClient(app)
+    with client.websocket_connect(f"/api/v1/ws/queue/org_alpha?token={nurse_ws_token}") as ws:
+        welcome = ws.receive_json()
+        assert welcome["event"] == "CONNECTED"
+
+        payload = {
+            "event": "QUEUE_STATUS_UPDATED",
+            "organization_id": "org_alpha",
+            "appointment_id": "appt-12345",
+            "patient_name": "Amit Sharma",
+            "new_status": "in_progress",
+        }
+        asyncio.run(queue_manager.broadcast("queue:org_alpha", payload))
+
+        received = ws.receive_json()
+        assert received["event"] == "QUEUE_STATUS_UPDATED"
+        assert received["appointment_id"] == "appt-12345"
+        assert received["new_status"] == "in_progress"
