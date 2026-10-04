@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { adminOperationsApi, QueueItem, QueueListResponse } from '@/lib/api';
 import { Button, Card, CardContent, Badge } from '@/components/ui';
+import { useQueueStream, QueueStreamPayload } from '@/lib/hooks/useQueueStream';
 
 const STATUS_FILTERS = [
     { key: 'all', label: 'All Consultations' },
@@ -41,6 +42,30 @@ export default function AdminQueuePage() {
             setIsLoading(false);
         }
     };
+
+    const handleQueueStreamEvent = useCallback((payload: QueueStreamPayload) => {
+        if (!payload.appointment_id) return;
+        setQueueData((prev) => {
+            if (!prev) return prev;
+            return {
+                ...prev,
+                queue: prev.queue.map((item) => {
+                    if (item.appointment_id === payload.appointment_id) {
+                        return {
+                            ...item,
+                            status: payload.new_status || item.status,
+                        };
+                    }
+                    return item;
+                }),
+            };
+        });
+    }, []);
+
+    const { isConnected: isQueueLive } = useQueueStream({
+        enabled: true,
+        onQueueUpdated: handleQueueStreamEvent,
+    });
 
     const handleSearch = (e: React.FormEvent) => {
         e.preventDefault();
@@ -94,6 +119,14 @@ export default function AdminQueuePage() {
                         <Badge variant="primary" className="text-[10px] uppercase font-bold">
                             Live Triage
                         </Badge>
+                        <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold tracking-wider uppercase border ${
+                            isQueueLive
+                                ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30'
+                                : 'bg-slate-500/10 text-slate-500 dark:text-slate-400 border-slate-500/30'
+                        }`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${isQueueLive ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`} />
+                            {isQueueLive ? 'Stream Active' : 'Polling'}
+                        </span>
                     </div>
                     <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white mt-1 flex items-center gap-2">
                         <span>⏱️ Real-Time Clinic Patient Queue</span>

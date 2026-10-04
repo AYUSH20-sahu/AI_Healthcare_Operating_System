@@ -16,6 +16,7 @@ from sqlalchemy import (
     Date,
     DateTime,
     Enum,
+    Float,
     ForeignKey,
     Index,
     Integer,
@@ -603,4 +604,158 @@ class MedicineReminder(Base):
 
     __table_args__ = (
         Index("ix_medicine_reminders_patient_active", "patient_id", "is_active"),
-    )
+    )
+
+
+# FHIR: Location / Encounter (Inpatient Bed and Clinical Ward Monitoring)
+class InpatientBed(Base):
+    """Hospital inpatient bed occupancy and bedside clinical vitals tracking."""
+    __tablename__ = "inpatient_beds"
+
+    bed_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    bed_number: Mapped[str] = mapped_column(String(50), index=True)
+    ward: Mapped[str] = mapped_column(String(100), index=True)
+    status: Mapped[str] = mapped_column(String(50), default="occupied")  # occupied, vacant, maintenance
+    clinical_status: Mapped[str] = mapped_column(String(50), default="Stable")  # Stable, Attention, Critical
+
+    patient_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("patients.patient_id"), nullable=True, index=True
+    )
+    patient_name: Mapped[str] = mapped_column(String(255))
+    uhid: Mapped[str] = mapped_column(String(100))
+    age: Mapped[int] = mapped_column(Integer, default=45)
+    gender: Mapped[str] = mapped_column(String(50), default="Unknown")
+    admitted_for: Mapped[str] = mapped_column(Text)
+    attending_physician: Mapped[str] = mapped_column(String(255))
+    admitted_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    admit_day: Mapped[int] = mapped_column(Integer, default=1)
+    diet: Mapped[str] = mapped_column(String(100), default="Regular Diet")
+    allergies: Mapped[list[str]] = mapped_column(JSON, default=list)
+    code_status: Mapped[str] = mapped_column(String(50), default="Full Code")
+    isolation_precautions: Mapped[str | None] = mapped_column(String(100), nullable=True)
+
+    next_medication: Mapped[str] = mapped_column(String(255), default="Standard IV Saline")
+    medication_due: Mapped[str] = mapped_column(String(100), default="16:00 Dose Round")
+
+    # Cached latest telemetry vitals
+    bp: Mapped[str] = mapped_column(String(50), default="120/80")
+    systolic: Mapped[int] = mapped_column(Integer, default=120)
+    diastolic: Mapped[int] = mapped_column(Integer, default=80)
+    pulse: Mapped[int] = mapped_column(Integer, default=72)
+    spo2: Mapped[int] = mapped_column(Integer, default=98)
+    temp: Mapped[float] = mapped_column(Float, default=98.6)
+    respiratory_rate: Mapped[int] = mapped_column(Integer, default=16)
+    pain_score: Mapped[int] = mapped_column(Integer, default=0)
+    vitals_last_checked: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    organization_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("organizations.organization_id"), nullable=True, index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    vitals_logs: Mapped[list["BedVitalsLog"]] = relationship(
+        back_populates="bed", cascade="all, delete-orphan", order_by="desc(BedVitalsLog.recorded_at)"
+    )
+    nurse_tasks: Mapped[list["NurseTask"]] = relationship(
+        back_populates="bed", cascade="all, delete-orphan"
+    )
+
+    __table_args__ = (
+        Index("ix_inpatient_beds_ward_status", "ward", "status"),
+    )
+
+
+# FHIR: Observation (Bedside Telemetry and Vital Signs Log)
+class BedVitalsLog(Base):
+    """Historical bedside vitals telemetry log with critical range flags."""
+    __tablename__ = "bed_vitals_logs"
+
+    log_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    bed_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("inpatient_beds.bed_id"), index=True
+    )
+    patient_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("patients.patient_id"), nullable=True, index=True
+    )
+    bp: Mapped[str] = mapped_column(String(50))
+    systolic: Mapped[int] = mapped_column(Integer)
+    diastolic: Mapped[int] = mapped_column(Integer)
+    pulse: Mapped[int] = mapped_column(Integer)
+    spo2: Mapped[int] = mapped_column(Integer)
+    temp: Mapped[float] = mapped_column(Float)
+    respiratory_rate: Mapped[int] = mapped_column(Integer, default=16)
+    pain_score: Mapped[int] = mapped_column(Integer, default=0)
+    status: Mapped[str] = mapped_column(String(50), default="stable")  # stable, attention, critical
+    is_critical: Mapped[bool] = mapped_column(Boolean, default=False)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    recorded_by: Mapped[str] = mapped_column(String(255), default="Staff Nurse")
+    recorded_by_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.user_id"), nullable=True
+    )
+    recorded_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+    # Relationships
+    bed: Mapped["InpatientBed"] = relationship(back_populates="vitals_logs")
+
+    __table_args__ = (
+        Index("ix_bed_vitals_logs_bed_recorded", "bed_id", "recorded_at"),
+    )
+
+
+# FHIR: Task / MedicationAdministration (Nurse Shift Medication & Ward Round Tasks)
+class NurseTask(Base):
+    """Shift medication administration and ward round duties."""
+    __tablename__ = "nurse_tasks"
+
+    task_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+    )
+    bed_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("inpatient_beds.bed_id"), nullable=True, index=True
+    )
+    patient_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("patients.patient_id"), nullable=True, index=True
+    )
+    patient_name: Mapped[str] = mapped_column(String(255))
+    bed_number: Mapped[str] = mapped_column(String(50))
+    ward: Mapped[str] = mapped_column(String(100))
+    task_type: Mapped[str] = mapped_column(String(50), default="medication", index=True)  # medication, ward_round
+
+    # Medication-specific
+    medication: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    dose: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    route: Mapped[str | None] = mapped_column(String(50), nullable=True)  # Oral, IV, Subcutaneous, Inhalation
+    prescribed_by: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    # Ward round-specific
+    round_task: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    category: Mapped[str | None] = mapped_column(String(50), nullable=True)  # positioning, wound, iv, catheter, nutrition, assessment
+
+    # Common fields
+    priority: Mapped[str] = mapped_column(String(50), default="routine")  # stat, urgent, routine
+    due_time: Mapped[str] = mapped_column(String(100))
+    is_overdue: Mapped[bool] = mapped_column(Boolean, default=False)
+    status: Mapped[str] = mapped_column(String(50), default="pending", index=True)  # pending, administered, delayed, refused, done
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    administered_by: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    administered_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    organization_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("organizations.organization_id"), nullable=True, index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    bed: Mapped["InpatientBed | None"] = relationship(back_populates="nurse_tasks")
+
+    __table_args__ = (
+        Index("ix_nurse_tasks_status_due", "status", "due_time"),
+    )
+

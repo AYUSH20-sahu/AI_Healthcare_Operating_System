@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/lib/auth';
 import { Card, CardContent } from '@/components/ui';
+import { nurseWorkstationApi, AssignedPatientData } from '@/lib/api/nurses';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -26,10 +27,6 @@ interface AssignedPatient {
     codeStatus: 'Full Code' | 'DNR' | 'DNI';
     isolationPrecautions?: string;
 }
-
-// ─── Patient Data ─────────────────────────────────────────────────────────────
-
-const ASSIGNED_PATIENTS: AssignedPatient[] = [];
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -181,13 +178,34 @@ function PatientCard({ patient }: { patient: AssignedPatient }) {
 
 export default function NursePatientsPage() {
     const { user } = useAuth();
+    const [patients, setPatients] = useState<AssignedPatient[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
     const [search, setSearch] = useState('');
     const [statusFilter, setStatusFilter] = useState<'all' | 'critical' | 'attention' | 'stable'>('all');
     const [wardFilter, setWardFilter] = useState<string>('all');
 
-    const wards = ['all', ...Array.from(new Set(ASSIGNED_PATIENTS.map(p => p.ward)))];
+    const loadPatients = useCallback(async () => {
+        try {
+            const data = await nurseWorkstationApi.getAssignedPatients();
+            if (Array.isArray(data)) {
+                setPatients(data);
+            }
+        } catch (err) {
+            console.error('Failed to load assigned patients:', err);
+        } finally {
+            setIsLoading(false);
+        }
+    }, []);
 
-    const filtered = ASSIGNED_PATIENTS.filter(p => {
+    useEffect(() => {
+        loadPatients();
+        const interval = setInterval(loadPatients, 30000);
+        return () => clearInterval(interval);
+    }, [loadPatients]);
+
+    const wards = ['all', ...Array.from(new Set(patients.map(p => p.ward)))];
+
+    const filtered = patients.filter(p => {
         const matchSearch = !search || p.patientName.toLowerCase().includes(search.toLowerCase()) || p.bedNumber.toLowerCase().includes(search.toLowerCase()) || p.admittedFor.toLowerCase().includes(search.toLowerCase());
         const matchStatus = statusFilter === 'all' || p.status === statusFilter;
         const matchWard = wardFilter === 'all' || p.ward === wardFilter;
@@ -195,9 +213,9 @@ export default function NursePatientsPage() {
     });
 
     const counts = {
-        critical: ASSIGNED_PATIENTS.filter(p => p.status === 'critical').length,
-        attention: ASSIGNED_PATIENTS.filter(p => p.status === 'attention').length,
-        stable: ASSIGNED_PATIENTS.filter(p => p.status === 'stable').length,
+        critical: patients.filter(p => p.status === 'critical').length,
+        attention: patients.filter(p => p.status === 'attention').length,
+        stable: patients.filter(p => p.status === 'stable').length,
     };
 
     return (
@@ -206,7 +224,7 @@ export default function NursePatientsPage() {
             <div>
                 <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100">My Assigned Patients</h1>
                 <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-                    {ASSIGNED_PATIENTS.length} patients across {wards.length - 1} ward{wards.length - 1 > 1 ? 's' : ''} assigned to your shift
+                    {patients.length} patients across {Math.max(1, wards.length - 1)} ward{wards.length - 1 > 1 ? 's' : ''} assigned to your shift
                 </p>
             </div>
 

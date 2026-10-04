@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/lib/auth';
 import { Card, CardContent, Badge, Modal, Button } from '@/components/ui';
+import { nurseWorkstationApi, ShiftTaskData } from '@/lib/api/nurses';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -108,8 +109,56 @@ function ActionModal({ task, onClose, onAction }: { task: MedTask; onClose: () =
 export default function NurseTasksPage() {
     const [medTasks, setMedTasks] = useState<MedTask[]>(INITIAL_MED_TASKS);
     const [roundTasks, setRoundTasks] = useState<RoundTask[]>(INITIAL_ROUND_TASKS);
+    const [isLoading, setIsLoading] = useState(true);
     const [activeTaskModal, setActiveTaskModal] = useState<MedTask | null>(null);
     const [activeTab, setActiveTab] = useState<'meds' | 'rounds'>('meds');
+
+    const loadTasks = useCallback(async () => {
+        try {
+            const data = await nurseWorkstationApi.getShiftTasks();
+            if (data) {
+                if (Array.isArray(data.medTasks)) {
+                    setMedTasks(data.medTasks.map((t) => ({
+                        id: t.id,
+                        patientName: t.patientName,
+                        patientId: t.patientId,
+                        bedNumber: t.bedNumber,
+                        ward: t.ward,
+                        medication: t.medication,
+                        dose: t.dose,
+                        route: t.route,
+                        dueTime: t.dueTime,
+                        overdue: t.overdue,
+                        priority: t.priority as Priority,
+                        status: t.status as TaskStatus,
+                        notes: t.notes,
+                        prescribedBy: t.prescribedBy,
+                    })));
+                }
+                if (Array.isArray(data.roundTasks)) {
+                    setRoundTasks(data.roundTasks.map((t) => ({
+                        id: t.id,
+                        patientName: t.patientName,
+                        bedNumber: t.bedNumber,
+                        task: t.task || t.roundTask || 'Ward check',
+                        category: (t.category as RoundTask['category']) || 'assessment',
+                        status: (t.status === 'done' ? 'done' : 'pending') as WardRoundStatus,
+                        dueBy: t.dueBy || t.dueTime,
+                    })));
+                }
+            }
+        } catch (err) {
+            console.error('Failed to load shift tasks:', err);
+        } finally {
+            setIsLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        loadTasks();
+        const interval = setInterval(loadTasks, 30000);
+        return () => clearInterval(interval);
+    }, [loadTasks]);
 
     const pendingMeds = medTasks.filter(t => t.status === 'pending');
     const overdueMeds = pendingMeds.filter(t => t.overdue);
@@ -117,12 +166,27 @@ export default function NurseTasksPage() {
     const pendingRounds = roundTasks.filter(t => t.status === 'pending');
     const completedRounds = roundTasks.filter(t => t.status === 'done');
 
-    const handleMedAction = (id: string, status: TaskStatus, notes?: string) => {
+    const handleMedAction = async (id: string, status: TaskStatus, notes?: string) => {
+        // Optimistic update
         setMedTasks(prev => prev.map(t => t.id === id ? { ...t, status, notes: notes || t.notes } : t));
+        try {
+            await nurseWorkstationApi.updateTaskStatus(id, { status, notes });
+            await loadTasks();
+        } catch (err) {
+            console.error('Failed to update medication task status:', err);
+        }
     };
 
-    const toggleRound = (id: string) => {
-        setRoundTasks(prev => prev.map(t => t.id === id ? { ...t, status: t.status === 'done' ? 'pending' : 'done' } : t));
+    const toggleRound = async (id: string) => {
+        const currentTask = roundTasks.find(t => t.id === id);
+        const newStatus: WardRoundStatus = currentTask?.status === 'done' ? 'pending' : 'done';
+        setRoundTasks(prev => prev.map(t => t.id === id ? { ...t, status: newStatus } : t));
+        try {
+            await nurseWorkstationApi.updateTaskStatus(id, { status: newStatus });
+            await loadTasks();
+        } catch (err) {
+            console.error('Failed to toggle round task status:', err);
+        }
     };
 
     return (

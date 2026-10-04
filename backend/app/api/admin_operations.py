@@ -396,6 +396,25 @@ async def update_queue_appointment_status(
     await db.commit()
     await db.refresh(appt)
 
+    try:
+        from app.core.websocket_manager import queue_manager
+        org_key = str(current_admin.organization_id or "default").lower().strip()
+        await queue_manager.broadcast(
+            f"queue:{org_key}",
+            {
+                "event": "QUEUE_STATUS_UPDATED",
+                "organization_id": org_key,
+                "appointment_id": str(appt.appointment_id),
+                "patient_name": pat.full_name,
+                "doctor_name": doc.full_name,
+                "old_status": old_status,
+                "new_status": new_status.value,
+                "scheduled_at": appt.scheduled_at.isoformat(),
+            },
+        )
+    except Exception as ws_err:
+        logger.warning(f"Queue broadcast notice: {ws_err}")
+
     return QueueItemResponse(
         appointment_id=appt.appointment_id,
         patient_id=pat.patient_id,

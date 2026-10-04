@@ -1,10 +1,13 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/lib/auth';
 import { Button, Card, CardContent, CardHeader, Badge, Input, Modal, Alert } from '@/components/ui';
+import { nurseWorkstationApi, InpatientBedData } from '@/lib/api/nurses';
+import { useWardTelemetry, TelemetryVitalsPayload } from '@/lib/hooks/useWardTelemetry';
 
 interface InpatientBed {
+    bedId?: string;
     bedNumber: string;
     ward: string;
     patientName: string;
@@ -29,6 +32,8 @@ interface InpatientBed {
 export default function NurseWorkstationPage() {
     const { user } = useAuth();
     const [beds, setBeds] = useState<InpatientBed[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [isSaving, setIsSaving] = useState(false);
     const [selectedBed, setSelectedBed] = useState<InpatientBed | null>(null);
     const [filterWard, setFilterWard] = useState<string>('all');
     const [isVitalsModalOpen, setIsVitalsModalOpen] = useState(false);
@@ -40,6 +45,84 @@ export default function NurseWorkstationPage() {
     const [newTemp, setNewTemp] = useState('');
     const [vitalsSavedNotice, setVitalsSavedNotice] = useState(false);
 
+    const fetchBeds = useCallback(async () => {
+        try {
+            const data = await nurseWorkstationApi.getInpatientBeds({
+                ward: filterWard === 'all' ? undefined : filterWard,
+            });
+            if (Array.isArray(data)) {
+                const mapped: InpatientBed[] = data.map((b) => ({
+                    bedId: b.bedId || b.bed_id,
+                    bedNumber: b.bedNumber || b.bed_number,
+                    ward: b.ward,
+                    patientName: b.patientName || b.patient_name,
+                    uhid: b.uhid,
+                    age: b.age,
+                    gender: b.gender,
+                    admittedFor: b.admittedFor || b.admitted_for,
+                    attendingPhysician: b.attendingPhysician || b.attending_physician,
+                    vitals: {
+                        bp: b.vitals?.bp || '120/80',
+                        pulse: b.vitals?.pulse || 72,
+                        spo2: b.vitals?.spo2 || 98,
+                        temp: b.vitals?.temp || 98.6,
+                        lastChecked: b.vitals?.lastChecked || 'Recently',
+                        isCritical: b.vitals?.isCritical,
+                    },
+                    nextMedication: b.nextMedication || b.next_medication || 'Routine Round',
+                    medicationDue: b.medicationDue || b.medication_due || 'Scheduled',
+                    status: (b.status as InpatientBed['status']) || 'Stable',
+                }));
+                setBeds(mapped);
+            }
+        } catch (err) {
+            console.error('Failed to fetch inpatient beds:', err);
+        } finally {
+            setIsLoading(false);
+        }
+    }, [filterWard]);
+
+    const handleLiveTelemetry = useCallback((payload: TelemetryVitalsPayload) => {
+        if (!payload.bed_id && !payload.bed_number) return;
+        setBeds((prevBeds) =>
+            prevBeds.map((bed) => {
+                if (bed.bedId === payload.bed_id || bed.bedNumber === payload.bed_number) {
+                    const statusStr = payload.clinical_status
+                        ? (payload.clinical_status.charAt(0).toUpperCase() + payload.clinical_status.slice(1).toLowerCase()) as InpatientBed['status']
+                        : bed.status;
+
+                    return {
+                        ...bed,
+                        vitals: {
+                            ...bed.vitals,
+                            bp: payload.bp || bed.vitals.bp,
+                            pulse: payload.pulse !== undefined ? payload.pulse : bed.vitals.pulse,
+                            spo2: payload.spo2 !== undefined ? payload.spo2 : bed.vitals.spo2,
+                            temp: payload.temp !== undefined ? payload.temp : bed.vitals.temp,
+                            lastChecked: 'Just now (Live)',
+                            isCritical: payload.is_critical,
+                        },
+                        status: statusStr,
+                    };
+                }
+                return bed;
+            })
+        );
+    }, []);
+
+    const { isConnected: isTelemetryLive } = useWardTelemetry({
+        ward: filterWard === 'all' ? 'icu' : filterWard,
+        enabled: true,
+        onVitalsUpdated: handleLiveTelemetry,
+        onMedicationAdministered: () => fetchBeds(),
+    });
+
+    useEffect(() => {
+        fetchBeds();
+        const timer = setInterval(fetchBeds, 30000);
+        return () => clearInterval(timer);
+    }, [fetchBeds]);
+
     const openVitalsModal = (bed: InpatientBed) => {
         setSelectedBed(bed);
         setNewBp(bed.vitals.bp);
@@ -49,46 +132,56 @@ export default function NurseWorkstationPage() {
         setIsVitalsModalOpen(true);
     };
 
-    const handleSaveVitals = () => {
+    const handleSaveVitals = async () => {
         if (!selectedBed) return;
 
-        const spo2Num = parseInt(newSpo2) || 98;
-        const pulseNum = parseInt(newPulse) || 75;
-        const tempNum = parseFloat(newTemp) || 98.6;
-        const isCritical = spo2Num < 90 || pulseNum > 115;
+        setIsSaving(true);
+        try {
+            const spo2Num = parseInt(newSpo2) || 98;
+            const pulseNum = parseInt(newPulse) || 75;
+            const tempNum = parseFloat(newTemp) || 98.6;
+            const [sysStr, diaStr] = (newBp || selectedBed.vitals.bp || '120/80').split('/');
+            const systolic = parseInt(sysStr) || 120;
+            const diastolic = parseInt(diaStr) || 80;
 
-        const updated = beds.map((b) => {
-            if (b.bedNumber === selectedBed.bedNumber) {
-                return {
-                    ...b,
-                    vitals: {
-                        bp: newBp || b.vitals.bp,
-                        pulse: pulseNum,
-                        spo2: spo2Num,
-                        temp: tempNum,
-                        lastChecked: 'Just now',
-                        isCritical,
-                    },
-                    status: (isCritical ? 'Critical' : tempNum > 100.5 ? 'Attention' : 'Stable') as InpatientBed['status'],
-                };
+            if (selectedBed.bedId) {
+                await nurseWorkstationApi.logVitals(selectedBed.bedId, {
+                    systolic,
+                    diastolic,
+                    bp: newBp || selectedBed.vitals.bp,
+                    pulse: pulseNum,
+                    spo2: spo2Num,
+                    temp: tempNum,
+                });
             }
-            return b;
-        });
 
-        setBeds(updated);
-        setIsVitalsModalOpen(false);
-        setVitalsSavedNotice(true);
-        setTimeout(() => setVitalsSavedNotice(false), 4000);
+            await fetchBeds();
+            setIsVitalsModalOpen(false);
+            setVitalsSavedNotice(true);
+            setTimeout(() => setVitalsSavedNotice(false), 4000);
+        } catch (err) {
+            console.error('Error logging bedside vitals:', err);
+        } finally {
+            setIsSaving(false);
+        }
     };
 
-    const handleMedicationAdministered = (bedNumber: string) => {
-        setBeds((prev) =>
-            prev.map((b) =>
-                b.bedNumber === bedNumber
-                    ? { ...b, medicationDue: 'Completed (Next at 20:00)' }
-                    : b
-            )
-        );
+    const handleMedicationAdministered = async (bed: InpatientBed) => {
+        try {
+            if (bed.bedId) {
+                await nurseWorkstationApi.markMedicationAdministered(bed.bedId);
+            }
+            await fetchBeds();
+        } catch (err) {
+            console.error('Error marking medication given:', err);
+            setBeds((prev) =>
+                prev.map((b) =>
+                    b.bedNumber === bed.bedNumber
+                        ? { ...b, medicationDue: 'Completed (Next at 20:00)' }
+                        : b
+                )
+            );
+        }
     };
 
     const filteredBeds = beds.filter((b) => {
@@ -100,6 +193,7 @@ export default function NurseWorkstationPage() {
 
     const criticalCount = beds.filter((b) => b.status === 'Critical').length;
     const attentionCount = beds.filter((b) => b.status === 'Attention').length;
+
 
     return (
         <div className="space-y-6 pb-16 max-w-7xl mx-auto">
@@ -231,9 +325,12 @@ export default function NurseWorkstationPage() {
                     </div>
                 </div>
 
-                <span className="text-xs text-slate-500">
-                    Auto-syncing bedside monitors every 30s
-                </span>
+                <div className="flex items-center gap-2">
+                    <span className={`inline-block w-2 h-2 rounded-full ${isTelemetryLive ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`} />
+                    <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+                        {isTelemetryLive ? 'Real-Time Bedside WebSocket Active' : 'Polling Sync Active (30s)'}
+                    </span>
+                </div>
             </div>
 
             {/* Inpatient Bed Grid */}
@@ -353,7 +450,7 @@ export default function NurseWorkstationPage() {
                                             <Button
                                                 variant="ghost"
                                                 size="sm"
-                                                onClick={() => handleMedicationAdministered(bed.bedNumber)}
+                                                onClick={() => handleMedicationAdministered(bed)}
                                                 className="text-[10px] h-6 px-1 text-emerald-600 hover:text-emerald-700"
                                             >
                                                 ✓ Given
@@ -440,9 +537,10 @@ export default function NurseWorkstationPage() {
                         <Button
                             variant="primary"
                             size="sm"
+                            disabled={isSaving}
                             onClick={handleSaveVitals}
                         >
-                            Save Vitals to EMR
+                            {isSaving ? 'Saving...' : 'Save Vitals to EMR'}
                         </Button>
                     </div>
                 </div>

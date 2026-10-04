@@ -23,6 +23,7 @@ from app.api import (
     abdm,
     observability,
     nurses,
+    websockets,
 )
 
 from app.core.config import settings
@@ -146,6 +147,7 @@ app.include_router(fhir.router, prefix="/api/v1")
 app.include_router(abdm.router, prefix="/api/v1")
 app.include_router(observability.router, prefix="/api/v1")
 app.include_router(nurses.router, prefix="/api/v1")
+app.include_router(websockets.router, prefix="/api/v1")
 
 
 @app.on_event("startup")
@@ -160,6 +162,14 @@ async def startup_event():
         init_db()
         from app.database import engine
         from sqlalchemy import text
+        from app.models import Base
+
+        if engine:
+            try:
+                async with engine.begin() as conn:
+                    await conn.run_sync(Base.metadata.create_all)
+            except Exception as e:
+                print(f"[AI-HOS Startup] Table creation check: {e}")
 
         # Ensure enum and new columns exist on startup
         if engine and "sqlite" not in str(engine.url):

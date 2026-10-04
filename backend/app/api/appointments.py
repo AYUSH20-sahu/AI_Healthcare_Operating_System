@@ -475,7 +475,7 @@ async def list_appointments(
     doctor_id: UUID | None = Query(None, description="Filter by doctor ID"),
     date_from: datetime | None = Query(None, description="Filter by date from"),
     date_to: datetime | None = Query(None, description="Filter by date to"),
-    status: str | None = Query(None, description="Filter by status"),
+    status_filter: str | None = Query(None, alias="status", description="Filter by status"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_active_user),
 ):
@@ -538,15 +538,15 @@ async def list_appointments(
         query = query.where(Appointment.scheduled_at <= date_to)
         count_query = count_query.where(Appointment.scheduled_at <= date_to)
     
-    if status:
+    if status_filter:
         try:
-            status_enum = AppointmentStatus(status)
+            status_enum = AppointmentStatus(status_filter)
             query = query.where(Appointment.status == status_enum)
             count_query = count_query.where(Appointment.status == status_enum)
         except ValueError:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid status: {status}",
+                detail=f"Invalid status: {status_filter}",
             )
     
     # Get total count

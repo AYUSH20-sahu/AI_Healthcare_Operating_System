@@ -46,7 +46,11 @@ AI-HOS is an AI-powered platform connecting hospitals, clinics, doctors, and pat
 | **M21** | **Scribe Agent** (voice → clinical note draft) | ✅ Done |
 | **M22** | **Prescription Agent** (note → prescription + interaction warnings) | ✅ Done |
 | **M23** | **Doctor Review/Approval Gate** (mandatory human-in-the-loop) | ✅ Done |
-| M24+ | Patient app, Intake, Triage, Voice, Deployment | 🔄 Planned |
+| **U-07–U-11** | **Doctor Copilot & Workflow** (Voice notes, Scribe, Rx draft, Approval gate) | ✅ Done |
+| **U-12–U-16** | **Patient Portal & Operations** (Intake, Triage, Telehealth, Scheduling, Reminders) | ✅ Done |
+| **U-17–U-19** | **Admin Operations & Multi-lingual** (Multi-tenant orgs, staff provisioning, audio streaming) | ✅ Done |
+| **U-20–U-21** | **Healthcare Interoperability** (HL7 FHIR R4 Bundle export, ABDM & ABHA tokenization) | ✅ Done |
+| **U-22–U-24** | **Observability, Security & E2E** (Telemetry, zero dummy data baseline, full system E2E) | ✅ Done |
 
 ## Local Development Setup
 
@@ -204,8 +208,14 @@ curl -X POST http://localhost:8000/api/v1/voice-notes/upload \
   -F "appointment_id=<uuid>"
 
 # 2. Trigger scribe agent via orchestrator
-curl -X POST http://localhost:8000/api/v1/approval/drafts \
+curl -X POST http://localhost:8000/api/v1/voice-notes/<voice_note_id>/scribe \
   -H "Authorization: Bearer $TOKEN"
+
+# Or analyze consultation transcript directly via Copilot Orchestrator:
+# curl -X POST http://localhost:8000/api/v1/copilot/analyze \
+#   -H "Authorization: Bearer $TOKEN" \
+#   -H "Content-Type: application/json" \
+#   -d '{"transcription": "...", "patient_id": "<uuid>"}'
 ```
 
 ### Doctor Review/Approval (M23)
@@ -248,16 +258,16 @@ AI-HOS/
 │   └── __init__.py
 ├── database/                # Migrations, seeds
 ├── docker/                  # Docker configs
-├── .github/workflows/       # CI/CD (M5)
+├── .github/workflows/       # CI/CD (M14)
 ├── .gitignore
 ├── .env.example             # Template with variable names
-├── .env.dev                 # Development template (M5)
-├── .env.staging             # Staging template with secret refs (M5)
-├── .env.prod                # Production template with secret refs (M5)
+├── .env.dev                 # Development template
+├── .env.staging             # Staging template with secret refs
+├── .env.prod                # Production template with secret refs
 └── README.md
 ```
 
-## CI/CD (M5)
+## CI/CD (M14)
 - **GitHub Actions**: `.github/workflows/ci.yml`
 - On every push/PR: backend lint (ruff) + test (pytest), frontend lint + build + test, Docker builds
 - Secrets injected via GitHub Actions secrets for staging/prod

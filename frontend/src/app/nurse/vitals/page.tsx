@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/lib/auth';
 import { Button, Card, CardContent, Badge, Input, Modal } from '@/components/ui';
+import { nurseWorkstationApi, InpatientBedData } from '@/lib/api/nurses';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -29,6 +30,7 @@ interface VitalReading {
 }
 
 interface PatientBed {
+    bedId?: string;
     bedNumber: string;
     ward: string;
     patientName: string;
@@ -78,13 +80,13 @@ function vitalColor(label: string, value: number): string {
 
 function VitalsModal({ patient, onClose, onSave }: { patient: PatientBed; onClose: () => void; onSave: (v: VitalReading) => void }) {
     const { user } = useAuth();
-    const [systolic, setSystolic] = useState(120);
-    const [diastolic, setDiastolic] = useState(80);
-    const [pulse, setPulse] = useState(72);
-    const [spo2, setSpo2] = useState(98);
-    const [temperature, setTemperature] = useState(98.6);
-    const [respRate, setRespRate] = useState(16);
-    const [painScore, setPainScore] = useState(0);
+    const [systolic, setSystolic] = useState(patient.latestVitals?.systolic || 120);
+    const [diastolic, setDiastolic] = useState(patient.latestVitals?.diastolic || 80);
+    const [pulse, setPulse] = useState(patient.latestVitals?.pulse || 72);
+    const [spo2, setSpo2] = useState(patient.latestVitals?.spo2 || 98);
+    const [temperature, setTemperature] = useState(patient.latestVitals?.temperature || 98.6);
+    const [respRate, setRespRate] = useState(patient.latestVitals?.respiratoryRate || 16);
+    const [painScore, setPainScore] = useState(patient.latestVitals?.painScore || 0);
     const [notes, setNotes] = useState('');
     const [saving, setSaving] = useState(false);
 
@@ -92,25 +94,47 @@ function VitalsModal({ patient, onClose, onSave }: { patient: PatientBed; onClos
 
     const handleSave = async () => {
         setSaving(true);
-        // Simulate API call — in production: POST /nurses/vitals
-        await new Promise(r => setTimeout(r, 600));
-        const reading: VitalReading = {
-            id: `vit-${Date.now()}`,
-            patientName: patient.patientName,
-            patientId: patient.patientId,
-            bedNumber: patient.bedNumber,
-            ward: patient.ward,
-            age: patient.age,
-            gender: patient.gender,
-            admittedFor: patient.admittedFor,
-            systolic, diastolic, pulse, spo2, temperature, respiratoryRate: respRate, painScore,
-            recordedAt: new Date().toISOString(),
-            recordedBy: user?.full_name || 'Nurse',
-            notes,
-            status,
-        };
-        onSave(reading);
-        setSaving(false);
+        try {
+            const bedIdToUse = patient.bedId || patient.bedNumber;
+            const res = await nurseWorkstationApi.logVitals(bedIdToUse, {
+                systolic,
+                diastolic,
+                bp: `${systolic}/${diastolic}`,
+                pulse,
+                spo2,
+                temp: temperature,
+                respiratory_rate: respRate,
+                pain_score: painScore,
+                notes,
+            });
+
+            const reading: VitalReading = {
+                id: res?.vitalsLog?.id || `vit-${Date.now()}`,
+                patientName: patient.patientName,
+                patientId: patient.patientId,
+                bedNumber: patient.bedNumber,
+                ward: patient.ward,
+                age: patient.age,
+                gender: patient.gender,
+                admittedFor: patient.admittedFor,
+                systolic,
+                diastolic,
+                pulse,
+                spo2,
+                temperature,
+                respiratoryRate: respRate,
+                painScore,
+                recordedAt: new Date().toISOString(),
+                recordedBy: user?.full_name || 'Nurse',
+                notes,
+                status,
+            };
+            onSave(reading);
+        } catch (err) {
+            console.error('Failed to log bedside vitals:', err);
+        } finally {
+            setSaving(false);
+        }
     };
 
     const criticalAlert = status === 'critical';
@@ -254,10 +278,111 @@ function VitalsModal({ patient, onClose, onSave }: { patient: PatientBed; onClos
 export default function NurseVitalsPage() {
     const { user } = useAuth();
     const [beds, setBeds] = useState<PatientBed[]>(PATIENT_BEDS);
+    const [isLoading, setIsLoading] = useState(true);
     const [selectedBed, setSelectedBed] = useState<PatientBed | null>(null);
     const [selectedWard, setSelectedWard] = useState<string>('all');
     const [historyBed, setHistoryBed] = useState<PatientBed | null>(null);
     const [vitalHistory, setVitalHistory] = useState<Record<string, VitalReading[]>>({});
+
+    const fetchBeds = useCallback(async () => {
+        try {
+            const data = await nurseWorkstationApi.getInpatientBeds();
+            if (Array.isArray(data)) {
+                const mappedBeds: PatientBed[] = data.map((b) => {
+                    const latest: VitalReading | undefined = b.latestVitals ? {
+                        id: b.latestVitals.id || `vit-${b.bedNumber}`,
+                        patientName: b.patientName || b.patient_name,
+                        patientId: b.patientId || b.patient_id,
+                        bedNumber: b.bedNumber || b.bed_number,
+                        ward: b.ward,
+                        age: b.age,
+                        gender: b.gender,
+                        admittedFor: b.admittedFor || b.admitted_for,
+                        systolic: b.latestVitals.systolic || 120,
+                        diastolic: b.latestVitals.diastolic || 80,
+                        pulse: b.latestVitals.pulse || 72,
+                        spo2: b.latestVitals.spo2 || 98,
+                        temperature: b.latestVitals.temperature || 98.6,
+                        respiratoryRate: b.latestVitals.respiratoryRate || 16,
+                        painScore: b.latestVitals.painScore || 0,
+                        recordedAt: b.latestVitals.recordedAt || new Date().toISOString(),
+                        recordedBy: b.latestVitals.recordedBy || 'Staff Nurse',
+                        status: (b.latestVitals.status as VitalReading['status']) || 'stable',
+                    } : undefined;
+
+                    return {
+                        bedId: b.bedId || b.bed_id,
+                        bedNumber: b.bedNumber || b.bed_number,
+                        ward: b.ward,
+                        patientName: b.patientName || b.patient_name,
+                        patientId: b.patientId || b.patient_id,
+                        age: b.age,
+                        gender: b.gender,
+                        admittedFor: b.admittedFor || b.admitted_for,
+                        attendingPhysician: b.attendingPhysician || b.attending_physician,
+                        latestVitals: latest,
+                        status: (b.status?.toLowerCase() as PatientBed['status']) || 'stable',
+                    };
+                });
+
+                setBeds(mappedBeds);
+
+                // Seed initial vital history per bed
+                const histMap: Record<string, VitalReading[]> = {};
+                mappedBeds.forEach(b => {
+                    if (b.latestVitals) {
+                        histMap[b.bedNumber] = [b.latestVitals];
+                    }
+                });
+                setVitalHistory(prev => ({ ...histMap, ...prev }));
+            }
+        } catch (err) {
+            console.error('Failed to fetch patient beds:', err);
+        } finally {
+            setIsLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        fetchBeds();
+        const timer = setInterval(fetchBeds, 30000);
+        return () => clearInterval(timer);
+    }, [fetchBeds]);
+
+    const handleOpenHistory = async (bed: PatientBed) => {
+        setHistoryBed(bed);
+        if (bed.bedId) {
+            try {
+                const logs = await nurseWorkstationApi.getVitalsHistory(bed.bedId);
+                if (Array.isArray(logs) && logs.length > 0) {
+                    const mappedLogs: VitalReading[] = logs.map(l => ({
+                        id: l.id,
+                        patientName: bed.patientName,
+                        patientId: bed.patientId,
+                        bedNumber: bed.bedNumber,
+                        ward: bed.ward,
+                        age: bed.age,
+                        gender: bed.gender,
+                        admittedFor: bed.admittedFor,
+                        systolic: l.systolic,
+                        diastolic: l.diastolic,
+                        pulse: l.pulse,
+                        spo2: l.spo2,
+                        temperature: l.temperature,
+                        respiratoryRate: l.respiratoryRate,
+                        painScore: l.painScore,
+                        recordedAt: l.recordedAt,
+                        recordedBy: l.recordedBy,
+                        notes: l.notes,
+                        status: l.status,
+                    }));
+                    setVitalHistory(prev => ({ ...prev, [bed.bedNumber]: mappedLogs }));
+                }
+            } catch (err) {
+                console.error('Failed to load vitals history from API:', err);
+            }
+        }
+    };
 
     const wards = ['all', ...Array.from(new Set(beds.map(b => b.ward)))];
 
@@ -425,7 +550,7 @@ export default function NurseVitalsPage() {
                                     <button
                                         id={`view-history-${bed.bedNumber}`}
                                         type="button"
-                                        onClick={() => setHistoryBed(bed)}
+                                        onClick={() => handleOpenHistory(bed)}
                                         className="px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 text-xs font-medium hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
                                     >
                                         History ({history.length})

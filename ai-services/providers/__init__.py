@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """Provider adapter interface for LLM, STT, and TTS services."""
 
 import json
@@ -10,9 +12,9 @@ from enum import Enum
 from typing import TYPE_CHECKING, Any, Optional
 
 if TYPE_CHECKING:
-    import google.generativeai as genai
-    from groq import AsyncGroq
-    from openai import AsyncOpenAI
+    import google.generativeai as genai  # type: ignore[import-untyped,import-not-found]
+    from groq import AsyncGroq  # type: ignore[import-untyped,import-not-found]
+    from openai import AsyncOpenAI  # type: ignore[import-untyped,import-not-found]
 
 logger = logging.getLogger(__name__)
 
@@ -284,6 +286,78 @@ class MockTTSProvider(TTSProviderBase):
         )
 
 
+class ElevenLabsTTSProvider(TTSProviderBase):
+    """ElevenLabs TTS provider supporting multilingual clinical speech synthesis."""
+
+    DEFAULT_VOICE_ID = "21m00Tcm4TlvDq8ikWAM"  # Rachel (Clear clinical tone)
+    DEFAULT_MODEL = "eleven_multilingual_v2"
+
+    def __init__(
+        self,
+        api_key: str | None = None,
+        default_voice_id: str | None = None,
+        default_model: str | None = None,
+    ):
+        self._api_key = api_key or os.getenv("ELEVENLABS_API_KEY")
+        self._default_voice_id = default_voice_id or os.getenv("ELEVENLABS_VOICE_ID", self.DEFAULT_VOICE_ID)
+        self._default_model = default_model or os.getenv("ELEVENLABS_MODEL_ID", self.DEFAULT_MODEL)
+
+    @property
+    def name(self) -> str:
+        return "elevenlabs"
+
+    async def health_check(self) -> bool:
+        return bool(self._api_key)
+
+    async def synthesize(
+        self,
+        text: str,
+        voice: str | None = None,
+        format: str = "mp3",
+        sample_rate: int = 22050,
+        **kwargs: Any,
+    ) -> SynthesisResult:
+        if not self._api_key:
+            raise ValueError("ELEVENLABS_API_KEY is not configured")
+
+        voice_id = voice or self._default_voice_id
+        model_id = kwargs.get("model_id", self._default_model)
+
+        try:
+            import httpx  # type: ignore[import-untyped,import-not-found]
+        except ImportError:
+            raise RuntimeError("httpx package not installed. Run: pip install httpx")
+
+        url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
+        headers = {
+            "xi-api-key": self._api_key,
+            "Content-Type": "application/json",
+            "Accept": "audio/mpeg",
+        }
+        payload = {
+            "text": text,
+            "model_id": model_id,
+            "voice_settings": {
+                "stability": kwargs.get("stability", 0.5),
+                "similarity_boost": kwargs.get("similarity_boost", 0.75),
+            },
+        }
+
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.post(url, headers=headers, json=payload)
+            if resp.status_code != 200:
+                raise RuntimeError(f"ElevenLabs TTS synthesis failed ({resp.status_code}): {resp.text}")
+            audio_bytes = resp.content
+
+        duration = len(text) * 0.05
+        return SynthesisResult(
+            audio_data=audio_bytes,
+            format=format,
+            sample_rate=sample_rate,
+            duration=duration,
+        )
+
+
 class NVIDIALLMProvider(LLMProviderBase):
     """NVIDIA NIM LLM provider using OpenAI-compatible API."""
     
@@ -305,7 +379,7 @@ class NVIDIALLMProvider(LLMProviderBase):
     async def _get_client(self) -> "AsyncOpenAI":
         if self._client is None:
             try:
-                from openai import AsyncOpenAI
+                from openai import AsyncOpenAI  # type: ignore[import-untyped,import-not-found]
                 self._client = AsyncOpenAI(
                     api_key=self._api_key,
                     base_url=self._base_url,
@@ -406,7 +480,7 @@ class GeminiLLMProvider(LLMProviderBase):
     async def _get_model(self):
         if self._model is None:
             try:
-                import google.generativeai as genai
+                import google.generativeai as genai  # type: ignore[import-untyped,import-not-found]
                 genai.configure(api_key=self._api_key)
                 self._model = genai.GenerativeModel(self._default_model)
             except ImportError:
@@ -600,7 +674,7 @@ class GroqSTTProvider(STTProviderBase):
     async def _get_client(self) -> "AsyncGroq":
         if self._client is None:
             try:
-                from groq import AsyncGroq
+                from groq import AsyncGroq  # type: ignore[import-untyped,import-not-found]
                 self._client = AsyncGroq(api_key=self._api_key)
             except ImportError:
                 raise RuntimeError("groq package not installed. Run: pip install groq")
@@ -753,10 +827,12 @@ def _configure_registry_from_env() -> None:
     
     # Configure TTS providers
     tts_provider = os.getenv("TTS_PROVIDER", "mock").lower()
-    
-    if tts_provider == "elevenlabs":
-        # ElevenLabs would go here (M34)
-        registry.register_tts("mock", MockTTSProvider(), default=True)
+    has_elevenlabs = bool(os.getenv("ELEVENLABS_API_KEY"))
+
+    if tts_provider == "elevenlabs" or has_elevenlabs:
+        eleven_provider = ElevenLabsTTSProvider()
+        registry.register_tts("elevenlabs", eleven_provider, default=(tts_provider == "elevenlabs"))
+        registry.register_tts("mock", MockTTSProvider(), default=(tts_provider != "elevenlabs"))
     else:
         registry.register_tts("mock", MockTTSProvider(), default=True)
 
