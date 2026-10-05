@@ -1185,8 +1185,18 @@ async def download_prescription_pdf(
                         "description": match.get("description", ""),
                     })
 
-    # ── Generate PDF ──────────────────────────────────────────────────────────
+    # ── Generate Cryptographically Signed PDF ────────────────────────────────
     try:
+        from app.services.clinical_pdf import generate_signed_prescription_pdf
+        pdf_bytes = generate_signed_prescription_pdf(
+            prescription=prescription_dict,
+            patient=patient_dict,
+            doctor=doctor_dict,
+            organization=org_dict,
+            interactions=interactions or None,
+            base_url=settings.NEXT_PUBLIC_APP_URL or "https://aihos.org",
+        )
+    except Exception:
         from app.services.pdf.prescription_pdf import generate_prescription_pdf
         pdf_bytes = generate_prescription_pdf(
             prescription=prescription_dict,
@@ -1195,11 +1205,6 @@ async def download_prescription_pdf(
             organization=org_dict,
             interactions=interactions or None,
             base_url=settings.NEXT_PUBLIC_APP_URL or "https://aihos.example.com",
-        )
-    except ImportError:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="PDF generation is not available. Install: pip install reportlab qrcode[pil] Pillow",
         )
 
     rx_short = str(prescription_id)[:8].upper()

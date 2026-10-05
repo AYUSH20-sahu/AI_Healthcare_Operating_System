@@ -44,6 +44,7 @@ export default function NurseWorkstationPage() {
     const [newSpo2, setNewSpo2] = useState('');
     const [newTemp, setNewTemp] = useState('');
     const [vitalsSavedNotice, setVitalsSavedNotice] = useState(false);
+    const [downloadingSummaryId, setDownloadingSummaryId] = useState<string | null>(null);
 
     const fetchBeds = useCallback(async () => {
         try {
@@ -181,6 +182,34 @@ export default function NurseWorkstationPage() {
                         : b
                 )
             );
+        }
+    };
+
+    const handleDownloadDischargeSummary = async (bed: InpatientBed) => {
+        if (!bed.bedId) return;
+        setDownloadingSummaryId(bed.bedId);
+        try {
+            const apiBase = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
+            const token = localStorage.getItem('access_token');
+            const res = await fetch(`${apiBase}/clinical-documents/discharge-summary/bed/${bed.bedId}/pdf`, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            if (!res.ok) {
+                const errData = await res.json().catch(() => null);
+                throw new Error(errData?.detail || `Failed to download Discharge Summary (HTTP ${res.status})`);
+            }
+            const blob = await res.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `Discharge_Summary_${bed.bedNumber}_${bed.patientName.replace(/\s+/g, '_')}.pdf`;
+            a.click();
+            URL.revokeObjectURL(url);
+        } catch (err: any) {
+            console.error('Discharge summary download failed:', err);
+            alert(err.message || 'Could not download Discharge Summary.');
+        } finally {
+            setDownloadingSummaryId(null);
         }
     };
 
@@ -395,14 +424,26 @@ export default function NurseWorkstationPage() {
                                             {bed.attendingPhysician}
                                         </p>
                                     </div>
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => openVitalsModal(bed)}
-                                        className="text-xs shrink-0"
-                                    >
-                                        ✏️ Log Vitals
-                                    </Button>
+                                    <div className="flex items-center gap-1.5 shrink-0">
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => openVitalsModal(bed)}
+                                            className="text-xs"
+                                        >
+                                            ✏️ Log Vitals
+                                        </Button>
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={() => handleDownloadDischargeSummary(bed)}
+                                            disabled={downloadingSummaryId === bed.bedId}
+                                            className="text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400"
+                                            title="Download Cryptographically Signed FHIR Discharge Summary PDF"
+                                        >
+                                            {downloadingSummaryId === bed.bedId ? '⏳...' : '📄 Summary'}
+                                        </Button>
+                                    </div>
                                 </div>
 
                                 {/* Vitals Readout Box */}
