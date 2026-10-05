@@ -328,7 +328,6 @@ def generate_signed_prescription_pdf(
 
     # ── Verification QR & Cryptographic Signature Stamp ───────────────────────
     verify_url = f"{base_url}/api/v1/clinical-documents/verify-signature?sig={digital_signature}&type=rx"
-    abdm_uri = f"abdm://records/view?type=rx&id={rx_id}&uhid={patient.get('patient_id')}&hfr={org.get('hfr_facility_id', settings.HFR_FACILITY_ID)}"
     qr_img = _get_qr_flowable(verify_url, size_pt=64)
 
     crypto_text = (
