@@ -17,7 +17,6 @@ import json
 import uuid
 from datetime import date, datetime, timedelta
 
-from passlib.context import CryptContext
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
@@ -295,6 +294,26 @@ async def seed_doctors(session: AsyncSession, user_map: dict | None = None):
             "email": "dr.reddy@skinhair.com",
             "full_name": "Dr. Vikram Reddy",
             "phone": "+91-98765-43214",
+        },
+        {
+            "doctor_id": uuid.uuid4(),
+            "user_id": None,
+            "specialty": "Internal Medicine",
+            "license_number": "MD-MED-006",
+            "hospital_affiliation": "City General Hospital",
+            "email": "dr.rao@citygeneral.com",
+            "full_name": "Dr. Sunita Rao",
+            "phone": "+91-98765-43215",
+        },
+        {
+            "doctor_id": uuid.uuid4(),
+            "user_id": None,
+            "specialty": "Emergency Medicine",
+            "license_number": "MD-EMERG-007",
+            "hospital_affiliation": "City General Hospital",
+            "email": "dr.nair@citygeneral.com",
+            "full_name": "Dr. Priya Nair",
+            "phone": "+91-98765-43216",
         },
     ]
 

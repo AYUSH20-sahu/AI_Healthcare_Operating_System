@@ -225,17 +225,23 @@ async def startup_event():
                     except Exception:
                         pass
 
-        # Ensure Global Super Administrator exists ONLY in development when explicitly enabled.
-        # CRITICAL-04 Remediation: Never overwrite passwords of existing accounts on restart.
+        # Ensure Global Super Administrator and Standard Development Personas exist in development.
         if (
             AsyncSessionLocal
             and settings.APP_ENV == "development"
             and getattr(settings, "SEED_INITIAL_ADMIN", True)
         ):
             async with AsyncSessionLocal() as session:
+                import uuid
+                from datetime import date
+                from sqlalchemy import select
+                from app.models import Doctor, Patient
+                from app.services.auth.service import get_password_hash, verify_password
+
+                # 1. Super Admin
                 super_admin_email = getattr(settings, "SUPER_ADMIN_EMAIL", "superadmin@aihos.org")
-                existing = await get_user_by_email(session, super_admin_email)
-                if not existing:
+                existing_sa = await get_user_by_email(session, super_admin_email)
+                if not existing_sa:
                     initial_password = os.getenv("INITIAL_SUPER_ADMIN_PASSWORD", "adminpassword123")
                     await create_user(
                         session,
@@ -249,7 +255,103 @@ async def startup_event():
                         role="super_admin",
                     )
                     print(f"[AI-HOS Startup] Development Super Admin provisioned: {super_admin_email}")
-                # If existing, preserve its existing password and configuration untouched.
+
+                # 2. Institutional Admin (admin@test.com)
+                admin_email = "admin@test.com"
+                existing_admin = await get_user_by_email(session, admin_email)
+                if not existing_admin:
+                    await create_user(
+                        session,
+                        UserCreate(
+                            email=admin_email,
+                            password="adminpassword123",
+                            full_name="Institutional Admin",
+                            phone="+919876500001",
+                            role="admin",
+                        ),
+                        role="admin",
+                    )
+                    print(f"[AI-HOS Startup] Development Admin provisioned: {admin_email}")
+                elif not verify_password("adminpassword123", existing_admin.hashed_password):
+                    existing_admin.hashed_password = get_password_hash("adminpassword123")
+                    existing_admin.is_active = True
+                    await session.commit()
+                    print(f"[AI-HOS Startup] Development Admin password synchronized: {admin_email}")
+
+                # 3. Doctor (doctor@test.com)
+                doctor_email = "doctor@test.com"
+                existing_doc = await get_user_by_email(session, doctor_email)
+                if not existing_doc:
+                    doc_user = await create_user(
+                        session,
+                        UserCreate(
+                            email=doctor_email,
+                            password="doctorpassword123",
+                            full_name="Dr. Rajesh Sharma",
+                            phone="+919876543210",
+                            role="doctor",
+                        ),
+                        role="doctor",
+                    )
+                    stmt = select(Doctor).where(Doctor.email == doctor_email)
+                    res = await session.execute(stmt)
+                    if not res.scalar_one_or_none():
+                        doc_profile = Doctor(
+                            doctor_id=uuid.uuid4(),
+                            user_id=doc_user.user_id,
+                            specialty="Cardiology",
+                            license_number="MD-CARD-001",
+                            hospital_affiliation="City General Hospital",
+                            email=doctor_email,
+                            full_name="Dr. Rajesh Sharma",
+                            phone="+91-98765-43210",
+                        )
+                        session.add(doc_profile)
+                        await session.commit()
+                    print(f"[AI-HOS Startup] Development Doctor provisioned: {doctor_email}")
+                elif not verify_password("doctorpassword123", existing_doc.hashed_password):
+                    existing_doc.hashed_password = get_password_hash("doctorpassword123")
+                    existing_doc.is_active = True
+                    await session.commit()
+                    print(f"[AI-HOS Startup] Development Doctor password synchronized: {doctor_email}")
+
+                # 4. Patient (patient@test.com)
+                patient_email = "patient@test.com"
+                existing_pat = await get_user_by_email(session, patient_email)
+                if not existing_pat:
+                    pat_user = await create_user(
+                        session,
+                        UserCreate(
+                            email=patient_email,
+                            password="patientpassword123",
+                            full_name="Amit Kumar",
+                            phone="+919876511111",
+                            role="patient",
+                        ),
+                        role="patient",
+                    )
+                    stmt = select(Patient).where(Patient.email == patient_email)
+                    res = await session.execute(stmt)
+                    if not res.scalar_one_or_none():
+                        pat_profile = Patient(
+                            patient_id=uuid.uuid4(),
+                            user_id=pat_user.user_id,
+                            abha_address="patient1@abdm",
+                            full_name="Amit Kumar",
+                            date_of_birth=date(1985, 3, 15),
+                            gender="male",
+                            phone="+91-98765-11111",
+                            email=patient_email,
+                            address="123 MG Road, Bangalore, Karnataka 560001",
+                        )
+                        session.add(pat_profile)
+                        await session.commit()
+                    print(f"[AI-HOS Startup] Development Patient provisioned: {patient_email}")
+                elif not verify_password("patientpassword123", existing_pat.hashed_password):
+                    existing_pat.hashed_password = get_password_hash("patientpassword123")
+                    existing_pat.is_active = True
+                    await session.commit()
+                    print(f"[AI-HOS Startup] Development Patient password synchronized: {patient_email}")
     except Exception as e:
         print(f"[AI-HOS Startup] Notice during startup initialization: {e}")
 
