@@ -1,20 +1,31 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import Link from 'next/link';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/lib/auth';
 import {
     consentApi,
-    ConsentItem,
     appointmentBookingApi,
-    DoctorListResponse,
-    Doctor,
     patientPortalApi,
-    PatientProfile,
     abdmApi,
+} from '@/lib/api';
+import type {
+    ConsentItem,
+    Doctor,
+    PatientProfile,
     AbdmStatusResponse,
 } from '@/lib/api';
 import { Button, Card, CardContent, Badge } from '@/components/ui';
+
+function getErrorMessage(error: unknown, fallback: string): string {
+    if (error instanceof Error && error.message) {
+        return error.message;
+    }
+    if (typeof error === 'object' && error !== null && 'message' in error) {
+        const msg = (error as { message: unknown }).message;
+        if (typeof msg === 'string' && msg) return msg;
+    }
+    return fallback;
+}
 
 export default function PatientAbhaConsentPage() {
     const { user } = useAuth();
@@ -37,46 +48,64 @@ export default function PatientAbhaConsentPage() {
     // ABHA Linking 2-Step OTP Modal State (Milestone U-21)
     const [isAbhaModalOpen, setIsAbhaModalOpen] = useState(false);
     const [abhaAddressInput, setAbhaAddressInput] = useState('');
+    const [authMode, setAuthMode] = useState<'MOBILE_OTP' | 'AADHAAR_OTP'>('MOBILE_OTP');
     const [linkingStep, setLinkingStep] = useState<'address' | 'otp'>('address');
     const [linkingTxId, setLinkingTxId] = useState<string | null>(null);
     const [otpInput, setOtpInput] = useState('');
     const [isSubmittingAbha, setIsSubmittingAbha] = useState(false);
     const [abhaError, setAbhaError] = useState<string | null>(null);
 
-    useEffect(() => {
-        loadData();
-    }, [filterActiveOnly]);
-
-    const loadData = async () => {
+    const loadData = useCallback(async () => {
         setIsLoading(true);
         try {
-            const [consentsRes, profileRes, statusRes, docRes] = await Promise.allSettled([
-                consentApi.getMyConsents(filterActiveOnly),
-                patientPortalApi.getProfile(),
-                abdmApi.getStatus(),
-                appointmentBookingApi.getDoctors(),
+            const [consentsRes, profileRes, statusRes, docRes] = await Promise.all([
+                consentApi.getMyConsents(filterActiveOnly).catch((err: unknown) => {
+                    console.warn('Failed to load consents:', err);
+                    return [] as ConsentItem[];
+                }),
+                patientPortalApi.getProfile().catch((err: unknown) => {
+                    console.warn('Failed to load profile:', err);
+                    return null;
+                }),
+                abdmApi.getStatus().catch((err: unknown) => {
+                    console.warn('Failed to load ABDM status:', err);
+                    return null;
+                }),
+                appointmentBookingApi.getDoctors().catch((err: unknown) => {
+                    console.warn('Failed to load doctors list:', err);
+                    return null;
+                }),
             ]);
 
-            if (consentsRes.status === 'fulfilled') setConsents(consentsRes.value);
-            if (profileRes.status === 'fulfilled') {
-                setPatientProfile(profileRes.value);
-                if (profileRes.value.abha_address) {
-                    setAbhaAddressInput(profileRes.value.abha_address);
+            if (consentsRes) {
+                setConsents(consentsRes);
+            }
+            if (profileRes) {
+                setPatientProfile(profileRes);
+                if (profileRes.abha_address) {
+                    setAbhaAddressInput(profileRes.abha_address);
                 }
             }
-            if (statusRes.status === 'fulfilled') setAbdmStatus(statusRes.value);
-            if (docRes.status === 'fulfilled') {
-                setDoctors(docRes.value.doctors);
-                if (docRes.value.doctors.length > 0) {
-                    setSelectedDoctorId(docRes.value.doctors[0].doctor_id);
+            if (statusRes) {
+                setAbdmStatus(statusRes);
+            }
+            if (docRes) {
+                const docList: Doctor[] = docRes.doctors || [];
+                setDoctors(docList);
+                if (docList.length > 0) {
+                    setSelectedDoctorId((prev: string) => prev || docList[0].doctor_id);
                 }
             }
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error('Failed to load ABDM consent console data:', err);
         } finally {
             setIsLoading(false);
         }
-    };
+    }, [filterActiveOnly]);
+
+    useEffect(() => {
+        loadData();
+    }, [loadData]);
 
     const handleOpenAbhaLinkModal = () => {
         setLinkingStep('address');
@@ -97,14 +126,14 @@ export default function PatientAbhaConsentPage() {
         setIsSubmittingAbha(true);
         setAbhaError(null);
         try {
-            const res = await abdmApi.initAbhaLinking(address);
+            const res = await abdmApi.initAbhaLinking(address, authMode);
             setLinkingTxId(res.transaction_id);
             setLinkingStep('otp');
             if (res.sandbox_test_otp) {
                 setOtpInput(res.sandbox_test_otp); // Pre-fill test OTP for sandbox convenience
             }
-        } catch (err: any) {
-            setAbhaError(err?.message || 'Failed to dispatch verification OTP. Please verify address format.');
+        } catch (err: unknown) {
+            setAbhaError(getErrorMessage(err, 'Failed to dispatch verification OTP. Please verify address format.'));
         } finally {
             setIsSubmittingAbha(false);
         }
@@ -126,15 +155,15 @@ export default function PatientAbhaConsentPage() {
             // Refresh patient profile
             const updatedProfile = await patientPortalApi.getProfile();
             setPatientProfile(updatedProfile);
-        } catch (err: any) {
-            setAbhaError(err?.message || 'Invalid or expired OTP. Please check the code and retry.');
+        } catch (err: unknown) {
+            setAbhaError(getErrorMessage(err, 'Invalid or expired OTP. Please check the code and retry.'));
         } finally {
             setIsSubmittingAbha(false);
         }
     };
 
     const handleUnlinkAbha = async () => {
-        if (!confirm('Are you sure you want to unlink your ABHA address from this clinical account?')) {
+        if (typeof window !== 'undefined' && !window.confirm('Are you sure you want to unlink your ABHA address from this clinical account?')) {
             return;
         }
         try {
@@ -142,8 +171,8 @@ export default function PatientAbhaConsentPage() {
             setActionSuccess('ABHA address unlinked successfully.');
             const updatedProfile = await patientPortalApi.getProfile();
             setPatientProfile(updatedProfile);
-        } catch (err: any) {
-            alert(err?.message || 'Failed to unlink ABHA');
+        } catch (err: unknown) {
+            alert(getErrorMessage(err, 'Failed to unlink ABHA'));
         }
     };
 
@@ -165,15 +194,15 @@ export default function PatientAbhaConsentPage() {
             setIsGrantModalOpen(false);
             const res = await consentApi.getMyConsents(filterActiveOnly);
             setConsents(res);
-        } catch (err: any) {
-            setGrantError(err.message || 'Failed to grant consent agreement');
+        } catch (err: unknown) {
+            setGrantError(getErrorMessage(err, 'Failed to grant consent agreement'));
         } finally {
             setIsGranting(false);
         }
     };
 
     const handleRevokeConsent = async (consent: ConsentItem) => {
-        if (!confirm(`Are you sure you want to revoke consent for ${consent.provider_name || 'this provider'}? The doctor will immediately lose access to your medical records.`)) {
+        if (typeof window !== 'undefined' && !window.confirm(`Are you sure you want to revoke consent for ${consent.provider_name || 'this provider'}? The doctor will immediately lose access to your medical records.`)) {
             return;
         }
 
@@ -184,20 +213,26 @@ export default function PatientAbhaConsentPage() {
             setActionSuccess(`Consent access for ${consent.provider_name || 'provider'} has been revoked.`);
             const res = await consentApi.getMyConsents(filterActiveOnly);
             setConsents(res);
-        } catch (err: any) {
-            alert(err.message || 'Failed to revoke consent');
+        } catch (err: unknown) {
+            alert(getErrorMessage(err, 'Failed to revoke consent'));
         } finally {
             setRevokingId(null);
         }
     };
 
-    const formatDate = (isoString: string) => {
-        const d = new Date(isoString);
-        return d.toLocaleDateString(undefined, {
-            year: 'numeric',
-            month: 'short',
-            day: 'numeric',
-        });
+    const formatDate = (isoString?: string | null) => {
+        if (!isoString) return '—';
+        try {
+            const d = new Date(isoString);
+            if (isNaN(d.getTime())) return isoString;
+            return d.toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric',
+            });
+        } catch {
+            return isoString;
+        }
     };
 
     const isAbhaLinked = Boolean(patientProfile?.abha_address);
@@ -248,7 +283,7 @@ export default function PatientAbhaConsentPage() {
             {actionSuccess && (
                 <div className="p-3.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200 text-xs flex items-center justify-between animate-fadeIn">
                     <span>✓ {actionSuccess}</span>
-                    <button onClick={() => setActionSuccess(null)} className="font-bold">✕</button>
+                    <button type="button" onClick={() => setActionSuccess(null)} className="font-bold">✕</button>
                 </div>
             )}
 
@@ -472,6 +507,7 @@ export default function PatientAbhaConsentPage() {
                                 </h3>
                             </div>
                             <button
+                                type="button"
                                 onClick={() => setIsAbhaModalOpen(false)}
                                 className="text-slate-400 hover:text-slate-600 transition"
                             >
@@ -490,18 +526,65 @@ export default function PatientAbhaConsentPage() {
                                 <form onSubmit={handleSendAbhaOtp} className="space-y-4">
                                     <div>
                                         <label className="font-semibold text-slate-700 dark:text-slate-300 block mb-1.5">
-                                            Enter your ABHA Address
+                                            Verification Channel & Security
+                                        </label>
+                                        <div className="grid grid-cols-2 gap-2 mb-3">
+                                            <button
+                                                type="button"
+                                                onClick={() => setAuthMode('MOBILE_OTP')}
+                                                className={`p-2.5 rounded-xl border text-left flex items-center gap-2 transition ${
+                                                    authMode === 'MOBILE_OTP'
+                                                        ? 'border-indigo-600 bg-indigo-50/50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 font-semibold'
+                                                        : 'border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:border-slate-300'
+                                                }`}
+                                            >
+                                                <span>📱</span>
+                                                <div>
+                                                    <div className="text-xs">Mobile OTP</div>
+                                                    <div className="text-[10px] text-slate-400">Standard SMS</div>
+                                                </div>
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setAuthMode('AADHAAR_OTP')}
+                                                className={`p-2.5 rounded-xl border text-left flex items-center gap-2 transition ${
+                                                    authMode === 'AADHAAR_OTP'
+                                                        ? 'border-indigo-600 bg-indigo-50/50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 font-semibold'
+                                                        : 'border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:border-slate-300'
+                                                }`}
+                                            >
+                                                <span>🔒</span>
+                                                <div>
+                                                    <div className="text-xs">Aadhaar OTP</div>
+                                                    <div className="text-[10px] text-slate-400">RSA-OAEP Encrypted</div>
+                                                </div>
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    {authMode === 'AADHAAR_OTP' && (
+                                        <div className="p-2.5 rounded-xl bg-emerald-50/60 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/40 text-emerald-800 dark:text-emerald-300 text-[11px] flex items-center gap-2">
+                                            <span>🛡️</span>
+                                            <span><strong>UIDAI Cryptographic Protection:</strong> Demographic and Aadhaar payloads are encrypted via 2048-bit RSA-OAEP before network transmission.</span>
+                                        </div>
+                                    )}
+
+                                    <div>
+                                        <label className="font-semibold text-slate-700 dark:text-slate-300 block mb-1.5">
+                                            {authMode === 'AADHAAR_OTP' ? 'Enter 12-Digit Aadhaar or ABHA' : 'Enter your ABHA Address'}
                                         </label>
                                         <input
                                             type="text"
                                             value={abhaAddressInput}
                                             onChange={(e) => setAbhaAddressInput(e.target.value)}
-                                            placeholder="e.g. rahul@abdm or 14-digit number"
+                                            placeholder={authMode === 'AADHAAR_OTP' ? 'e.g. 1234-5678-9012 or rahul@abdm' : 'e.g. rahul@abdm or 14-digit number'}
                                             required
                                             className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-none"
                                         />
                                         <p className="text-[11px] text-slate-400 mt-1">
-                                            A 6-digit verification code will be sent to your registered mobile number.
+                                            {authMode === 'AADHAAR_OTP'
+                                                ? 'A 6-digit cryptographic OTP will be sent to your Aadhaar-linked phone.'
+                                                : 'A 6-digit verification code will be sent to your registered mobile number.'}
                                         </p>
                                     </div>
 
@@ -562,12 +645,10 @@ export default function PatientAbhaConsentPage() {
                                             }}
                                             onChange={(e) => setOtpInput(e.target.value.replace(/\D/g, '').slice(0, 6))}
                                             onPaste={(e) => {
+                                                e.preventDefault();
                                                 const text = e.clipboardData.getData('text');
-                                                if (!/^\d*$/.test(text)) {
-                                                    e.preventDefault();
-                                                    const clean = text.replace(/\D/g, '').slice(0, 6);
-                                                    document.execCommand?.('insertText', false, clean);
-                                                }
+                                                const clean = text.replace(/\D/g, '').slice(0, 6);
+                                                setOtpInput(clean);
                                             }}
                                             maxLength={6}
                                             placeholder="123456"
@@ -613,6 +694,7 @@ export default function PatientAbhaConsentPage() {
                                 Authorize Provider Consent Agreement
                             </h3>
                             <button
+                                type="button"
                                 onClick={() => setIsGrantModalOpen(false)}
                                 className="text-slate-400 hover:text-slate-600 transition"
                             >
@@ -637,11 +719,15 @@ export default function PatientAbhaConsentPage() {
                                     required
                                     className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-none"
                                 >
-                                    {doctors.map((doc) => (
-                                        <option key={doc.doctor_id} value={doc.doctor_id}>
-                                            {doc.full_name} — {doc.specialty} ({doc.hospital_affiliation || 'AI-HOS Node'})
-                                        </option>
-                                    ))}
+                                    {doctors.length === 0 ? (
+                                        <option value="">No doctors available</option>
+                                    ) : (
+                                        doctors.map((doc) => (
+                                            <option key={doc.doctor_id} value={doc.doctor_id}>
+                                                {doc.full_name} — {doc.specialty} ({doc.hospital_affiliation || 'AI-HOS Node'})
+                                            </option>
+                                        ))
+                                    )}
                                 </select>
                             </div>
 

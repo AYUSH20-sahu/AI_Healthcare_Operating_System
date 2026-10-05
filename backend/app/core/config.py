@@ -1,8 +1,8 @@
 from pathlib import Path
 
-from dotenv import load_dotenv
-from pydantic import field_validator, model_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from dotenv import load_dotenv  # type: ignore
+from pydantic import field_validator, model_validator  # type: ignore
+from pydantic_settings import BaseSettings, SettingsConfigDict  # type: ignore
 
 # Explicitly load .env and .env.local from project root
 _root_dir = Path(__file__).parent.parent.parent.parent
@@ -67,8 +67,11 @@ class Settings(BaseSettings):
     ABDM_CLIENT_SECRET: str | None = None
     ABDM_BASE_URL: str = "https://dev.abdm.gov.in/gateway"
     ABDM_SANDBOX_MODE: bool = True
+    ABDM_PUBLIC_KEY: str | None = None
     HFR_FACILITY_ID: str = "IN-DL-AIHOS-001"
     HFR_FACILITY_NAME: str = "AI-HOS Apex Clinical Center"
+    HIP_ID: str = "IN-DL-AIHOS-001"
+    HIU_ID: str = "IN-DL-AIHOS-001"
     FHIR_BASE_URL: str = "https://hapi.fhir.org/baseR4"
 
     # Monitoring

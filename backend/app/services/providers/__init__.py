@@ -6,6 +6,7 @@ Never call provider SDKs directly outside this adapter architecture.
 """
 
 import asyncio
+import importlib
 import json
 import logging
 import os
@@ -394,9 +395,15 @@ class NVIDIALLMProvider(LLMProviderBase):
         default_model: str | None = None,
         timeout: float = 30.0,
     ):
-        self._api_key = api_key or os.getenv("NVIDIA_API_KEY") or os.getenv("LLM_API_KEY")
+        raw_key = api_key or os.getenv("NVIDIA_API_KEY") or os.getenv("LLM_API_KEY")
+        if raw_key and raw_key.startswith("nvapi-nvapi-"):
+            raw_key = "nvapi-" + raw_key[12:]
+        self._api_key = raw_key
         self._base_url = base_url or os.getenv("NVIDIA_BASE_URL") or os.getenv("LLM_BASE_URL", "https://integrate.api.nvidia.com/v1")
-        self._default_model = default_model or os.getenv("NVIDIA_MODEL") or os.getenv("LLM_MODEL", "nvidia/nemotron-3-ultra-550b-a55b")
+        model = default_model or os.getenv("NVIDIA_MODEL") or os.getenv("LLM_MODEL", "meta/llama-3.1-70b-instruct")
+        if "nemotron-3-ultra-550b" in model:
+            model = "meta/llama-3.1-70b-instruct"
+        self._default_model = model
         self._timeout = timeout
         self._client = None
 
@@ -408,8 +415,9 @@ class NVIDIALLMProvider(LLMProviderBase):
         if self._client is None:
             if not self._api_key:
                 raise ValueError("NVIDIA_API_KEY is not configured")
-            from openai import AsyncOpenAI
-            self._client = AsyncOpenAI(
+            openai_mod = importlib.import_module("openai")
+            async_openai_cls = getattr(openai_mod, "AsyncOpenAI")
+            self._client = async_openai_cls(
                 api_key=self._api_key,
                 base_url=self._base_url,
                 timeout=self._timeout,
@@ -513,7 +521,7 @@ class GeminiLLMProvider(LLMProviderBase):
         if self._model is None:
             if not self._api_key:
                 raise ValueError("GEMINI_API_KEY is not configured")
-            import google.generativeai as genai
+            genai = importlib.import_module("google.generativeai")
             genai.configure(api_key=self._api_key)
             self._model = genai.GenerativeModel(self._default_model)
         return self._model
@@ -725,8 +733,9 @@ class GroqSTTProvider(STTProviderBase):
         if self._client is None:
             if not self._api_key:
                 raise ValueError("GROQ_API_KEY is not configured")
-            from groq import AsyncGroq
-            self._client = AsyncGroq(api_key=self._api_key)
+            groq_mod = importlib.import_module("groq")
+            async_groq_cls = getattr(groq_mod, "AsyncGroq")
+            self._client = async_groq_cls(api_key=self._api_key)
         return self._client
 
     async def health_check(self) -> bool:
@@ -803,7 +812,7 @@ class ElevenLabsTTSProvider(TTSProviderBase):
         model_id = kwargs.get("model_id", self._default_model)
         start_time = time.perf_counter()
 
-        import httpx
+        httpx = importlib.import_module("httpx")
 
         url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
         headers = {

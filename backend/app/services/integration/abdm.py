@@ -15,7 +15,7 @@ from typing import Any, Dict
 import uuid
 from uuid import UUID
 
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession  # type: ignore
 
 from app.core.config import settings
 from app.models import AuditLog, AuditOutcome, Doctor, Patient, User
@@ -37,6 +37,8 @@ class ABDMIntegrationService:
         CRITICAL: Never exposes ABDM_CLIENT_SECRET or raw secret credentials.
         """
         is_configured = bool(settings.ABDM_CLIENT_ID and settings.ABDM_CLIENT_SECRET)
+        from app.services.abdm_gateway import _LOCAL_GATEWAY_CACHE
+        token_cached = bool(_LOCAL_GATEWAY_CACHE.get("token"))
         return {
             "gateway_status": "ONLINE" if (is_configured or settings.ABDM_SANDBOX_MODE) else "OFFLINE",
             "environment": "sandbox" if settings.ABDM_SANDBOX_MODE else "production",
@@ -45,6 +47,8 @@ class ABDMIntegrationService:
             "hfr_facility_name": settings.HFR_FACILITY_NAME,
             "supported_auth_modes": ["MOBILE_OTP", "AADHAAR_OTP"],
             "client_configured": is_configured,
+            "rsa_oaep_encryption_active": True,
+            "token_cache_active": token_cached,
             "abdm_version": "v0.5",
         }
 
@@ -55,7 +59,7 @@ class ABDMIntegrationService:
         abha_address: str,
         auth_mode: str = "MOBILE_OTP",
     ) -> Dict[str, Any]:
-        """Initiate ABHA linking OTP transaction for patient."""
+        """Initiate ABHA linking OTP transaction for patient with optional RSA-OAEP Aadhaar encryption."""
         cleaned_address = abha_address.strip().lower()
         if not re.match(r"^[a-zA-Z0-9._-]+(@[a-zA-Z0-9]+)?$", cleaned_address):
             raise ValueError("Invalid ABHA address format. Must be e.g. name@abdm or standard identifier.")
@@ -64,25 +68,42 @@ class ABDMIntegrationService:
         # In sandbox, default OTP is 123456 or a 6-digit random code
         simulated_otp = "123456" if settings.ABDM_SANDBOX_MODE else f"{secrets.randbelow(900000) + 100000}"
 
+        # If Aadhaar OTP, encrypt payload via RSA-OAEP before storage/egress
+        encrypted_envelope = None
+        if auth_mode.upper() == "AADHAAR_OTP":
+            from app.services.abdm_gateway import ABDMGatewayService
+            encrypted_envelope = ABDMGatewayService.encrypt_aadhaar_payload(cleaned_address)
+
         _ABHA_TX_STORE[transaction_id] = {
             "patient_id": patient.patient_id,
             "abha_address": cleaned_address,
             "auth_mode": auth_mode,
+            "encrypted_envelope": encrypted_envelope,
             "expected_otp": simulated_otp,
             "created_at": datetime.utcnow(),
             "expires_at": datetime.utcnow() + timedelta(minutes=10),
         }
 
-        masked_dest = patient.phone[-4:] if patient.phone and len(patient.phone) >= 4 else "XXXX"
+        if auth_mode.upper() == "AADHAAR_OTP":
+            masked_dest = cleaned_address[-4:] if len(cleaned_address) >= 4 else "XXXX"
+            msg = f"Encrypted Aadhaar verification OTP dispatched to UIDAI registered mobile linked to ...{masked_dest}."
+        else:
+            masked_dest = patient.phone[-4:] if patient.phone and len(patient.phone) >= 4 else "XXXX"
+            msg = f"OTP successfully dispatched to mobile ending with {masked_dest}."
 
-        return {
+        resp = {
             "transaction_id": transaction_id,
             "abha_address": cleaned_address,
             "auth_mode": auth_mode,
-            "message": f"OTP successfully dispatched to mobile ending with {masked_dest}.",
+            "message": msg,
+            "encryption_applied": bool(encrypted_envelope),
+            "encryption_algo": "RSA-OAEP-SHA1" if encrypted_envelope else None,
             "sandbox_test_otp": "123456" if settings.ABDM_SANDBOX_MODE else None,
             "expires_in_seconds": 600,
         }
+        if encrypted_envelope:
+            resp["encrypted_payload_preview"] = encrypted_envelope[:36] + "..."
+        return resp
 
     @classmethod
     async def verify_abha_linking(

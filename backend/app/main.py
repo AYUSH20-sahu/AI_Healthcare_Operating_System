@@ -1,5 +1,5 @@
 import os
-from fastapi import FastAPI
+from fastapi import FastAPI  # type: ignore
 
 from app.api import (
     appointments,
@@ -21,6 +21,7 @@ from app.api import (
     voice,
     fhir,
     abdm,
+    abdm_webhooks,
     observability,
     nurses,
     websockets,
@@ -35,7 +36,7 @@ from app.core.observability import (
 )
 from app.core.security import RateLimitingMiddleware, SecurityHeadersMiddleware
 from app.services.auth.audit import AuditLoggingMiddleware
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.cors import CORSMiddleware  # type: ignore
 import app.services.scribe  # registers ScribeAgent on orchestrator
 import app.services.prescriptions  # registers PrescriptionDraftAgent on orchestrator
 import app.services.intake  # registers IntakeAgent on orchestrator
@@ -44,7 +45,8 @@ import app.services.intake  # registers IntakeAgent on orchestrator
 sentry_dsn = os.getenv("SENTRY_DSN") or settings.SENTRY_DSN
 if sentry_dsn and not sentry_dsn.startswith("your_sentry"):
     try:
-        import sentry_sdk  # type: ignore
+        import importlib
+        sentry_sdk = importlib.import_module("sentry_sdk")
 
         def _scrub_sensitive_data(event, hint):
             # HIPAA & OWASP: Scrub sensitive authentication headers and credentials
@@ -145,6 +147,7 @@ app.include_router(telehealth.router, prefix="/api/v1")
 app.include_router(voice.router, prefix="/api/v1")
 app.include_router(fhir.router, prefix="/api/v1")
 app.include_router(abdm.router, prefix="/api/v1")
+app.include_router(abdm_webhooks.router, prefix="/api/v1")
 app.include_router(observability.router, prefix="/api/v1")
 app.include_router(nurses.router, prefix="/api/v1")
 app.include_router(websockets.router, prefix="/api/v1")
@@ -158,8 +161,8 @@ async def startup_event():
 
     try:
         init_db()
-        from app.database import engine
-        from sqlalchemy import text
+        from app.database import engine  # type: ignore
+        from sqlalchemy import text  # type: ignore
         from app.models import Base
 
         if engine:
@@ -177,6 +180,7 @@ async def startup_event():
                     await conn.execute(text("ALTER TYPE userrole ADD VALUE IF NOT EXISTS 'super_admin';"))
                     await conn.execute(text("ALTER TYPE userrole ADD VALUE IF NOT EXISTS 'head_physician';"))
                     await conn.execute(text("ALTER TYPE userrole ADD VALUE IF NOT EXISTS 'head_nurse';"))
+                    await conn.execute(text("ALTER TYPE appointmentstatus ADD VALUE IF NOT EXISTS 'in_progress';"))
             except Exception:
                 pass
 
