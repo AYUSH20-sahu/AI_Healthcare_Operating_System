@@ -1,0 +1,18 @@
+# Auto-normalize line endings to LF across Linux, macOS, and Windows
+* text=auto eol=lf
+
+# Explicit LF for configuration and code
+*.toml text eol=lf
+*.ini text eol=lf
+*.py text eol=lf
+*.json text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.md text eol=lf
+*.ts text eol=lf
+*.tsx text eol=lf
+*.js text eol=lf
+*.mjs text eol=lf
+*.css text eol=lf
+*.sh text eol=lf
+Dockerfile* text eol=lf

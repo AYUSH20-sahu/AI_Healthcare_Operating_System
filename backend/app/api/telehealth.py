@@ -10,7 +10,7 @@ import re
 from typing import Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Response, UploadFile, WebSocket, WebSocketDisconnect, status
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -32,6 +32,7 @@ from app.models import (
     UserRole,
 )
 from app.services.auth.service import get_current_active_user
+from app.services.telehealth_media import TelehealthMediaService
 
 router = APIRouter(prefix="/telehealth", tags=["telehealth"])
 
@@ -400,13 +401,30 @@ async def get_room_token(
     room_id = f"room-{appointment_id}"
     peer_role = "doctor" if is_doctor else "patient"
 
+    user_identifier = str(current_user.email or current_user.user_id)
+    ice_config = TelehealthMediaService.generate_ice_servers(user_identifier=user_identifier)
+
     return {
         "room_id": room_id,
         "appointment_id": str(appointment_id),
         "peer_role": peer_role,
         "ws_url": f"/api/v1/telehealth/ws/{room_id}",
+        "ice_servers": ice_config["ice_servers"],
         "instructions": "Connect to ws_url via WebSocket. Send JSON messages: {type, payload}. Supported types: offer, answer, ice-candidate, bye",
     }
+
+
+@router.get("/ice-servers")
+async def get_ice_servers(
+    current_user: User = Depends(get_current_active_user),
+):
+    """Retrieve dynamic Coturn REST API ICE server configurations with HMAC-SHA1 authentication.
+    
+    Generates time-limited credentials for WebRTC NAT traversal across enterprise hospital firewalls.
+    """
+    user_identifier = str(current_user.email or current_user.user_id)
+    return TelehealthMediaService.generate_ice_servers(user_identifier=user_identifier)
+
 
 
 @router.websocket("/ws/{room_id}")
@@ -499,4 +517,110 @@ async def webrtc_signalling(websocket: WebSocket, room_id: str):
         # If room is empty, remove it
         if not room_peers:
             _signalling_rooms.pop(room_id, None)
+
+
+# ─── Consultation Recording Storage (Horizon C) ───────────────────────────────
+
+@router.post("/room/{appointment_id}/recording")
+async def upload_consultation_recording(
+    appointment_id: UUID,
+    file: UploadFile = File(...),
+    duration_seconds: Optional[int] = Form(None),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Upload completed consultation video/audio recording with server-side AES-256-GCM encryption."""
+    appointment = await db.get(Appointment, appointment_id)
+    if not appointment:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Appointment not found.")
+
+    is_doctor = current_user.role in [UserRole.DOCTOR, UserRole.HEAD_PHYSICIAN, UserRole.ADMIN]
+    is_patient = current_user.role == UserRole.PATIENT
+
+    if not (is_doctor or is_patient):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Unauthorized to upload recording for this appointment.")
+
+    content = await file.read()
+    if len(content) == 0:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Uploaded recording file is empty.")
+
+    meta = TelehealthMediaService.store_recording(
+        appointment_id=str(appointment_id),
+        file_bytes=content,
+        filename=file.filename or "recording.webm",
+        duration_seconds=duration_seconds,
+        recorded_by_user_id=str(current_user.user_id),
+        extra_metadata={
+            "doctor_id": str(appointment.doctor_id) if hasattr(appointment, "doctor_id") else None,
+            "patient_id": str(appointment.patient_id) if hasattr(appointment, "patient_id") else None,
+            "recorded_by_role": current_user.role.value if hasattr(current_user.role, "value") else str(current_user.role),
+        },
+    )
+    return {
+        "success": True,
+        "message": "Consultation recording encrypted with AES-256-GCM and stored securely.",
+        "metadata": meta,
+    }
+
+
+@router.get("/room/{appointment_id}/recording/status")
+async def get_recording_status(
+    appointment_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Retrieve metadata and cryptographic encryption status of consultation recording."""
+    appointment = await db.get(Appointment, appointment_id)
+    if not appointment:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Appointment not found.")
+
+    meta = TelehealthMediaService.get_recording_metadata(str(appointment_id))
+    if not meta:
+        return {
+            "has_recording": False,
+            "appointment_id": str(appointment_id),
+            "metadata": None,
+        }
+
+    return {
+        "has_recording": True,
+        "appointment_id": str(appointment_id),
+        "metadata": meta,
+    }
+
+
+@router.get("/room/{appointment_id}/recording/download")
+async def download_recording(
+    appointment_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Decrypt on-the-fly and stream consultation recording to authorized clinical participants."""
+    appointment = await db.get(Appointment, appointment_id)
+    if not appointment:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Appointment not found.")
+
+    is_doctor = current_user.role in [UserRole.DOCTOR, UserRole.HEAD_PHYSICIAN, UserRole.ADMIN]
+    is_patient = current_user.role == UserRole.PATIENT
+
+    if not (is_doctor or is_patient):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Unauthorized to download recording.")
+
+    try:
+        decrypted_bytes, meta = TelehealthMediaService.retrieve_recording(str(appointment_id))
+    except FileNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No recording found for this appointment.")
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Decryption failed: {exc}")
+
+    return Response(
+        content=decrypted_bytes,
+        media_type=meta.get("content_type", "video/webm"),
+        headers={
+            "Content-Disposition": f'attachment; filename="{meta.get("original_filename", "recording.webm")}"',
+            "X-Encryption-Verified": "AES-256-GCM",
+            "X-SHA256-Verified": meta.get("plaintext_sha256", ""),
+        },
+    )
+
 

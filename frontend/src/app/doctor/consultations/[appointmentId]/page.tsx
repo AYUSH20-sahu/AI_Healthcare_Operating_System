@@ -165,6 +165,13 @@ export default function DoctorTelehealthRoomPage() {
                 {/* Right actions */}
                 <div className="flex items-center gap-2">
                     <Link
+                        href={`/doctor/consultations/room?appointment_id=${appointmentId}`}
+                        className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold transition shadow-sm flex items-center gap-1.5"
+                    >
+                        <span>📹</span>
+                        <span>Launch WebRTC Studio</span>
+                    </Link>
+                    <Link
                         href={`/doctor/scribe`}
                         className="px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition"
                     >

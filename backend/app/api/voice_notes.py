@@ -3,6 +3,7 @@
 import os
 from datetime import datetime
 from pathlib import Path
+from typing import Optional
 from uuid import UUID
 
 from fastapi import (
@@ -44,6 +45,10 @@ from app.models import (
 from app.services.auth.audit import log_audit_event
 from app.services.auth.service import get_current_active_user
 from app.services.orchestrator import TaskRequest, TaskType, get_orchestrator
+from app.services.providers import get_stt_provider
+
+import logging
+logger = logging.getLogger("aihos.voice_notes")
 
 router = APIRouter(prefix="/voice-notes", tags=["voice-notes"])
 
@@ -601,3 +606,179 @@ async def process_voice_note_scribe(
         ai_metadata=scribe_res.ai_metadata,
         created_at=medical_record.created_at,
     )
+
+
+# ─── Live Audio Scribe Chunk Streaming (Horizon C) ────────────────────────────
+
+@router.post("/{voice_note_id}/stream")
+async def stream_audio_chunk(
+    voice_note_id: UUID,
+    chunk: UploadFile = File(...),
+    sequence_number: int = Form(0),
+    is_final: bool = Form(False),
+    language: Optional[str] = Form(None),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Stream an audio chunk for an ongoing voice note session and receive incremental transcription."""
+    if current_user.role not in [UserRole.DOCTOR, UserRole.HEAD_PHYSICIAN, UserRole.ADMIN]:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only doctors and clinical staff can stream consultation audio.")
+
+    voice_note = await db.get(VoiceNote, voice_note_id)
+    if not voice_note:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Voice note not found.")
+
+    chunk_bytes = await chunk.read()
+    if not chunk_bytes:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Empty audio chunk received.")
+
+    # 1. Append audio chunk to storage file
+    file_path = Path(voice_note.file_path)
+    with open(file_path, "ab") as f:
+        f.write(chunk_bytes)
+
+    voice_note.file_size = file_path.stat().st_size
+
+    # 2. Incrementally transcribe chunk via STT provider
+    incremental_text = ""
+    try:
+        stt = get_stt_provider()
+        res = await stt.transcribe(
+            audio_data=chunk_bytes,
+            format="webm",
+            language=language or "en",
+        )
+        if res and res.text:
+            incremental_text = res.text.strip()
+    except Exception as exc:
+        logger.warning("Incremental STT transcription failed for chunk %s: %s", sequence_number, exc)
+
+    # 3. Update transcription state
+    if incremental_text:
+        existing = (voice_note.transcription or "").strip()
+        voice_note.transcription = f"{existing} {incremental_text}".strip()
+
+    if is_final:
+        voice_note.transcription_status = "completed"
+    else:
+        voice_note.transcription_status = "in_progress"
+
+    await db.commit()
+    await db.refresh(voice_note)
+
+    return {
+        "voice_note_id": str(voice_note.voice_note_id),
+        "appointment_id": str(voice_note.appointment_id),
+        "sequence_number": sequence_number,
+        "incremental_text": incremental_text,
+        "full_transcription": voice_note.transcription or "",
+        "is_final": is_final,
+        "status": voice_note.transcription_status,
+        "file_size": voice_note.file_size,
+    }
+
+
+@router.post("/stream/appointment/{appointment_id}")
+async def stream_audio_chunk_by_appointment(
+    appointment_id: UUID,
+    chunk: UploadFile = File(...),
+    sequence_number: int = Form(0),
+    is_final: bool = Form(False),
+    language: Optional[str] = Form(None),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Convenience streaming endpoint directly keyed by appointment_id for live consultation room audio pipe."""
+    if current_user.role not in [UserRole.DOCTOR, UserRole.HEAD_PHYSICIAN, UserRole.ADMIN]:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only doctors and clinical staff can stream consultation audio.")
+
+    appointment = await db.get(Appointment, appointment_id)
+    if not appointment:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Appointment not found.")
+
+    # Find existing in-progress voice note or create a new one
+    stmt = (
+        select(VoiceNote)
+        .where(VoiceNote.appointment_id == appointment_id)
+        .where(VoiceNote.transcription_status.in_(["pending", "in_progress"]))
+        .order_by(VoiceNote.created_at.desc())
+        .limit(1)
+    )
+    res = await db.execute(stmt)
+    voice_note = res.scalar_one_or_none()
+
+    if not voice_note:
+        # Resolve doctor
+        doctor_stmt = select(Doctor).where(Doctor.user_id == current_user.user_id)
+        doc_res = await db.execute(doctor_stmt)
+        doctor = doc_res.scalar_one_or_none()
+        doc_id = doctor.doctor_id if doctor else appointment.doctor_id
+
+        stream_filename = f"stream_{appointment_id}_{int(datetime.utcnow().timestamp())}.webm"
+        stream_path = STORAGE_DIR / stream_filename
+
+        # Touch empty file
+        with open(stream_path, "wb") as f:
+            pass
+
+        voice_note = VoiceNote(
+            appointment_id=appointment_id,
+            doctor_id=doc_id,
+            patient_id=appointment.patient_id,
+            file_path=str(stream_path),
+            file_name=stream_filename,
+            content_type="audio/webm",
+            file_size=0,
+            transcription="",
+            transcription_status="in_progress",
+        )
+        db.add(voice_note)
+        await db.commit()
+        await db.refresh(voice_note)
+
+    # Delegate to streaming logic
+    chunk_bytes = await chunk.read()
+    if not chunk_bytes:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Empty audio chunk received.")
+
+    file_path = Path(voice_note.file_path)
+    with open(file_path, "ab") as f:
+        f.write(chunk_bytes)
+
+    voice_note.file_size = file_path.stat().st_size
+
+    incremental_text = ""
+    try:
+        stt = get_stt_provider()
+        stt_res = await stt.transcribe(
+            audio_data=chunk_bytes,
+            format="webm",
+            language=language or "en",
+        )
+        if stt_res and stt_res.text:
+            incremental_text = stt_res.text.strip()
+    except Exception as exc:
+        logger.warning("Incremental STT transcription failed for chunk %s: %s", sequence_number, exc)
+
+    if incremental_text:
+        existing = (voice_note.transcription or "").strip()
+        voice_note.transcription = f"{existing} {incremental_text}".strip()
+
+    if is_final:
+        voice_note.transcription_status = "completed"
+    else:
+        voice_note.transcription_status = "in_progress"
+
+    await db.commit()
+    await db.refresh(voice_note)
+
+    return {
+        "voice_note_id": str(voice_note.voice_note_id),
+        "appointment_id": str(voice_note.appointment_id),
+        "sequence_number": sequence_number,
+        "incremental_text": incremental_text,
+        "full_transcription": voice_note.transcription or "",
+        "is_final": is_final,
+        "status": voice_note.transcription_status,
+        "file_size": voice_note.file_size,
+    }

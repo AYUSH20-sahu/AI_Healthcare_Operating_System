@@ -78,6 +78,23 @@ class Settings(BaseSettings):
     SENTRY_DSN: str | None = None
     LOG_LEVEL: str = "INFO"
 
+    # Horizon C: WebRTC Media Engine, Coturn & Telehealth Recording
+    COTURN_STATIC_AUTH_SECRET: str = "aihos_coturn_static_secret_development_key"
+    COTURN_REALM: str = "turn.ai-hos.hospital"
+    COTURN_URLS: list[str] = [
+        "turn:turn.ai-hos.hospital:3478?transport=udp",
+        "turn:turn.ai-hos.hospital:3478?transport=tcp",
+        "turns:turn.ai-hos.hospital:5349?transport=tcp",
+    ]
+    STUN_URLS: list[str] = [
+        "stun:stun.l.google.com:19302",
+        "stun:stun1.l.google.com:19302",
+    ]
+    COTURN_TTL: int = 86400  # 24 hours in seconds
+    TELEHEALTH_RECORDING_STORAGE: str = "./storage/telehealth_recordings"
+    TELEHEALTH_STORAGE_ENCRYPTION_KEY: str = "aihos_telehealth_aes256_storage_secret_key"
+    TELEHEALTH_S3_BUCKET: str | None = None
+
     # Frontend
     NEXT_PUBLIC_API_URL: str | None = None
     NEXT_PUBLIC_APP_URL: str | None = None

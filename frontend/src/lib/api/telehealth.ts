@@ -72,6 +72,40 @@ export interface TelehealthActionResponse {
     telehealth_ended_at?: string | null;
 }
 
+export interface IceServerItem {
+    urls: string | string[];
+    username?: string;
+    credential?: string;
+}
+
+export interface IceServersResponse {
+    ice_servers: IceServerItem[];
+    ttl: number;
+    expires_at: number;
+    realm?: string;
+    username?: string;
+}
+
+export interface RecordingMetadata {
+    appointment_id: string;
+    original_filename: string;
+    content_type: string;
+    plaintext_bytes: number;
+    encrypted_bytes: number;
+    plaintext_sha256: string;
+    encryption_algorithm: string;
+    duration_seconds: number;
+    recorded_by_user_id?: string | null;
+    created_at: string;
+    storage_path?: string;
+}
+
+export interface RecordingStatusResponse {
+    has_recording: boolean;
+    appointment_id: string;
+    metadata: RecordingMetadata | null;
+}
+
 export const telehealthApi = {
     getDoctorSchedule: (dateStr?: string) =>
         api.get<DoctorScheduleResponse>('/telehealth/schedule', {
@@ -83,4 +117,22 @@ export const telehealthApi = {
         api.post<TelehealthActionResponse>(`/telehealth/rooms/${appointmentId}/start`, {}),
     endRoom: (appointmentId: string) =>
         api.post<TelehealthActionResponse>(`/telehealth/rooms/${appointmentId}/end`, {}),
+    getIceServers: () =>
+        api.get<IceServersResponse>('/telehealth/ice-servers'),
+    getRoomToken: (appointmentId: string) =>
+        api.get<{
+            room_id: string;
+            appointment_id: string;
+            peer_role: 'doctor' | 'patient';
+            ws_url: string;
+            ice_servers?: IceServerItem[];
+            instructions?: string;
+        }>(`/telehealth/room/${appointmentId}/token`),
+    uploadRecording: (appointmentId: string, formData: FormData) =>
+        api.post<{ success: boolean; message: string; metadata: RecordingMetadata }>(
+            `/telehealth/room/${appointmentId}/recording`,
+            formData
+        ),
+    getRecordingStatus: (appointmentId: string) =>
+        api.get<RecordingStatusResponse>(`/telehealth/room/${appointmentId}/recording/status`),
 };

@@ -334,6 +334,17 @@ export interface ScribeDraftResponse {
     created_at: string;
 }
 
+export interface AudioStreamChunkResponse {
+    voice_note_id: string;
+    appointment_id: string;
+    sequence_number: number;
+    incremental_text: string;
+    full_transcription: string;
+    is_final: boolean;
+    status: string;
+    file_size?: number;
+}
+
 export const voiceNotesApi = {
     upload: (formData: FormData) =>
         api.post<VoiceNoteUploadResponse>('/voice-notes/upload/', formData),
@@ -355,6 +366,12 @@ export const voiceNotesApi = {
 
     processScribe: (voiceNoteId: string, data?: ScribeProcessRequest) =>
         api.post<ScribeDraftResponse>(`/voice-notes/${voiceNoteId}/scribe`, data || {}),
+
+    streamChunk: (voiceNoteId: string, formData: FormData) =>
+        api.post<AudioStreamChunkResponse>(`/voice-notes/${voiceNoteId}/stream`, formData),
+
+    streamAppointmentChunk: (appointmentId: string, formData: FormData) =>
+        api.post<AudioStreamChunkResponse>(`/voice-notes/stream/appointment/${appointmentId}`, formData),
 };
 
 export interface IntakeMessageItem {
