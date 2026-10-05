@@ -14,9 +14,12 @@ from typing import Any, Dict, List, Optional
 from app.models import (
     Appointment,
     AppointmentStatus,
+    BedVitalsLog,
     Doctor,
+    InpatientBed,
     MedicalRecord,
     MedicalRecordStatus,
+    NurseTask,
     Patient,
     Prescription,
     PrescriptionStatus,
@@ -359,3 +362,509 @@ def to_fhir_bundle(
     }
 
     return bundle
+
+
+def to_fhir_observation(
+    vital: BedVitalsLog,
+    patient: Optional[Patient] = None,
+) -> Dict[str, Any]:
+    """Map internal BedVitalsLog entity to an HL7 FHIR R4 Observation resource (Vital Signs)."""
+    pat_id = str(patient.patient_id) if patient else (str(vital.patient_id) if vital.patient_id else "unknown")
+    rec_time = vital.recorded_at.isoformat() if vital.recorded_at else datetime.utcnow().isoformat()
+
+    components: List[Dict[str, Any]] = [
+        {
+            "code": {
+                "coding": [
+                    {
+                        "system": "http://loinc.org",
+                        "code": "8480-6",
+                        "display": "Systolic blood pressure",
+                    }
+                ],
+                "text": "Systolic Blood Pressure",
+            },
+            "valueQuantity": {
+                "value": float(vital.systolic),
+                "unit": "mmHg",
+                "system": "http://unitsofmeasure.org",
+                "code": "mm[Hg]",
+            },
+        },
+        {
+            "code": {
+                "coding": [
+                    {
+                        "system": "http://loinc.org",
+                        "code": "8462-4",
+                        "display": "Diastolic blood pressure",
+                    }
+                ],
+                "text": "Diastolic Blood Pressure",
+            },
+            "valueQuantity": {
+                "value": float(vital.diastolic),
+                "unit": "mmHg",
+                "system": "http://unitsofmeasure.org",
+                "code": "mm[Hg]",
+            },
+        },
+        {
+            "code": {
+                "coding": [
+                    {
+                        "system": "http://loinc.org",
+                        "code": "8867-4",
+                        "display": "Heart rate",
+                    }
+                ],
+                "text": "Heart Rate / Pulse",
+            },
+            "valueQuantity": {
+                "value": float(vital.pulse),
+                "unit": "beats/minute",
+                "system": "http://unitsofmeasure.org",
+                "code": "/min",
+            },
+        },
+        {
+            "code": {
+                "coding": [
+                    {
+                        "system": "http://loinc.org",
+                        "code": "2708-6",
+                        "display": "Oxygen saturation in Arterial blood",
+                    }
+                ],
+                "text": "Oxygen Saturation (SpO2)",
+            },
+            "valueQuantity": {
+                "value": float(vital.spo2),
+                "unit": "%",
+                "system": "http://unitsofmeasure.org",
+                "code": "%",
+            },
+        },
+        {
+            "code": {
+                "coding": [
+                    {
+                        "system": "http://loinc.org",
+                        "code": "8310-5",
+                        "display": "Body temperature",
+                    }
+                ],
+                "text": "Body Temperature",
+            },
+            "valueQuantity": {
+                "value": float(vital.temp),
+                "unit": "degF",
+                "system": "http://unitsofmeasure.org",
+                "code": "[degF]",
+            },
+        },
+        {
+            "code": {
+                "coding": [
+                    {
+                        "system": "http://loinc.org",
+                        "code": "9279-1",
+                        "display": "Respiratory rate",
+                    }
+                ],
+                "text": "Respiratory Rate",
+            },
+            "valueQuantity": {
+                "value": float(getattr(vital, "respiratory_rate", 16) or 16),
+                "unit": "breaths/minute",
+                "system": "http://unitsofmeasure.org",
+                "code": "/min",
+            },
+        },
+    ]
+
+    resource: Dict[str, Any] = {
+        "resourceType": "Observation",
+        "id": str(vital.log_id),
+        "status": "final",
+        "category": [
+            {
+                "coding": [
+                    {
+                        "system": "http://terminology.hl7.org/CodeSystem/observation-category",
+                        "code": "vital-signs",
+                        "display": "Vital Signs",
+                    }
+                ],
+                "text": "Vital Signs",
+            }
+        ],
+        "code": {
+            "coding": [
+                {
+                    "system": "http://loinc.org",
+                    "code": "85354-9",
+                    "display": "Blood pressure panel with all children optional",
+                }
+            ],
+            "text": "Bedside Vital Signs Telemetry",
+        },
+        "subject": {
+            "reference": f"Patient/{pat_id}",
+            "display": getattr(patient, "full_name", "Inpatient"),
+        },
+        "effectiveDateTime": rec_time,
+        "component": components,
+    }
+
+    if getattr(vital, "notes", None):
+        resource["valueString"] = vital.notes
+
+    return resource
+
+
+def to_fhir_encounter(
+    bed: InpatientBed,
+    patient: Optional[Patient] = None,
+    doctor: Optional[Doctor] = None,
+) -> Dict[str, Any]:
+    """Map internal InpatientBed occupancy entity to an HL7 FHIR R4 Encounter resource."""
+    pat_id = str(patient.patient_id) if patient else (str(bed.patient_id) if bed.patient_id else "unknown")
+    pat_name = getattr(patient, "full_name", bed.patient_name or "Inpatient")
+    admit_time = bed.admitted_at.isoformat() if bed.admitted_at else datetime.utcnow().isoformat()
+
+    status_val = "in-progress" if bed.status == "occupied" else "finished"
+
+    resource: Dict[str, Any] = {
+        "resourceType": "Encounter",
+        "id": str(bed.bed_id),
+        "identifier": [
+            {
+                "system": "https://aihos.org/encounters/inpatient",
+                "value": str(bed.bed_id),
+                "use": "official",
+            }
+        ],
+        "status": status_val,
+        "class": {
+            "system": "http://terminology.hl7.org/CodeSystem/v3-ActCode",
+            "code": "IMP",
+            "display": "inpatient encounter",
+        },
+        "subject": {
+            "reference": f"Patient/{pat_id}",
+            "display": pat_name,
+        },
+        "period": {
+            "start": admit_time,
+        },
+        "reasonCode": [
+            {
+                "text": bed.admitted_for or "Inpatient Observation & Care",
+            }
+        ],
+        "location": [
+            {
+                "location": {
+                    "display": f"Ward {bed.ward}, Bed {bed.bed_number}",
+                },
+                "status": "active" if bed.status == "occupied" else "completed",
+            }
+        ],
+    }
+
+    if doctor:
+        resource["participant"] = [
+            {
+                "individual": {
+                    "reference": f"Practitioner/{doctor.doctor_id}",
+                    "display": f"Dr. {doctor.full_name}",
+                }
+            }
+        ]
+    elif bed.attending_physician:
+        resource["participant"] = [
+            {
+                "individual": {
+                    "reference": "Practitioner/attending",
+                    "display": bed.attending_physician,
+                }
+            }
+        ]
+
+    return resource
+
+
+def to_fhir_composition(
+    patient: Patient,
+    bed: InpatientBed,
+    vitals_logs: Optional[List[BedVitalsLog]] = None,
+    nurse_tasks: Optional[List[NurseTask]] = None,
+    records: Optional[List[MedicalRecord]] = None,
+    prescriptions: Optional[List[Prescription]] = None,
+    doctor: Optional[Doctor] = None,
+) -> Dict[str, Any]:
+    """Compile inpatient care data into a standardized HL7 FHIR R4 Composition (Discharge Summary)."""
+    import uuid
+
+    comp_id = str(uuid.uuid4())
+    doc_ref = f"Practitioner/{doctor.doctor_id}" if doctor else "Practitioner/attending"
+    doc_name = f"Dr. {doctor.full_name}" if doctor else (bed.attending_physician or "Attending Physician")
+
+    sections: List[Dict[str, Any]] = [
+        # 1. Chief Complaint & Admission Reason
+        {
+            "title": "Reason for Admission & Diagnosis",
+            "code": {
+                "coding": [
+                    {
+                        "system": "http://loinc.org",
+                        "code": "46239-0",
+                        "display": "Chief complaint and reason for visit",
+                    }
+                ],
+                "text": "Reason for Admission",
+            },
+            "text": {
+                "status": "generated",
+                "div": f"<div><p><b>Admitted For:</b> {bed.admitted_for}</p><p><b>Ward/Bed:</b> {bed.ward} - Bed {bed.bed_number}</p></div>",
+            },
+        },
+        # 2. Hospital Course & Doctor Consultation Notes
+        {
+            "title": "Hospital Course & Clinical Documentation",
+            "code": {
+                "coding": [
+                    {
+                        "system": "http://loinc.org",
+                        "code": "8648-8",
+                        "display": "Hospital course Clinical note",
+                    }
+                ],
+                "text": "Hospital Course",
+            },
+            "entry": [
+                {"reference": f"DiagnosticReport/{rec.record_id}", "display": f"Clinical Note ({rec.created_at.strftime('%Y-%m-%d')})"}
+                for rec in (records or [])
+            ],
+            "text": {
+                "status": "generated",
+                "div": f"<div><p>Hospital stay duration: {bed.admit_day} day(s). Attending physician: {doc_name}. Clinical review complete.</p></div>",
+            },
+        },
+        # 3. Vital Signs Summary
+        {
+            "title": "Bedside Vital Signs Telemetry",
+            "code": {
+                "coding": [
+                    {
+                        "system": "http://loinc.org",
+                        "code": "8716-3",
+                        "display": "Vital signs",
+                    }
+                ],
+                "text": "Vital Signs",
+            },
+            "entry": [
+                {"reference": f"Observation/{v.log_id}", "display": f"Vitals @ {v.recorded_at.strftime('%H:%M')} (BP: {v.bp}, Pulse: {v.pulse})"}
+                for v in (vitals_logs or [])[:5]
+            ],
+            "text": {
+                "status": "generated",
+                "div": f"<div><p>Latest Telemetry: BP {bed.bp} mmHg, Pulse {bed.pulse} bpm, SpO2 {bed.spo2}%, Temp {bed.temp}°F. Clinical Status: {bed.clinical_status}.</p></div>",
+            },
+        },
+        # 4. Inpatient Medication Administrations
+        {
+            "title": "Inpatient Medications Administered",
+            "code": {
+                "coding": [
+                    {
+                        "system": "http://loinc.org",
+                        "code": "18610-6",
+                        "display": "Medication administered",
+                    }
+                ],
+                "text": "Medications Administered",
+            },
+            "text": {
+                "status": "generated",
+                "div": f"<div><p>{len(nurse_tasks or [])} ward medication rounds administered during hospital stay.</p></div>",
+            },
+        },
+        # 5. Discharge Medications
+        {
+            "title": "Discharge Medications & Regimen",
+            "code": {
+                "coding": [
+                    {
+                        "system": "http://loinc.org",
+                        "code": "75311-1",
+                        "display": "Discharge medications",
+                    }
+                ],
+                "text": "Discharge Medications",
+            },
+            "entry": [
+                {"reference": f"MedicationRequest/{rx.prescription_id}", "display": f"Prescription #{str(rx.prescription_id)[:8]}"}
+                for rx in (prescriptions or [])
+            ],
+            "text": {
+                "status": "generated",
+                "div": f"<div><p>{len(prescriptions or [])} discharge prescription order(s) finalized.</p></div>",
+            },
+        },
+        # 6. Care Plan & Follow-Up
+        {
+            "title": "Plan of Care & Follow-Up Instructions",
+            "code": {
+                "coding": [
+                    {
+                        "system": "http://loinc.org",
+                        "code": "18776-5",
+                        "display": "Plan of care note",
+                    }
+                ],
+                "text": "Care Plan & Follow-Up",
+            },
+            "text": {
+                "status": "generated",
+                "div": f"<div><p>Dietary instructions: {bed.diet}. Code status: {bed.code_status}. Follow-up with OPD in 7 days or immediately if acute symptoms recur.</p></div>",
+            },
+        },
+    ]
+
+    resource: Dict[str, Any] = {
+        "resourceType": "Composition",
+        "id": comp_id,
+        "identifier": {
+            "system": "https://aihos.org/compositions/discharge-summary",
+            "value": f"DS-{bed.bed_id}-{patient.patient_id}",
+            "use": "official",
+        },
+        "status": "final",
+        "type": {
+            "coding": [
+                {
+                    "system": "http://loinc.org",
+                    "code": "18842-5",
+                    "display": "Discharge summary note",
+                }
+            ],
+            "text": "Hospital Discharge Summary",
+        },
+        "category": [
+            {
+                "coding": [
+                    {
+                        "system": "http://loinc.org",
+                        "code": "LP173421-1",
+                        "display": "Report",
+                    }
+                ],
+                "text": "Clinical Report",
+            }
+        ],
+        "subject": {
+            "reference": f"Patient/{patient.patient_id}",
+            "display": patient.full_name,
+        },
+        "encounter": {
+            "reference": f"Encounter/{bed.bed_id}",
+            "display": f"Inpatient Stay ({bed.ward} - Bed {bed.bed_number})",
+        },
+        "date": datetime.utcnow().isoformat(),
+        "author": [
+            {
+                "reference": doc_ref,
+                "display": doc_name,
+            }
+        ],
+        "title": f"Inpatient Discharge Summary — {patient.full_name}",
+        "section": sections,
+    }
+
+    return resource
+
+
+def to_fhir_discharge_bundle(
+    patient: Patient,
+    bed: InpatientBed,
+    vitals_logs: Optional[List[BedVitalsLog]] = None,
+    nurse_tasks: Optional[List[NurseTask]] = None,
+    records: Optional[List[MedicalRecord]] = None,
+    prescriptions: Optional[List[Prescription]] = None,
+    doctor: Optional[Doctor] = None,
+) -> Dict[str, Any]:
+    """Bundle inpatient Discharge Summary Composition and all referenced resources into a FHIR R4 Document Bundle."""
+    import uuid
+
+    entries: List[Dict[str, Any]] = []
+
+    # 1. Composition (MUST be first entry for FHIR document bundle)
+    composition = to_fhir_composition(
+        patient=patient,
+        bed=bed,
+        vitals_logs=vitals_logs,
+        nurse_tasks=nurse_tasks,
+        records=records,
+        prescriptions=prescriptions,
+        doctor=doctor,
+    )
+    entries.append({
+        "fullUrl": f"urn:uuid:{composition['id']}",
+        "resource": composition,
+    })
+
+    # 2. Patient
+    pat_res = to_fhir_patient(patient)
+    entries.append({
+        "fullUrl": f"urn:uuid:{patient.patient_id}",
+        "resource": pat_res,
+    })
+
+    # 3. Encounter
+    enc_res = to_fhir_encounter(bed, patient=patient, doctor=doctor)
+    entries.append({
+        "fullUrl": f"urn:uuid:{bed.bed_id}",
+        "resource": enc_res,
+    })
+
+    # 4. Observations (Vitals)
+    for v in (vitals_logs or []):
+        obs_res = to_fhir_observation(v, patient=patient)
+        entries.append({
+            "fullUrl": f"urn:uuid:{v.log_id}",
+            "resource": obs_res,
+        })
+
+    # 5. DiagnosticReports (Medical Records)
+    for rec in (records or []):
+        rep_res = to_fhir_diagnostic_report(rec, doctor=doctor, patient=patient)
+        entries.append({
+            "fullUrl": f"urn:uuid:{rec.record_id}",
+            "resource": rep_res,
+        })
+
+    # 6. MedicationRequests (Prescriptions)
+    for rx in (prescriptions or []):
+        rx_res = to_fhir_medication_request(rx, doctor=doctor, patient=patient)
+        entries.append({
+            "fullUrl": f"urn:uuid:{rx.prescription_id}",
+            "resource": rx_res,
+        })
+
+    return {
+        "resourceType": "Bundle",
+        "id": str(uuid.uuid4()),
+        "identifier": {
+            "system": "https://aihos.org/bundles/discharge-document",
+            "value": f"DOC-{bed.bed_id}",
+            "use": "official",
+        },
+        "type": "document",
+        "timestamp": datetime.utcnow().isoformat(),
+        "total": len(entries),
+        "entry": entries,
+    }
+

@@ -219,3 +219,21 @@ async def get_fhir_bundle(
         records=records,
         prescriptions=prescriptions,
     )
+
+
+@router.post("/validate")
+async def validate_fhir(
+    resource: Dict[str, Any],
+    current_user: User = Depends(get_current_active_user),
+) -> Dict[str, Any]:
+    """Validate any arbitrary HL7 FHIR Release 4 resource or bundle against strict schema rules."""
+    from app.services.fhir_validator import FHIRValidator
+
+    resource_type = resource.get("resourceType")
+    if resource_type == "Bundle":
+        result = FHIRValidator.validate_bundle(resource)
+    else:
+        result = FHIRValidator.validate_resource(resource)
+
+    return result.to_dict()
+

@@ -25,6 +25,7 @@ from app.api import (
     observability,
     nurses,
     websockets,
+    clinical_documents,
 )
 
 from app.core.config import settings
@@ -151,6 +152,7 @@ app.include_router(abdm_webhooks.router, prefix="/api/v1")
 app.include_router(observability.router, prefix="/api/v1")
 app.include_router(nurses.router, prefix="/api/v1")
 app.include_router(websockets.router, prefix="/api/v1")
+app.include_router(clinical_documents.router, prefix="/api/v1")
 
 
 @app.on_event("startup")
