@@ -1,0 +1,19 @@
+{
+  "appointment_id": "f91b2b79-f209-4cc4-9f93-5d6164281c1c",
+  "original_filename": "consultation_call.webm",
+  "content_type": "video/webm",
+  "plaintext_bytes": 52,
+  "encrypted_bytes": 80,
+  "plaintext_sha256": "e80f15b2f2dd8377bed8fab4751404bcef02e441e20e1cd420f58e22d775b20a",
+  "encryption_algorithm": "AES-256-GCM",
+  "duration_seconds": 95,
+  "recorded_by_user_id": "57fff513-d722-4aa7-ab9e-34f9ddacfd33",
+  "created_at": "2026-10-05T08:04:15.092500+00:00",
+  "storage_path": "C:\\Users\\User\\Desktop\\workspace\\AI_Healthcare_Operating_System\\AI_Healthcare_Operating_System\\backend\\storage\\telehealth_recordings\\f91b2b79-f209-4cc4-9f93-5d6164281c1c_recording.webm.enc",
+  "s3_synced": false,
+  "extra": {
+    "doctor_id": "c70a2469-dae9-48d2-9d02-60945df5b9d0",
+    "patient_id": "67b6459f-a826-4464-b878-09d2091faa7d",
+    "recorded_by_role": "doctor"
+  }
+}
