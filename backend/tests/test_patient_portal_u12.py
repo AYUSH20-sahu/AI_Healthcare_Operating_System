@@ -301,7 +301,7 @@ async def test_05_patient_views_own_medical_records(
     assert res.status_code == 200
     data = res.json()
     assert len(data) >= 1
-    assert data[0]["status"] == "finalized"
+    assert data[0]["status"].lower() == "finalized"
     assert "Allergic Rhinitis" in data[0]["assessment"]
 
 

@@ -232,6 +232,7 @@ async def consent_manager_notification_webhook(
         # Don't raise — acknowledge the webhook regardless so ABDM doesn't retry
 
     return {
+        "status": "ACKNOWLEDGED",
         "acknowledged": True,
         "request_id": request_id,
         "processed_status": notification_status,

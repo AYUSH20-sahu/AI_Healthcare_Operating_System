@@ -451,9 +451,9 @@ async def get_doctors_availability_matrix(
             raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD.")
 
     # 1. Fetch doctors
-    doc_query = select(Doctor).join(User, Doctor.user_id == User.user_id).where(User.is_active)
+    doc_query = select(Doctor).outerjoin(User, Doctor.user_id == User.user_id).where((User.is_active != False) | (Doctor.user_id == None))
     if specialty and specialty.lower() != "all":
-        doc_query = doc_query.where(Doctor.specialty.ilike(specialty))
+        doc_query = doc_query.where(Doctor.specialty.ilike(f"%{specialty}%"))
     doc_query = doc_query.order_by(Doctor.full_name.asc())
 
     doctors = list((await db.execute(doc_query)).scalars().all())

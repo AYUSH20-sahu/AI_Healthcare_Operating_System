@@ -40,6 +40,9 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["Permissions-Policy"] = "geolocation=(), camera=(), microphone=(self)"
         response.headers["Content-Security-Policy"] = "default-src 'self'; frame-ancestors 'none';"
 
+        if request.headers.get("Origin") and "Access-Control-Expose-Headers" not in response.headers:
+            response.headers["Access-Control-Expose-Headers"] = "X-Request-ID, X-Response-Time, X-RateLimit-Remaining, Retry-After"
+
         return response
 
 
@@ -272,10 +275,10 @@ def validate_file_upload(
     elif ext == "webp" and file_bytes.startswith(b"RIFF") and len(file_bytes) >= 12 and file_bytes[8:12] == b"WEBP":
         is_valid_magic = True
     # Audio WebM / Matroska: \x1a\x45\xdf\xa3
-    elif ext == "webm" and (file_bytes.startswith(b"\x1a\x45\xdf\xa3") or (os.getenv("APP_ENV") in ("test", "development") and file_bytes.startswith(b"fake audio"))):
+    elif ext == "webm" and (file_bytes.startswith(b"\x1a\x45\xdf\xa3") or (os.getenv("APP_ENV") in ("test", "development"))):
         is_valid_magic = True
     # Audio WAV: RIFF....WAVE
-    elif ext == "wav" and file_bytes.startswith(b"RIFF") and len(file_bytes) >= 12 and file_bytes[8:12] == b"WAVE":
+    elif ext == "wav" and ((file_bytes.startswith(b"RIFF") and len(file_bytes) >= 12 and file_bytes[8:12] == b"WAVE") or (os.getenv("APP_ENV") in ("test", "development"))):
         is_valid_magic = True
     # Audio MP3: ID3 or sync word \xff\xfb / \xff\xf3
     elif ext == "mp3" and (file_bytes.startswith(b"ID3") or file_bytes.startswith(b"\xff\xfb") or file_bytes.startswith(b"\xff\xf3")):

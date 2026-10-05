@@ -73,6 +73,17 @@ async def client(db_session):
     """Create an async test client."""
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        orig_request = ac.request
+
+        async def auto_expire_request(*args, **kwargs):
+            resp = await orig_request(*args, **kwargs)
+            try:
+                db_session.expire_all()
+            except Exception:
+                pass
+            return resp
+
+        ac.request = auto_expire_request
         yield ac
 
 

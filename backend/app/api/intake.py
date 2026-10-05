@@ -246,6 +246,7 @@ async def get_intake_session_by_id(
 
 
 @router.post("/sessions/{session_id}/message", response_model=IntakeMessageResponse)
+@router.post("/sessions/{session_id}/messages", response_model=IntakeMessageResponse)
 async def send_intake_message(
     session_id: UUID,
     payload: IntakeMessageRequest,

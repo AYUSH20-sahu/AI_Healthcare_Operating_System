@@ -57,34 +57,33 @@ async def test_cors_preflight_and_headers():
 
 
 @pytest.mark.asyncio
-async def test_rate_limiting_enforcement():
+async def test_rate_limiting_enforcement(client: AsyncClient):
     """Verify rate limiter middleware triggers HTTP 429 when threshold exceeded."""
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        # Auth limit is 20 requests per minute
-        # Send 25 rapid requests from the same test client
-        hit_429 = False
-        retry_header = None
+    # Auth limit is 20 requests per minute
+    # Send 25 rapid requests from the same test client
+    hit_429 = False
+    retry_header = None
 
-        for _ in range(25):
-            res = await client.post(
-                "/api/v1/auth/login",
-                json={"email": "nonexistent@test.com", "password": "wrongpassword123"},
-            )
-            if res.status_code == 429:
-                hit_429 = True
-                retry_header = res.headers.get("Retry-After")
-                data = res.json()
-                assert "error" in data
-                assert data["error"]["code"] == "RATE_LIMITED"
-                break
+    for _ in range(25):
+        res = await client.post(
+            "/api/v1/auth/login",
+            json={"email": "nonexistent@test.com", "password": "wrongpassword123"},
+        )
+        if res.status_code == 429:
+            hit_429 = True
+            retry_header = res.headers.get("Retry-After")
+            data = res.json()
+            assert "error" in data
+            assert data["error"]["code"] == "RATE_LIMITED"
+            break
 
-        assert hit_429 is True
-        assert retry_header is not None
-        assert int(retry_header) >= 1
+    assert hit_429 is True
+    assert retry_header is not None
+    assert int(retry_header) >= 1
 
 
 @pytest.mark.asyncio
-async def test_password_strength_enforcement():
+async def test_password_strength_enforcement(client: AsyncClient):
     """Verify registration endpoint rejects short or trivial passwords."""
     # 1. Short password (< 8 chars)
     valid, msg = validate_password_strength("short")
@@ -101,34 +100,32 @@ async def test_password_strength_enforcement():
     assert valid_ok is True
 
     # 4. API level test
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        res = await client.post(
-            "/api/v1/auth/signup",
-            json={
-                "email": "weakpass_user@test.com",
-                "password": "123",  # Too short
-                "full_name": "Test Weak Password",
-            },
-        )
-        assert res.status_code == 400
-        assert "8 characters" in res.json().get("detail", "")
+    res = await client.post(
+        "/api/v1/auth/signup",
+        json={
+            "email": "weakpass_user@test.com",
+            "password": "123",  # Too short
+            "full_name": "Test Weak Password",
+        },
+    )
+    assert res.status_code == 400
+    assert "8 characters" in res.json().get("detail", "")
 
 
 @pytest.mark.asyncio
-async def test_jwt_token_type_hardening():
+async def test_jwt_token_type_hardening(client: AsyncClient):
     """Verify refresh token cannot be used to authenticate access-protected endpoints."""
     # Generate a refresh token
     refresh_tok = create_refresh_token(data={"sub": "00000000-0000-0000-0000-000000000001", "role": "patient"})
 
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        # Attempt to access /auth/me with refresh token
-        res = await client.get(
-            "/api/v1/auth/me",
-            headers={"Authorization": f"Bearer {refresh_tok}"},
-        )
-        # Must be rejected because token type is 'refresh', not 'access'
-        assert res.status_code == 401
-        assert "Could not validate credentials" in res.json().get("detail", "")
+    # Attempt to access /auth/me with refresh token
+    res = await client.get(
+        "/api/v1/auth/me",
+        headers={"Authorization": f"Bearer {refresh_tok}"},
+    )
+    # Must be rejected because token type is 'refresh', not 'access'
+    assert res.status_code == 401
+    assert "Could not validate credentials" in res.json().get("detail", "")
 
 
 def test_filename_sanitization_defense():

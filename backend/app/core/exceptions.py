@@ -31,6 +31,7 @@ def create_error_response(
     details: dict[str, Any] | None = None,
     status_code: int = status.HTTP_500_INTERNAL_SERVER_ERROR,
     request: Optional[Request] = None,
+    detail: Any = None,
 ) -> JSONResponse:
     """Create a standardized error response with request correlation."""
     from app.core.observability import current_request_id
@@ -44,17 +45,20 @@ def create_error_response(
     ts = datetime.now(timezone.utc).isoformat()
 
     headers = {"X-Request-ID": req_id} if req_id else {}
+    payload = ErrorResponse(
+        error=ErrorDetail(
+            code=code,
+            message=message,
+            details=details,
+            request_id=req_id,
+            timestamp=ts,
+        )
+    ).model_dump()
+    payload["detail"] = detail if detail is not None else message
+
     return JSONResponse(
         status_code=status_code,
-        content=ErrorResponse(
-            error=ErrorDetail(
-                code=code,
-                message=message,
-                details=details,
-                request_id=req_id,
-                timestamp=ts,
-            )
-        ).model_dump(),
+        content=payload,
         headers=headers,
     )
 
@@ -87,6 +91,7 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException) 
         details=details,
         status_code=exc.status_code,
         request=request,
+        detail=exc.detail,
     )
 
 
@@ -106,6 +111,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
         details={"errors": errors},
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         request=request,
+        detail=errors,
     )
 
 

@@ -39,7 +39,7 @@ class UserSignupRequest(BaseModel):
     phone: str | None = None
 
     class Config:
-        extra = "forbid"
+        extra = "ignore"
 
 
 class UserCreate(BaseModel):
@@ -131,7 +131,7 @@ def is_token_jti_revoked(jti: str) -> bool:
 
 def revoke_all_user_tokens(user_id: str) -> None:
     """Revoke all tokens issued for a user before this timestamp."""
-    ts = datetime.utcnow().timestamp()
+    ts = time.time()
     str_uid = str(user_id)
     user_tokens_revoked_before[str_uid] = ts
     r = _get_redis_client()

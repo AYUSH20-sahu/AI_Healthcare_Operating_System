@@ -24,8 +24,50 @@ from sqlalchemy import (
     Text,
 )
 
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.types import CHAR, TypeDecorator
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+
+
+class SafeUUID(TypeDecorator):
+    """Platform-independent UUID that accepts both str and uuid.UUID objects."""
+    impl = PG_UUID
+    cache_ok = True
+
+    def __init__(self, as_uuid=True, *args, **kwargs):
+        super().__init__(as_uuid=as_uuid, *args, **kwargs)
+        self.as_uuid = as_uuid
+
+    def load_dialect_impl(self, dialect):
+        if dialect.name == "postgresql":
+            return dialect.type_descriptor(PG_UUID(as_uuid=self.as_uuid))
+        else:
+            return dialect.type_descriptor(CHAR(36))
+
+    def process_bind_param(self, value, dialect):
+        if value is None:
+            return None
+        if isinstance(value, str):
+            try:
+                value = uuid.UUID(value)
+            except (ValueError, AttributeError):
+                return str(value)
+        if dialect.name == "postgresql":
+            return value
+        return str(value)
+
+    def process_result_value(self, value, dialect):
+        if value is None:
+            return None
+        if isinstance(value, uuid.UUID):
+            return value
+        try:
+            return uuid.UUID(str(value))
+        except (ValueError, AttributeError):
+            return value
+
+
+UUID = SafeUUID
 
 
 class Base(DeclarativeBase):
@@ -77,11 +119,23 @@ class IntakeStatus(PyEnum):
     ESCALATED = "escalated"
 
 
-class ConsentScope(PyEnum):
+class ConsentScope(str, PyEnum):
     """Consent record scope values."""
     FULL_ACCESS = "full_access"
+    RECORDS_ONLY = "records_only"
+    APPOINTMENTS_ONLY = "appointments_only"
+    NOTES_ONLY = "notes_only"
     LIMITED = "limited"
     EMERGENCY_ONLY = "emergency_only"
+
+    @classmethod
+    def _missing_(cls, value):
+        if isinstance(value, str):
+            val_lower = value.lower()
+            for member in cls:
+                if member.value == val_lower or member.name.lower() == val_lower:
+                    return member
+        return None
 
 
 class AuditOutcome(PyEnum):

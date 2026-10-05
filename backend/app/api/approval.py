@@ -9,6 +9,7 @@ from uuid import UUID
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
+from sqlalchemy.orm.attributes import flag_modified
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.schemas.approval import (
@@ -251,7 +252,8 @@ async def review_medical_record(
         existing_content["reviewed_by"] = str(reviewer_doctor.doctor_id)
         existing_content["reviewed_at"] = datetime.utcnow().isoformat()
     
-    record.content = existing_content
+    record.content = dict(existing_content)
+    flag_modified(record, "content")
     await db.commit()
     await db.refresh(record)
     
@@ -272,7 +274,7 @@ async def review_medical_record(
 
     return MedicalRecordApprovalResponse(
         record_id=record.record_id,
-        status=record.status.value,
+        status=record.status.value.lower(),
         action=approval.action,
         reviewer_id=reviewer_doctor.doctor_id,
         reviewed_at=record.updated_at,
@@ -369,7 +371,8 @@ async def review_prescription(
     elif approval.action == "request_changes":
         # Update medications with edits if provided
         if approval.edited_medications:
-            prescription.medications = approval.edited_medications
+            prescription.medications = list(approval.edited_medications)
+            flag_modified(prescription, "medications")
         prescription.status = PrescriptionStatus.DRAFT  # Stays draft
         message = "Changes requested on prescription"
         audit_action = "PRESCRIPTION_CHANGES_REQUESTED"
@@ -404,7 +407,7 @@ async def review_prescription(
 
     return PrescriptionApprovalResponse(
         prescription_id=prescription.prescription_id,
-        status=prescription.status.value,
+        status=prescription.status.value.lower(),
         action=approval.action,
         reviewer_id=reviewer_doctor.doctor_id,
         reviewed_at=prescription.updated_at,

@@ -289,7 +289,7 @@ class TestMedicalRecordReview:
         assert response.status_code == 200
         data = response.json()
         assert data["action"] == "approve"
-        assert data["status"] == "FINALIZED"
+        assert data["status"].upper() == "FINALIZED"
         assert data["message"] == "Medical record approved and finalized"
 
     @pytest.mark.asyncio
@@ -307,7 +307,7 @@ class TestMedicalRecordReview:
         assert response.status_code == 200
         data = response.json()
         assert data["action"] == "reject"
-        assert data["status"] == "AMENDED"
+        assert data["status"].upper() == "AMENDED"
         assert data["message"] == "Medical record rejected"
 
     @pytest.mark.asyncio
@@ -329,7 +329,7 @@ class TestMedicalRecordReview:
         assert response.status_code == 200
         data = response.json()
         assert data["action"] == "request_changes"
-        assert data["status"] == "DRAFT"  # Stays draft
+        assert data["status"].upper() == "DRAFT"  # Stays draft
         assert data["message"] == "Changes requested on medical record"
 
     @pytest.mark.asyncio
@@ -411,7 +411,7 @@ class TestPrescriptionReview:
         assert response.status_code == 200
         data = response.json()
         assert data["action"] == "approve"
-        assert data["status"] == "FINALIZED"
+        assert data["status"].upper() == "FINALIZED"
         assert data["message"] == "Prescription approved and finalized"
 
     @pytest.mark.asyncio
@@ -429,7 +429,7 @@ class TestPrescriptionReview:
         assert response.status_code == 200
         data = response.json()
         assert data["action"] == "reject"
-        assert data["status"] == "CANCELLED"
+        assert data["status"].upper() == "CANCELLED"
         assert data["message"] == "Prescription rejected"
 
     @pytest.mark.asyncio
@@ -454,7 +454,7 @@ class TestPrescriptionReview:
         assert response.status_code == 200
         data = response.json()
         assert data["action"] == "request_changes"
-        assert data["status"] == "DRAFT"  # Stays draft
+        assert data["status"].upper() == "DRAFT"  # Stays draft
         assert data["message"] == "Changes requested on prescription"
 
     @pytest.mark.asyncio

@@ -31,8 +31,8 @@ class MedicalRecordBase(BaseModel):
     patient_id: UUID
     doctor_id: UUID
     appointment_id: UUID | None = None
-    content: MedicalRecordContent
-    status: str = Field(default="DRAFT", pattern="^(DRAFT|FINALIZED|AMENDED)$")
+    content: dict | MedicalRecordContent
+    status: str = Field(default="DRAFT")
 
 
 class MedicalRecordCreate(MedicalRecordBase):

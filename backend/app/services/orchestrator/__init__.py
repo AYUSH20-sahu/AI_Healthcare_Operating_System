@@ -99,6 +99,10 @@ class Orchestrator:
         """List registered task types."""
         return list(self._agents.keys())
 
+    async def dispatch(self, request: TaskRequest) -> TaskResult:
+        """Alias for execute_task."""
+        return await self.execute_task(request)
+
     async def execute_task(self, request: TaskRequest) -> TaskResult:
         """Execute task with enforced timeout, retry with backoff, and human fallback escalation."""
         start_time = time.perf_counter()

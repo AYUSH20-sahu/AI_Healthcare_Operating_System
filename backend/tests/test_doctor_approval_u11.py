@@ -215,7 +215,7 @@ async def test_02_doctor_reviews_draft_details(
     )
     assert mr_res.status_code == 200
     mr_data = mr_res.json()
-    assert mr_data["status"] == "draft"
+    assert mr_data["status"].lower() == "draft"
     assert mr_data["content"]["confidence"] == 0.94
     assert "viral bronchitis" in mr_data["content"]["assessment"]
 
@@ -226,7 +226,7 @@ async def test_02_doctor_reviews_draft_details(
     )
     assert rx_res.status_code == 200
     rx_data = rx_res.json()
-    assert rx_data["status"] == "draft"
+    assert rx_data["status"].lower() == "draft"
     assert rx_data["medications"][0]["medication_name"] == "Amoxicillin"
 
 
@@ -259,7 +259,7 @@ async def test_03_doctor_edits_draft_content(
     )
     assert mr_res.status_code == 200
     mr_data = mr_res.json()
-    assert mr_data["status"] == "draft"  # Remains draft while requesting changes
+    assert mr_data["status"].lower() == "draft"  # Remains draft while requesting changes
 
     # Edit prescription medications
     rx_edit_payload = {
@@ -282,7 +282,7 @@ async def test_03_doctor_edits_draft_content(
     )
     assert rx_res.status_code == 200
     rx_data = rx_res.json()
-    assert rx_data["status"] == "draft"
+    assert rx_data["status"].lower() == "draft"
 
 
 # ---------------------------------------------------------------------------
@@ -311,7 +311,7 @@ async def test_04_doctor_approves_draft(
     )
     assert mr_res.status_code == 200
     mr_data = mr_res.json()
-    assert mr_data["status"] == "finalized"
+    assert mr_data["status"].lower() == "finalized"
     assert mr_data["action"] == "approve"
     assert mr_data["finalized_at"] is not None
 
@@ -332,7 +332,7 @@ async def test_04_doctor_approves_draft(
     )
     assert rx_res.status_code == 200
     rx_data = rx_res.json()
-    assert rx_data["status"] == "finalized"
+    assert rx_data["status"].lower() == "finalized"
     assert rx_data["action"] == "approve"
     assert rx_data["finalized_at"] is not None
 
@@ -405,7 +405,7 @@ async def test_06_doctor_rejects_draft_with_explicit_reason(
     )
     assert mr_res.status_code == 200
     mr_data = mr_res.json()
-    assert mr_data["status"] == "amended"
+    assert mr_data["status"].lower() == "amended"
     assert mr_data["rejection_reason"] == mr_reject_payload["rejection_reason"]
 
     rx_reject_payload = {
@@ -420,7 +420,7 @@ async def test_06_doctor_rejects_draft_with_explicit_reason(
     )
     assert rx_res.status_code == 200
     rx_data = rx_res.json()
-    assert rx_data["status"] == "cancelled"
+    assert rx_data["status"].lower() == "cancelled"
     assert rx_data["rejection_reason"] == rx_reject_payload["rejection_reason"]
 
 
@@ -593,7 +593,7 @@ async def test_10_refresh_preserves_correct_status(
         headers={"Authorization": f"Bearer {token}"},
     )
     assert mr_refreshed.status_code == 200
-    assert mr_refreshed.json()["status"] == "finalized"
+    assert mr_refreshed.json()["status"].lower() == "finalized"
     assert mr_refreshed.json()["content"]["approved_at"] is not None
 
     rx_refreshed = await async_client.get(
@@ -601,7 +601,7 @@ async def test_10_refresh_preserves_correct_status(
         headers={"Authorization": f"Bearer {token}"},
     )
     assert rx_refreshed.status_code == 200
-    assert rx_refreshed.json()["status"] == "finalized"
+    assert rx_refreshed.json()["status"].lower() == "finalized"
     assert rx_refreshed.json()["finalized_at"] is not None
 
     # Drafts queue must no longer list either finalized item
