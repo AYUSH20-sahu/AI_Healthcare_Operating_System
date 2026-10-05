@@ -438,11 +438,14 @@ async def get_current_user(
             raise credentials_exception
         if is_user_token_invalidated(user_id, payload.get("iat")):
             raise credentials_exception
-        token_data = TokenData(user_id=UUID(user_id))
+        try:
+            target_uuid = UUID(user_id)
+            user = await get_user_by_id(db, target_uuid)
+        except ValueError:
+            user = await get_user_by_identifier(db, user_id)
     except (JWTError, ValueError):
         raise credentials_exception
     
-    user = await get_user_by_id(db, token_data.user_id)
     if user is None:
         raise credentials_exception
     return user

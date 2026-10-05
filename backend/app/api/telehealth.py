@@ -47,7 +47,7 @@ RED_FLAG_PATTERNS = [
     (r"(?i)\b(shortness\s*of\s*breath|cannot\s*breathe|difficulty\s*breathing|asphyxiation|gasping)\b", "Acute Respiratory Distress (Red Flag)"),
     (r"(?i)\b(sudden\s*numbness|facial\s*droop|slurred\s*speech|stroke|paralysis)\b", "Acute Neurological / Stroke Indicator (Red Flag)"),
     (r"(?i)\b(uncontrolled\s*bleeding|hemorrhage|coughing\s*blood|vomiting\s*blood)\b", "Severe Uncontrolled Hemorrhage (Red Flag)"),
-    (r"(?i)\b(loss\s*of\s*consciousness|unresponsive|syncope|fainted|blacked\s*out)\b", "Impaired Consciousness / Syncope (Red Flag)"),
+    (r"(?i)\b(loss\s*of\s*consciousness|unresponsive|syncope|faint|fainted|fainting|blacked\s*out)\b", "Impaired Consciousness / Syncope (Red Flag)"),
     (r"(?i)\b(severe\s*anaphylaxis|throat\s*swelling|tongue\s*swelling|allergic\s*shock)\b", "Acute Anaphylactic Shock (Red Flag)"),
 ]
 

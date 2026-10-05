@@ -402,7 +402,7 @@ async def toggle_user_status(
     
     Deactivated users cannot authenticate or access any system APIs.
     """
-    if user_id == current_admin.user_id and not status_data.is_active:
+    if str(user_id) == str(current_admin.user_id) and not status_data.is_active:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Administrators cannot deactivate their own active account",
@@ -528,7 +528,7 @@ async def update_user_role(
                 detail="Only the institutional Super Administrator can promote accounts to the Administrator role.",
             )
 
-    if user_id == current_admin.user_id and assigned_role != UserRole.ADMIN:
+    if str(user_id) == str(current_admin.user_id) and assigned_role != UserRole.ADMIN:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Administrators cannot demote their own account",
@@ -628,7 +628,7 @@ async def deactivate_or_delete_user(
     
     Prevents self-deletion by administrators.
     """
-    if user_id == current_admin.user_id:
+    if str(user_id) == str(current_admin.user_id):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Administrators cannot delete their own account",

@@ -64,7 +64,9 @@ class PrescriptionStatus(PyEnum):
     """Prescription status values."""
     DRAFT = "DRAFT"
     FINALIZED = "FINALIZED"
+    APPROVED = "APPROVED"
     CANCELLED = "CANCELLED"
+    REJECTED = "REJECTED"
 
 
 class IntakeStatus(PyEnum):
@@ -247,6 +249,40 @@ class Patient(Base):
     reports: Mapped[list["PatientReport"]] = relationship(back_populates="patient", cascade="all, delete-orphan")
     medicine_reminders: Mapped[list["MedicineReminder"]] = relationship(back_populates="patient", cascade="all, delete-orphan")
 
+    @property
+    def first_name(self) -> str:
+        if self.full_name:
+            parts = self.full_name.split()
+            return parts[0] if parts else ""
+        return ""
+
+    @first_name.setter
+    def first_name(self, value: str) -> None:
+        first = value or ""
+        last = self.last_name
+        self.full_name = f"{first} {last}".strip()
+
+    @property
+    def last_name(self) -> str:
+        if self.full_name:
+            parts = self.full_name.split()
+            return " ".join(parts[1:]) if len(parts) > 1 else ""
+        return ""
+
+    @last_name.setter
+    def last_name(self, value: str) -> None:
+        first = self.first_name
+        last = value or ""
+        self.full_name = f"{first} {last}".strip()
+
+    def __init__(self, **kwargs):
+        if "first_name" in kwargs or "last_name" in kwargs:
+            first = kwargs.pop("first_name", "") or ""
+            last = kwargs.pop("last_name", "") or ""
+            if "full_name" not in kwargs or not kwargs["full_name"]:
+                kwargs["full_name"] = f"{first} {last}".strip()
+        super().__init__(**kwargs)
+
 
 # FHIR: Practitioner + PractitionerRole
 class Doctor(Base):
@@ -296,6 +332,40 @@ class Doctor(Base):
     voice_notes: Mapped[list["VoiceNote"]] = relationship(back_populates="doctor")
     consents_given: Mapped[list["Consent"]] = relationship(back_populates="provider", foreign_keys="Consent.provider_id")
 
+    @property
+    def first_name(self) -> str:
+        if self.full_name:
+            parts = self.full_name.split()
+            return parts[0] if parts else ""
+        return ""
+
+    @first_name.setter
+    def first_name(self, value: str) -> None:
+        first = value or ""
+        last = self.last_name
+        self.full_name = f"{first} {last}".strip()
+
+    @property
+    def last_name(self) -> str:
+        if self.full_name:
+            parts = self.full_name.split()
+            return " ".join(parts[1:]) if len(parts) > 1 else ""
+        return ""
+
+    @last_name.setter
+    def last_name(self, value: str) -> None:
+        first = self.first_name
+        last = value or ""
+        self.full_name = f"{first} {last}".strip()
+
+    def __init__(self, **kwargs):
+        if "first_name" in kwargs or "last_name" in kwargs:
+            first = kwargs.pop("first_name", "") or ""
+            last = kwargs.pop("last_name", "") or ""
+            if "full_name" not in kwargs or not kwargs["full_name"]:
+                kwargs["full_name"] = f"{first} {last}".strip()
+        super().__init__(**kwargs)
+
 
 # FHIR: Appointment
 class Appointment(Base):
@@ -321,6 +391,7 @@ class Appointment(Base):
         Enum(AppointmentStatus), default=AppointmentStatus.SCHEDULED, index=True
     )
     notes: Mapped[str | None] = mapped_column(Text)
+    reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
     meeting_link: Mapped[str | None] = mapped_column(String(500), nullable=True)
     telehealth_room_id: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
     telehealth_started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
@@ -333,6 +404,11 @@ class Appointment(Base):
     doctor: Mapped["Doctor"] = relationship(back_populates="appointments")
     medical_records: Mapped[list["MedicalRecord"]] = relationship(back_populates="appointment")
     voice_notes: Mapped[list["VoiceNote"]] = relationship(back_populates="appointment")
+
+    def __init__(self, **kwargs):
+        if "reason" in kwargs and not kwargs.get("notes"):
+            kwargs["notes"] = kwargs.get("reason")
+        super().__init__(**kwargs)
 
 
 # FHIR: Composition / ClinicalImpression / DiagnosticReport

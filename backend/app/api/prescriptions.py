@@ -519,7 +519,7 @@ async def draft_prescription(
         "suggested_medications": [m.model_dump() for m in draft_req.suggested_medications] if draft_req.suggested_medications else [],
         "patient_allergies": draft_req.patient_allergies or [],
         "current_medications": draft_req.current_medications or [],
-        "patient_name": f"{patient.first_name} {patient.last_name}",
+        "patient_name": patient.full_name or f"{patient.first_name} {patient.last_name}".strip() or "Patient",
     }
     
     # Dispatch to orchestrator
