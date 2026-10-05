@@ -226,16 +226,32 @@ async def provision_user(
     except ValueError:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid role: '{provision_data.role}'. Allowed for hospital provisioning: doctor, head_physician, head_nurse",
+            detail=f"Invalid role: '{provision_data.role}'. Allowed for hospital provisioning: doctor, head_physician, head_nurse, nurse, receptionist",
         )
+
+    # 1a. Enforce Super Admin Boundary for Admin provisioning (SEC-06)
+    if assigned_role in (UserRole.ADMIN, UserRole.SUPER_ADMIN):
+        from app.core.config import settings
+        if current_admin.email.lower() != settings.SUPER_ADMIN_EMAIL.lower():
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only the institutional Super Administrator can provision new Administrator accounts.",
+            )
 
     # 1b. Role constraints for Hospital Admin
     if current_admin.role != UserRole.SUPER_ADMIN:
-        allowed_admin_roles = (UserRole.DOCTOR, UserRole.HEAD_PHYSICIAN, UserRole.HEAD_NURSE)
+        allowed_admin_roles = (
+            UserRole.DOCTOR,
+            UserRole.HEAD_PHYSICIAN,
+            UserRole.HEAD_NURSE,
+            UserRole.NURSE,
+            UserRole.RECEPTIONIST,
+            UserRole.ADMIN,
+        )
         if assigned_role not in allowed_admin_roles:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Hospital Admin can only provision Doctors, Head Physician, or Head Nurse. Selected: {assigned_role.value}",
+                detail=f"Hospital Admin can only provision clinical and authorized staff accounts. Selected: {assigned_role.value}",
             )
 
     # 1c. Enforce Only ONE Head Physician per organization

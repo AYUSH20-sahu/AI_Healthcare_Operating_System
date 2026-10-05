@@ -39,7 +39,7 @@ class UserSignupRequest(BaseModel):
     phone: str | None = None
 
     class Config:
-        extra = "allow"
+        extra = "forbid"
 
 
 class UserCreate(BaseModel):

@@ -449,7 +449,7 @@ async def get_my_patient_report(
     if report.patient_id != patient.patient_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied: You cannot access another patient's medical report",
+            detail="Access denied: Cannot access another patient's medical report",
         )
     return report
 
@@ -471,7 +471,7 @@ async def download_my_patient_report(
     if report.patient_id != patient.patient_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied: You cannot download another patient's medical report",
+            detail="Access denied: Cannot download another patient's medical report",
         )
 
     file_path = Path(report.file_path)
@@ -505,7 +505,7 @@ async def delete_my_patient_report(
     if report.patient_id != patient.patient_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied: You cannot delete another patient's medical report",
+            detail="Access denied: Cannot delete another patient's medical report",
         )
 
     # Attempt physical unlinking
@@ -596,7 +596,7 @@ async def update_my_medicine_reminder(
     if reminder.patient_id != patient.patient_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied: You cannot update another patient's medicine reminder",
+            detail="Access denied: Cannot update another patient's medicine reminder",
         )
 
     data = update_data.model_dump(exclude_unset=True)
@@ -635,7 +635,7 @@ async def delete_my_medicine_reminder(
     if reminder.patient_id != patient.patient_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied: You cannot delete another patient's medicine reminder",
+            detail="Access denied: Cannot delete another patient's medicine reminder",
         )
 
     await db.delete(reminder)

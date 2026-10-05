@@ -205,14 +205,11 @@ def sanitize_filename(filename: str) -> str:
     if not filename:
         return "unnamed_file"
 
-    # Remove any directory path components
-    basename = os.path.basename(filename)
-    # Remove null bytes and control chars
-    clean = re.sub(r"[\x00-\x1f\x7f]", "", basename)
-    # Replace invalid chars with underscore, keep only alphanumeric, dots, hyphens, underscores
+    clean = re.sub(r"[\x00-\x1f\x7f]", "", filename)
+    if "/" in clean:
+        clean = clean.split("/")[-1]
     clean = re.sub(r"[^\w.\-]", "_", clean)
-    # Strip leading dots or hyphens
-    clean = clean.lstrip(".-")
+    clean = clean.lstrip(".-_")
 
     return clean if clean else "sanitized_file"
 
@@ -238,9 +235,10 @@ def validate_file_upload(
     if file_size > max_size_bytes:
         max_mb = max_size_bytes / (1024 * 1024)
         current_mb = file_size / (1024 * 1024)
+        max_mb_fmt = f"{int(max_mb)}" if max_mb == int(max_mb) else f"{max_mb:.1f}"
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"File size exceeds maximum allowed limit of {max_mb:.1f} MB ({current_mb:.2f} MB uploaded).",
+            detail=f"File size exceeds maximum allowed limit of {max_mb_fmt} MB ({current_mb:.2f} MB uploaded).",
         )
 
     # Validate extension
@@ -248,14 +246,14 @@ def validate_file_upload(
     if ext not in allowed_extensions:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"File extension '.{ext}' is not permitted. Allowed extensions: {', '.join(sorted(allowed_extensions))}.",
+            detail=f"Unsupported file format: File extension '.{ext}' is not permitted. Allowed extensions: {', '.join(sorted(allowed_extensions))}.",
         )
 
     # Validate MIME type
     if content_type.lower() not in allowed_mimes:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"MIME type '{content_type}' is not supported.",
+            detail=f"Unsupported file format: MIME type '{content_type}' is not supported.",
         )
 
     # Magic byte verification
