@@ -137,7 +137,7 @@ async def on_consent_hip_notify(
     x_hip_id: Optional[str] = Header(None, alias="X-HIP-ID"),
 ) -> Dict[str, Any]:
     """Notification received by HIP when a patient grants, revokes, or denies consent."""
-    header_check = ABDMGatewayService.verify_webhook_headers(
+    ABDMGatewayService.verify_webhook_headers(
         dict(request.headers),
         expected_facility_id=settings.HFR_FACILITY_ID,
     )
@@ -202,7 +202,7 @@ async def on_health_information_hip_request(
     x_hip_id: Optional[str] = Header(None, alias="X-HIP-ID"),
 ) -> Dict[str, Any]:
     """Request from Gateway to dispatch FHIR health records to an authorized HIU dataPushUrl."""
-    header_check = ABDMGatewayService.verify_webhook_headers(
+    ABDMGatewayService.verify_webhook_headers(
         dict(request.headers),
         expected_facility_id=settings.HFR_FACILITY_ID,
     )

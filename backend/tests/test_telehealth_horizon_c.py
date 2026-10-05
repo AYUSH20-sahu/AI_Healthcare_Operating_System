@@ -11,8 +11,6 @@ Validates:
 """
 
 import io
-import os
-import time
 import pytest
 import pytest_asyncio
 from datetime import datetime
@@ -27,7 +25,6 @@ from app.models import (
     Patient,
     User,
     UserRole,
-    VoiceNote,
 )
 from app.services.auth.service import create_access_token, get_password_hash
 from app.services.telehealth_media import TelehealthMediaService

@@ -2,8 +2,6 @@ import logging
 from datetime import date, datetime, time, timedelta
 from uuid import UUID
 
-logger = logging.getLogger("ai_hos.appointments")
-
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -28,6 +26,8 @@ from app.models import (
     UserRole,
 )
 from app.services.auth.service import get_current_active_user
+
+logger = logging.getLogger("ai_hos.appointments")
 
 router = APIRouter(prefix="/appointments", tags=["appointments"])
 
