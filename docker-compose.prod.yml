@@ -1,4 +1,4 @@
-# AI-HOS Production Docker Compose Configuration
+# AI-HOS Production Docker Compose Configuration (Horizon D)
 # Usage: docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
 
 services:
@@ -9,9 +9,9 @@ services:
     command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-""}
     volumes:
       - redis_data_prod:/data
-    # Note: No host port published; Redis is accessible ONLY internally by backend
+    # Redis port is accessible ONLY internally by backend on bridge network
     healthcheck:
-      test: [ "CMD", "redis-cli", "ping" ]
+      test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 3s
       retries: 5
@@ -42,14 +42,22 @@ services:
       - LLM_PROVIDER=${LLM_PROVIDER:-nvidia}
       - LLM_API_KEY=${LLM_API_KEY}
       - SENTRY_DSN=${SENTRY_DSN}
+    volumes:
+      - backend_storage_prod:/app/storage
     ports:
       - "8000:8000"
     depends_on:
       redis:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
     networks:
       - ai-hos-prod-network
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4 --no-server-header
+    command: ["gunicorn", "-w", "4", "-k", "uvicorn.workers.UvicornWorker", "-b", "0.0.0.0:8000", "app.main:app"]
 
   frontend:
     build:
@@ -65,13 +73,21 @@ services:
     ports:
       - "3000:3000"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     networks:
       - ai-hos-prod-network
-    command: npm run start
+    command: ["node", "server.js"]
 
 volumes:
   redis_data_prod:
+  backend_storage_prod:
 
 networks:
   ai-hos-prod-network:
