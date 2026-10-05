@@ -78,6 +78,12 @@ async def client(db_session):
 
 
 @pytest_asyncio.fixture
+async def async_client(client: AsyncClient):
+    """Alias for client fixture to support test suites requesting async_client."""
+    yield client
+
+
+@pytest_asyncio.fixture
 async def admin_user(db_session):
     """Create an admin user."""
     user = User(
