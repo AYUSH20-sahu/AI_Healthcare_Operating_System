@@ -98,16 +98,121 @@ async def seed_database():
                 try:
                     async with engine.connect() as conn:
                         await conn.execution_options(isolation_level="AUTOCOMMIT")
-                        await conn.execute(text("ALTER TYPE userrole ADD VALUE IF NOT EXISTS 'super_admin';"))
-                        await conn.execute(text("ALTER TYPE userrole ADD VALUE IF NOT EXISTS 'head_physician';"))
-                        await conn.execute(text("ALTER TYPE userrole ADD VALUE IF NOT EXISTS 'head_nurse';"))
-                        await conn.execute(text("ALTER TYPE appointmentstatus ADD VALUE IF NOT EXISTS 'in_progress';"))
+                        enum_alterations = [
+                            # userrole
+                            "ALTER TYPE userrole ADD VALUE IF NOT EXISTS 'super_admin';",
+                            "ALTER TYPE userrole ADD VALUE IF NOT EXISTS 'head_physician';",
+                            "ALTER TYPE userrole ADD VALUE IF NOT EXISTS 'head_nurse';",
+                            # appointmentstatus
+                            "ALTER TYPE appointmentstatus ADD VALUE IF NOT EXISTS 'scheduled';",
+                            "ALTER TYPE appointmentstatus ADD VALUE IF NOT EXISTS 'in_progress';",
+                            "ALTER TYPE appointmentstatus ADD VALUE IF NOT EXISTS 'completed';",
+                            "ALTER TYPE appointmentstatus ADD VALUE IF NOT EXISTS 'cancelled';",
+                            "ALTER TYPE appointmentstatus ADD VALUE IF NOT EXISTS 'no_show';",
+                            "ALTER TYPE appointmentstatus ADD VALUE IF NOT EXISTS 'SCHEDULED';",
+                            "ALTER TYPE appointmentstatus ADD VALUE IF NOT EXISTS 'IN_PROGRESS';",
+                            "ALTER TYPE appointmentstatus ADD VALUE IF NOT EXISTS 'COMPLETED';",
+                            "ALTER TYPE appointmentstatus ADD VALUE IF NOT EXISTS 'CANCELLED';",
+                            "ALTER TYPE appointmentstatus ADD VALUE IF NOT EXISTS 'NO_SHOW';",
+                            # appointment_status
+                            "ALTER TYPE appointment_status ADD VALUE IF NOT EXISTS 'scheduled';",
+                            "ALTER TYPE appointment_status ADD VALUE IF NOT EXISTS 'in_progress';",
+                            "ALTER TYPE appointment_status ADD VALUE IF NOT EXISTS 'completed';",
+                            "ALTER TYPE appointment_status ADD VALUE IF NOT EXISTS 'cancelled';",
+                            "ALTER TYPE appointment_status ADD VALUE IF NOT EXISTS 'no_show';",
+                            # consentscope
+                            "ALTER TYPE consentscope ADD VALUE IF NOT EXISTS 'full_access';",
+                            "ALTER TYPE consentscope ADD VALUE IF NOT EXISTS 'records_only';",
+                            "ALTER TYPE consentscope ADD VALUE IF NOT EXISTS 'appointments_only';",
+                            "ALTER TYPE consentscope ADD VALUE IF NOT EXISTS 'notes_only';",
+                            "ALTER TYPE consentscope ADD VALUE IF NOT EXISTS 'limited';",
+                            "ALTER TYPE consentscope ADD VALUE IF NOT EXISTS 'emergency_only';",
+                            # consent_scope
+                            "ALTER TYPE consent_scope ADD VALUE IF NOT EXISTS 'full_access';",
+                            "ALTER TYPE consent_scope ADD VALUE IF NOT EXISTS 'records_only';",
+                            "ALTER TYPE consent_scope ADD VALUE IF NOT EXISTS 'appointments_only';",
+                            "ALTER TYPE consent_scope ADD VALUE IF NOT EXISTS 'notes_only';",
+                            "ALTER TYPE consent_scope ADD VALUE IF NOT EXISTS 'limited';",
+                            "ALTER TYPE consent_scope ADD VALUE IF NOT EXISTS 'emergency_only';",
+                            # medicalrecordstatus / medical_record_status
+                            "ALTER TYPE medicalrecordstatus ADD VALUE IF NOT EXISTS 'DRAFT';",
+                            "ALTER TYPE medicalrecordstatus ADD VALUE IF NOT EXISTS 'FINALIZED';",
+                            "ALTER TYPE medicalrecordstatus ADD VALUE IF NOT EXISTS 'AMENDED';",
+                            "ALTER TYPE medicalrecordstatus ADD VALUE IF NOT EXISTS 'draft';",
+                            "ALTER TYPE medicalrecordstatus ADD VALUE IF NOT EXISTS 'finalized';",
+                            "ALTER TYPE medicalrecordstatus ADD VALUE IF NOT EXISTS 'amended';",
+                            "ALTER TYPE medical_record_status ADD VALUE IF NOT EXISTS 'DRAFT';",
+                            "ALTER TYPE medical_record_status ADD VALUE IF NOT EXISTS 'FINALIZED';",
+                            "ALTER TYPE medical_record_status ADD VALUE IF NOT EXISTS 'AMENDED';",
+                            # prescriptionstatus / prescription_status
+                            "ALTER TYPE prescriptionstatus ADD VALUE IF NOT EXISTS 'DRAFT';",
+                            "ALTER TYPE prescriptionstatus ADD VALUE IF NOT EXISTS 'FINALIZED';",
+                            "ALTER TYPE prescriptionstatus ADD VALUE IF NOT EXISTS 'APPROVED';",
+                            "ALTER TYPE prescriptionstatus ADD VALUE IF NOT EXISTS 'CANCELLED';",
+                            "ALTER TYPE prescriptionstatus ADD VALUE IF NOT EXISTS 'REJECTED';",
+                            "ALTER TYPE prescriptionstatus ADD VALUE IF NOT EXISTS 'draft';",
+                            "ALTER TYPE prescriptionstatus ADD VALUE IF NOT EXISTS 'finalized';",
+                            "ALTER TYPE prescription_status ADD VALUE IF NOT EXISTS 'DRAFT';",
+                            "ALTER TYPE prescription_status ADD VALUE IF NOT EXISTS 'FINALIZED';",
+                            "ALTER TYPE prescription_status ADD VALUE IF NOT EXISTS 'APPROVED';",
+                        ]
+                        for ea in enum_alterations:
+                            try:
+                                await conn.execute(text(ea))
+                            except Exception:
+                                pass
                 except Exception as e:
                     print(f"  - Enum update notice: {e}")
 
             if Base is not None:
                 async with engine.begin() as conn:
                     await conn.run_sync(Base.metadata.create_all)
+                    if "sqlite" not in str(engine.url):
+                        alter_statements = [
+                            "ALTER TABLE appointments ADD COLUMN IF NOT EXISTS reason VARCHAR(500);",
+                            "ALTER TABLE appointments ADD COLUMN IF NOT EXISTS meeting_link VARCHAR(500);",
+                            "ALTER TABLE appointments ADD COLUMN IF NOT EXISTS telehealth_room_id VARCHAR(100);",
+                            "ALTER TABLE appointments ADD COLUMN IF NOT EXISTS telehealth_started_at TIMESTAMP;",
+                            "ALTER TABLE appointments ADD COLUMN IF NOT EXISTS telehealth_ended_at TIMESTAMP;",
+                            "ALTER TABLE users ADD COLUMN IF NOT EXISTS phone VARCHAR(50);",
+                            "ALTER TABLE users ADD COLUMN IF NOT EXISTS organization_id UUID REFERENCES organizations(organization_id) ON DELETE SET NULL;",
+                            "ALTER TABLE users ADD COLUMN IF NOT EXISTS department VARCHAR(100);",
+                            "ALTER TABLE users ADD COLUMN IF NOT EXISTS designation VARCHAR(100);",
+                            "ALTER TABLE users ADD COLUMN IF NOT EXISTS qualifications VARCHAR(255);",
+                            "ALTER TABLE users ADD COLUMN IF NOT EXISTS experience_years INTEGER;",
+                            "ALTER TABLE users ADD COLUMN IF NOT EXISTS room_number VARCHAR(50);",
+                            "ALTER TABLE users ADD COLUMN IF NOT EXISTS shift VARCHAR(100);",
+                            "ALTER TABLE users ADD COLUMN IF NOT EXISTS supervisor_id UUID REFERENCES users(user_id) ON DELETE SET NULL;",
+                            "ALTER TABLE doctors ADD COLUMN IF NOT EXISTS department VARCHAR(100);",
+                            "ALTER TABLE doctors ADD COLUMN IF NOT EXISTS designation VARCHAR(100);",
+                            "ALTER TABLE doctors ADD COLUMN IF NOT EXISTS qualifications VARCHAR(255);",
+                            "ALTER TABLE doctors ADD COLUMN IF NOT EXISTS experience_years INTEGER;",
+                            "ALTER TABLE doctors ADD COLUMN IF NOT EXISTS room_number VARCHAR(50);",
+                            "ALTER TABLE doctors ADD COLUMN IF NOT EXISTS shift VARCHAR(100);",
+                            "ALTER TABLE doctors ADD COLUMN IF NOT EXISTS is_head_physician BOOLEAN DEFAULT FALSE;",
+                            "ALTER TABLE doctors ADD COLUMN IF NOT EXISTS supervisor_id UUID REFERENCES users(user_id) ON DELETE SET NULL;",
+                            "ALTER TABLE patients ADD COLUMN IF NOT EXISTS phone VARCHAR(50);",
+                            "ALTER TABLE organizations ADD COLUMN IF NOT EXISTS facility_type VARCHAR(100);",
+                            "ALTER TABLE organizations ADD COLUMN IF NOT EXISTS departments JSONB;",
+                            "ALTER TABLE organizations ADD COLUMN IF NOT EXISTS total_beds INTEGER DEFAULT 0;",
+                            "ALTER TABLE organizations ADD COLUMN IF NOT EXISTS icu_beds INTEGER DEFAULT 0;",
+                            "ALTER TABLE organizations ADD COLUMN IF NOT EXISTS has_emergency BOOLEAN DEFAULT TRUE;",
+                            "ALTER TABLE organizations ADD COLUMN IF NOT EXISTS has_ambulance BOOLEAN DEFAULT TRUE;",
+                            "ALTER TABLE organizations ADD COLUMN IF NOT EXISTS license_number VARCHAR(100);",
+                            "ALTER TABLE organizations ADD COLUMN IF NOT EXISTS abdm_facility_id VARCHAR(100);",
+                            "ALTER TABLE organizations ADD COLUMN IF NOT EXISTS insurance_network_code VARCHAR(100);",
+                            "ALTER TABLE organizations ADD COLUMN IF NOT EXISTS emergency_hotline VARCHAR(50);",
+                            "ALTER TABLE organizations ADD COLUMN IF NOT EXISTS operating_hours VARCHAR(255);",
+                            "ALTER TABLE organizations ADD COLUMN IF NOT EXISTS clinical_review_policy TEXT;",
+                            "ALTER TABLE medical_records ADD COLUMN IF NOT EXISTS finalized_at TIMESTAMP;",
+                            "ALTER TABLE prescriptions ADD COLUMN IF NOT EXISTS finalized_at TIMESTAMP;",
+                            "ALTER TABLE prescriptions ADD COLUMN IF NOT EXISTS notes TEXT;",
+                        ]
+                        for stmt in alter_statements:
+                            try:
+                                await conn.execute(text(stmt))
+                            except Exception as e:
+                                pass
             print("  ✓ Schema tables verified.")
 
             # 2. Seed Organization
@@ -727,7 +832,22 @@ async def seed_appointments(session: AsyncSession, doctors: list, patients: list
         },
     ]
 
+    try:
+        check_enum = await session.execute(text(
+            "SELECT enumlabel FROM pg_enum JOIN pg_type ON pg_enum.enumtypid = pg_type.oid WHERE typname IN ('appointmentstatus', 'appointment_status');"
+        ))
+        valid_statuses = {r[0] for r in check_enum.fetchall()}
+    except Exception:
+        valid_statuses = set()
+
     for a in appts:
+        st = a["status"]
+        if valid_statuses and st not in valid_statuses:
+            if st.upper() in valid_statuses:
+                a["status"] = st.upper()
+            elif st.lower() in valid_statuses:
+                a["status"] = st.lower()
+
         await session.execute(text("""
             INSERT INTO appointments (
                 appointment_id, patient_id, doctor_id, scheduled_at, duration_minutes,
@@ -807,7 +927,22 @@ async def seed_medical_records(session: AsyncSession, doctors: list, patients: l
         },
     ]
 
+    try:
+        check_mr = await session.execute(text(
+            "SELECT enumlabel FROM pg_enum JOIN pg_type ON pg_enum.enumtypid = pg_type.oid WHERE typname IN ('medicalrecordstatus', 'medical_record_status');"
+        ))
+        valid_mr = {r[0] for r in check_mr.fetchall()}
+    except Exception:
+        valid_mr = set()
+
     for r in records:
+        st = r["status"]
+        if valid_mr and st not in valid_mr:
+            if st.lower() in valid_mr:
+                r["status"] = st.lower()
+            elif st.upper() in valid_mr:
+                r["status"] = st.upper()
+
         await session.execute(text("""
             INSERT INTO medical_records (
                 record_id, patient_id, doctor_id, appointment_id, content, status,
@@ -883,7 +1018,22 @@ async def seed_prescriptions(session: AsyncSession, doctors: list, patients: lis
         },
     ]
 
+    try:
+        check_rx = await session.execute(text(
+            "SELECT enumlabel FROM pg_enum JOIN pg_type ON pg_enum.enumtypid = pg_type.oid WHERE typname IN ('prescriptionstatus', 'prescription_status');"
+        ))
+        valid_rx = {r[0] for r in check_rx.fetchall()}
+    except Exception:
+        valid_rx = set()
+
     for p in prescriptions:
+        st = p["status"]
+        if valid_rx and st not in valid_rx:
+            if st.lower() in valid_rx:
+                p["status"] = st.lower()
+            elif st.upper() in valid_rx:
+                p["status"] = st.upper()
+
         await session.execute(text("""
             INSERT INTO prescriptions (
                 prescription_id, medical_record_id, patient_id, doctor_id, medications,
@@ -932,7 +1082,22 @@ async def seed_consents(session: AsyncSession, patients: list, doctors: list) ->
         },
     ]
 
+    try:
+        check_cs = await session.execute(text(
+            "SELECT enumlabel FROM pg_enum JOIN pg_type ON pg_enum.enumtypid = pg_type.oid WHERE typname IN ('consentscope', 'consent_scope');"
+        ))
+        valid_cs = {r[0] for r in check_cs.fetchall()}
+    except Exception:
+        valid_cs = set()
+
     for c in consents:
+        st = c["record_scope"]
+        if valid_cs and st not in valid_cs:
+            if st.lower() in valid_cs:
+                c["record_scope"] = st.lower()
+            elif st.upper() in valid_cs:
+                c["record_scope"] = st.upper()
+
         await session.execute(text("""
             INSERT INTO consents (
                 consent_id, patient_id, provider_id, record_scope, granted_at, revoked_at,
