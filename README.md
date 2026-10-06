@@ -82,20 +82,121 @@ docker compose up
 - **PostgreSQL**: Managed Cloud PostgreSQL (Nhost)
 - **Redis**: localhost:6379 (with healthcheck)
 
-### Production Baseline Credentials (Super Administrator Only)
+### Active Test Personas & Demo Credentials
 
-All dummy organizations, patients, appointments, and test records have been purged. The system maintains **only** the Global Super Administrator:
+To explore and test all portals across the Five-Layer Architecture, use the credentials below:
 
-| Role | Email | Phone | Password | Clearance & Access Route |
+#### 1. Core Institutional & Patient Personas
+| Role & Persona | Email | Phone | Password | Access Route & Portal | Primary Capabilities |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Global Super Administrator** | `superadmin@aihos.org` | `+919999000001` | `adminpassword123` | [`/admin/organizations`](http://localhost:3000/admin/organizations) | Multi-tenant hospital onboarding wizard, facility licensing & cross-tenant governance |
+| **Hospital Administrator** | `admin@test.com` | `+919876500001` | `adminpassword123` | [`/admin`](http://localhost:3000/admin) | Clinician provisioning, staff shifts, ward management & immutable audit logs |
+| **Attending Doctor (Cardiology)** | `doctor@test.com` | `+919876543210` | `doctorpassword123` | [`/doctor`](http://localhost:3000/doctor) | Consultations, Telehealth, and the **Doctor Review Gate** ([`/doctor/approvals`](http://localhost:3000/doctor/approvals)) |
+| **Head Inpatient Nurse** | `nurse@test.com` | `+919876500005` | `nursepassword123` | [`/nurse`](http://localhost:3000/nurse) | Inpatient bed occupancy, bedside vitals telemetry logging & shift medication rounds |
+| **Registered Patient** | `patient@test.com` | `+919876511111` | `patientpassword123` | [`/patient/login`](http://localhost:3000/patient/login) | Appointment booking, ABHA health records, medicine reminders & lab diagnostic reports |
+
+---
+
+#### 2. Departmental Specialists (10 Doctors — 2 for Each Department)
+*All departmental doctors sign in at [`/doctor`](http://localhost:3000/doctor) (or [`/auth/login`](http://localhost:3000/auth/login)) with password:* `doctorpassword123`
+
+| Department | Clinician Name | Email | License Number | Designation & Shift |
 | :--- | :--- | :--- | :--- | :--- |
-| **Global Super Administrator** | `superadmin@aihos.org` | `+919999000001` | `adminpassword123` | **Full Authority Across All Organizations** — Organization Management Console (`/admin/organizations`), System Admin (`/admin`) |
+| **Cardiology** | Dr. Rajesh Sharma | `doc.cardio1@aihos.org` | `MCI-CARD-2015-8849` | Head of Cardiology (Morning 09:00 - 14:00) |
+| **Cardiology** | Dr. Anita Desai | `doc.cardio2@aihos.org` | `MCI-CARD-2018-7721` | Consultant Cardiologist (Afternoon 14:00 - 19:00) |
+| **Neurology** | Dr. Priya Patel | `doc.neuro1@aihos.org` | `MCI-NEUR-2018-4412` | Head of Neurology (Morning 09:00 - 14:00) |
+| **Neurology** | Dr. Sameer Joshi | `doc.neuro2@aihos.org` | `MCI-NEUR-2020-5519` | Consultant Neurologist (Afternoon 14:00 - 19:00) |
+| **Pediatrics** | Dr. Arjun Kumar | `doc.pedia1@aihos.org` | `MCI-PEDI-2016-9031` | Lead Pediatric Specialist (Morning 09:00 - 15:00) |
+| **Pediatrics** | Dr. Neha Agarwal | `doc.pedia2@aihos.org` | `MCI-PEDI-2019-3824` | Consultant Pediatrician & Neonatologist (Afternoon) |
+| **Orthopedics** | Dr. Kavya Singh | `doc.ortho1@aihos.org` | `MCI-ORTH-2014-3129` | Senior Orthopedic Surgeon (Morning 08:30 - 13:30) |
+| **Orthopedics** | Dr. Rohan Mehta | `doc.ortho2@aihos.org` | `MCI-ORTH-2017-8890` | Consultant Spine & Joint Specialist (Afternoon) |
+| **Dermatology** | Dr. Vikram Reddy | `doc.derm1@aihos.org` | `MCI-DERM-2015-6612` | Senior Dermatologist (Morning 09:00 - 14:00) |
+| **Dermatology** | Dr. Pooja Chawla | `doc.derm2@aihos.org` | `MCI-DERM-2019-4458` | Consultant Dermatologist & Dermatosurgeon (Afternoon) |
+
+---
+
+#### 3. Specialized Physicians (20 Physicians across Clinical Disciplines)
+*All physicians sign in at [`/doctor`](http://localhost:3000/doctor) (or [`/auth/login`](http://localhost:3000/auth/login)) with password:* `doctorpassword123`
+
+| # | Physician Name | Email | Clinical Discipline / Specialty | License Number | Room / Location |
+| :- | :--- | :--- | :--- | :--- | :--- |
+| 1 | Dr. Sunita Rao | `physician1@aihos.org` | Internal Medicine (Lead Physician) | `MCI-MED-2012-7641` | Room 105 |
+| 2 | Dr. Alok Verma | `physician2@aihos.org` | General Medicine | `MCI-MED-2014-1102` | Room 106 |
+| 3 | Dr. Meera Nambiar | `physician3@aihos.org` | Critical Care & ICU Lead | `MCI-MED-2015-3341` | ICU Station |
+| 4 | Dr. Harish Iyer | `physician4@aihos.org` | Pulmonology & Chest Medicine | `MCI-MED-2016-8921` | Room 205 |
+| 5 | Dr. Divya Saxena | `physician5@aihos.org` | Gastroenterology & Hepatology | `MCI-MED-2013-4419` | Room 206 |
+| 6 | Dr. Rakesh Kulkarni | `physician6@aihos.org` | Nephrology & Dialysis | `MCI-MED-2015-7728` | Dialysis Wing |
+| 7 | Dr. Sangeeta Pillai | `physician7@aihos.org` | Medical Oncology | `MCI-MED-2014-9912` | Daycare Unit |
+| 8 | Dr. Vivek Mathur | `physician8@aihos.org` | Endocrinology & Diabetology | `MCI-MED-2017-2234` | Room 305 |
+| 9 | Dr. Ananya Sen | `physician9@aihos.org` | Rheumatology & Autoimmune Care | `MCI-MED-2018-6619` | Room 306 |
+| 10 | Dr. Deepak Bhatt | `physician10@aihos.org` | Infectious Disease & Travel Health | `MCI-MED-2016-5521` | Isolation Ward |
+| 11 | Dr. Shweta Ghosh | `physician11@aihos.org` | Geriatric Medicine & Elderly Care | `MCI-MED-2015-8832` | Room 405 |
+| 12 | Dr. Manish Tiwari | `physician12@aihos.org` | Emergency Medicine & Trauma | `MCI-MED-2019-1192` | Trauma Bay 1 |
+| 13 | Dr. Radhika Menon | `physician13@aihos.org` | Family Medicine & Primary Care | `MCI-MED-2017-3312` | OPD Desk 1 |
+| 14 | Dr. Tarun Chopra | `physician14@aihos.org` | Preventive Health & Executive Wellness | `MCI-MED-2018-7744` | Health Center |
+| 15 | Dr. Bhavna Shah | `physician15@aihos.org` | Clinical Hematology | `MCI-MED-2016-4481` | Room 505 |
+| 16 | Dr. Nikhil Grover | `physician16@aihos.org` | Allergy & Clinical Immunology | `MCI-MED-2019-9923` | Room 506 |
+| 17 | Dr. Tanvi Hegde | `physician17@aihos.org` | Palliative Care & Pain Management | `MCI-MED-2018-1123` | Hospice Wing |
+| 18 | Dr. Saurabh Malhotra | `physician18@aihos.org` | General & Laparoscopic Surgery | `MCI-MED-2014-5591` | OT Complex |
+| 19 | Dr. Ritu Kapoor | `physician19@aihos.org` | Clinical Pharmacology & Therapeutics | `MCI-MED-2017-6644` | Pharmacy Lab |
+| 20 | Dr. Siddharth Jain | `physician20@aihos.org` | Neuro-Critical Care & Neuro-Trauma | `MCI-MED-2016-8819` | Neuro ICU |
+
+---
+
+#### 4. Inpatient Ward & Critical Care Nurses (20 Nurses)
+*All nurses sign in at [`/nurse`](http://localhost:3000/nurse) (or [`/auth/login`](http://localhost:3000/auth/login)) with password:* `nursepassword123`
+
+| # | Nurse Name | Email | Assigned Department / Unit | Role & Shift | Nursing Station |
+| :- | :--- | :--- | :--- | :--- | :--- |
+| 1 | Sister Sunita Verma | `nurse@test.com` | Inpatient Care | Head Nurse (Morning) | Station 1 |
+| 2 | Sister Preeti Thomas | `nurse2@aihos.org` | Critical Care | Senior ICU Incharge (Morning) | ICU Desk |
+| 3 | Nurse Rekha Nair | `nurse3@aihos.org` | Cardiology | Cardiac Care Unit (CCU) Nurse (Morning) | CCU Station |
+| 4 | Nurse Anitha Kurien | `nurse4@aihos.org` | Pediatrics | Pediatric Ward Nurse (Afternoon) | Pediatric Desk |
+| 5 | Nurse Mary Fernandez | `nurse5@aihos.org` | Emergency & Trauma | Emergency & Trauma Nurse (Night) | Trauma Desk |
+| 6 | Nurse Geetha Krishnan | `nurse6@aihos.org` | Orthopedics | Orthopedic Post-Op Nurse (Morning) | Ortho Station |
+| 7 | Nurse Shilpa Deshmukh | `nurse7@aihos.org` | Nephrology | Dialysis Unit Staff Nurse (Morning) | Dialysis Wing |
+| 8 | Nurse Kavita Rawat | `nurse8@aihos.org` | Oncology | Oncology Daycare Nurse (Morning) | Daycare Station |
+| 9 | Nurse Blessy Mathew | `nurse9@aihos.org` | General Surgery | Surgical Step-Down Nurse (Afternoon) | Surgery Station |
+| 10 | Nurse Pooja Negi | `nurse10@aihos.org` | Emergency & Trauma | Triage Screening Nurse (Morning) | Triage Desk |
+| 11 | Nurse Deepa Swaminathan | `nurse11@aihos.org` | Critical Care | Night Shift ICU Incharge (Night) | ICU Central |
+| 12 | Nurse Mini Joseph | `nurse12@aihos.org` | Pediatrics | Neonatal ICU (NICU) Nurse (Night) | NICU Station |
+| 13 | Nurse Sarita Yadav | `nurse13@aihos.org` | General Medicine | General Medical Ward Nurse (Afternoon) | Ward 2 Desk |
+| 14 | Nurse Lissy Varghese | `nurse14@aihos.org` | Administration | Infection Control Liaison Nurse (Morning) | Infection Office |
+| 15 | Nurse Usha Rani | `nurse15@aihos.org` | Neurology | Stroke Care Unit Nurse (Morning) | Neuro Desk |
+| 16 | Nurse Sneha Patil | `nurse16@aihos.org` | Outpatient Care | Infusion Clinic Nurse (Morning) | Infusion Wing |
+| 17 | Nurse Bindu Samuel | `nurse17@aihos.org` | Inpatient Care | Wound & Catheter Care Nurse (Afternoon) | Ward 3 Desk |
+| 18 | Nurse Ancy Philip | `nurse18@aihos.org` | Critical Care | High Dependency Unit (HDU) Nurse (Night) | HDU Desk |
+| 19 | Nurse Reena George | `nurse19@aihos.org` | General Surgery | Pre-Op Holding Nurse (Morning) | Pre-Op Area |
+| 20 | Nurse Jancy Abraham | `nurse20@aihos.org` | Inpatient Care | Palliative & Elderly Care Nurse (Morning) | Geriatric Desk |
+
+---
+
+### Populating the Clinical Dummy Dataset
+
+The project includes an idempotent seeder (`database/seed.py`) that populates the complete clinical ecosystem:
+- **Flagship Facility**: Apex Multi-Specialty Hospital & Research Center (`APEX-HOSP-01`, 150 Beds, 30 ICU Beds, NABH licensed, ABDM `IN-DL-AIHOS-001`).
+- **Clinicians**: 10 Departmental Specialists + 20 Physicians across disciplines with verified medical licenses.
+- **Nursing Staff**: 20 Inpatient Ward, ICU, and Trauma Nurses with role-based workstation credentials.
+- **Patient Cohort**: 5 Patients with verified ABHA addresses (`amit.kumar@abdm`, `priya.sharma@abdm`, etc.).
+- **Consultations & Telehealth**: Scheduled upcoming visits, active video consultations, and completed encounters.
+- **Medical Records & Approvals**: Finalized SOAP records plus drafts queued in the clinician review gate ([`/doctor/approvals`](http://localhost:3000/doctor/approvals)).
+- **Prescriptions**: Formatted medication regimens with drug-drug and allergy interaction screening.
+- **Inpatient Beds & Nursing Telemetry**: Step-down and ICU bed matrices with historical vitals (BP, SpO2, Pulse) and due medication rounds.
+- **Patient Adherence**: Daily scheduled dosage reminders and uploaded diagnostic PDF reports.
+
+**To run the seeder:**
+```powershell
+# From the project root:
+python run_seed.py
+# Or double-click the helper script:
+.\seed.bat
+```
 
 > [!NOTE]
-> - **Zero Dummy Data**: The Nhost database contains zero dummy records.
-> - **Organization Registration**: New healthcare facilities are set up via the **4-Step Organization Onboarding Wizard** at `/auth/register`. The registering user is established as that facility's lead Administrator.
-> - **Super Admin Authority**: Super Admin can create or delete any organization and its administrator via `/admin/organizations`.
-> - **Isolated Patient Portal**: Patients register exclusively at `/patient/register` (dual email + mobile credentials) and sign in at `/patient/login` with zero links to the institutional staff portal.
-> - **Clinician & Staff Accounts**: Doctors, Nurses, and Staff must be provisioned by their facility Administrator via `/admin/users`.
+> - **Idempotent Seeder**: `run_seed.py` uses `ON CONFLICT DO UPDATE`. You can run it safely at any time to refresh mock records.
+> - **Isolated Patient Authentication**: Patients sign in exclusively at `/patient/login` with zero access to the institutional staff portal.
+> - **Staff Provisioning Boundary**: New doctors, nurses, and staff accounts must be provisioned by a facility Administrator via `/admin/users`.
+> - **Production Guardrail**: In `APP_ENV=production`, mock user seeding is strictly disabled by default. All production credentials must be securely provisioned via environment variables or vault secret managers.
 
 ### Docker Compose Services
 - `redis` — Redis 7 with persistence and named volume `redis_data`
