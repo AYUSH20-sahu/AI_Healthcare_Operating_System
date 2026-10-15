@@ -557,3 +557,165 @@ async def list_intake_sessions(
 
     res = await db.execute(stmt)
     return res.scalars().all()
+
+
+class ConciergeChatRequest(BaseModel):
+    query: str
+
+
+class ConciergeChatResponse(BaseModel):
+    reply: str
+    quick_actions: Optional[list[dict]] = None
+    matched_doctor: Optional[dict] = None
+    is_emergency: bool = False
+
+
+@router.post("/concierge-chat", response_model=ConciergeChatResponse)
+async def concierge_chat(
+    data: ConciergeChatRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Public conversational concierge for patient portal questions.
+
+    Understands doctor availability, fees, OPD schedules, and emergency alerts.
+    """
+    q = (data.query or "").lower().strip()
+
+    # 1. Emergency detection
+    emergency_keywords = [
+        "heart attack", "chest pain", "breath", "stroke", "unconscious",
+        "bleeding", "severe pain", "accident", "emergency", "ambulance", "trauma"
+    ]
+    if any(k in q for k in emergency_keywords):
+        return ConciergeChatResponse(
+            reply=(
+                "🚨 **CRITICAL MEDICAL EMERGENCY PROTOCOL:**\n\n"
+                "If you or someone nearby is experiencing acute symptoms (severe chest pain, sudden breathlessness, "
+                "facial drooping, or heavy bleeding), do not delay. Immediately dial **108** (Ambulance) or our direct "
+                "hospital trauma desk at **+91-011-2345-6789**."
+            ),
+            quick_actions=[
+                {"label": "🚨 Open Emergency SOS Console", "action": "emergency"},
+                {"label": "📞 Call Ambulance: 108", "action": "call_108"},
+            ],
+            is_emergency=True,
+        )
+
+    # 2. Fees & Charges inquiry
+    fee_keywords = ["fee", "cost", "charge", "price", "rate", "how much"]
+    if any(k in q for k in fee_keywords):
+        summary = (
+            "💰 **CarePulse Hospital Consultation & OPD Fee Schedule:**\n\n"
+            "• **General Medicine OPD:** ₹500\n"
+            "• **Pediatrics & Child Health:** ₹600\n"
+            "• **Dermatology & Skin Allergy:** ₹650\n"
+            "• **Orthopedics & Joint Care:** ₹750\n"
+            "• **Interventional Cardiology:** ₹800\n"
+            "• **Neurology & Stroke Care:** ₹900\n"
+            "• **Emergency Triage Assessment:** ₹1,000\n\n"
+            "✨ **Patient Inclusions:**\n"
+            "• Follow-up consultations within 7 days are **100% Free**\n"
+            "• Digital health record generation (ABDM ABHA): Included\n\n"
+            "*Sign in or register to book a confirmed slot.*"
+        )
+        return ConciergeChatResponse(
+            reply=summary,
+            quick_actions=[
+                {"label": "📅 View Doctor Slots", "action": "doctors"},
+                {"label": "⏰ OPD Clinic Hours", "action": "hours"},
+            ],
+        )
+
+    # 3. Doctor search / appointment query
+    doc_keywords = ["doctor", "slot", "timing", "schedule", "appointment", "specialist", "cardio", "neuro", "pediatric", "ortho", "derma", "sharma", "patel"]
+    if any(k in q for k in doc_keywords):
+        from app.models import Doctor
+        stmt = select(Doctor).order_by(Doctor.full_name)
+        res = await db.execute(stmt)
+        docs = res.scalars().all()
+
+        matched_doc = None
+        if docs:
+            for d in docs:
+                if (d.specialty and d.specialty.lower() in q) or (d.full_name and any(part.lower() in q for part in d.full_name.split())):
+                    matched_doc = {
+                        "id": str(d.doctor_id),
+                        "name": d.full_name,
+                        "specialty": d.specialty or "General Practice",
+                        "qualification": d.qualifications or "MBBS, MD",
+                        "room": d.room_number or "Main OPD Pavilion",
+                        "fee": 800 if "cardio" in (d.specialty or "").lower() else 600,
+                        "followUpFee": "Free within 7 days",
+                        "status": "Available Today",
+                    }
+                    break
+
+        if matched_doc:
+            return ConciergeChatResponse(
+                reply=(
+                    f"Consultation details for **{matched_doc['name']}** ({matched_doc['specialty']}):\n\n"
+                    f"• **Qualifications:** {matched_doc['qualification']}\n"
+                    f"• **Location:** {matched_doc['room']}\n"
+                    f"• **Consultation Fee:** ₹{matched_doc['fee']} ({matched_doc['followUpFee']})\n"
+                    f"• **Status:** {matched_doc['status']}\n\n"
+                    f"*Sign in to reserve an appointment.*"
+                ),
+                matched_doctor=matched_doc,
+                quick_actions=[
+                    {"label": "📋 View All Doctors", "action": "doctors"},
+                    {"label": "💰 Check Consultation Fees", "action": "fees"},
+                ],
+            )
+
+        # General roster
+        return ConciergeChatResponse(
+            reply=(
+                "👨‍⚕️ **Hospital Specialist Roster & Available Time Slots:**\n\n"
+                "1. **Dr. Rajesh Sharma** (Cardiology): Mon-Fri 09:00 AM - 01:00 PM (Fee: ₹800)\n"
+                "2. **Dr. Priya Patel** (Neurology): Mon, Wed, Fri 10:00 AM - 02:00 PM (Fee: ₹900)\n"
+                "3. **Dr. Arjun Kumar** (Pediatrics): Mon-Sat 09:30 AM - 03:30 PM (Fee: ₹600)\n"
+                "4. **Dr. Kavya Singh** (Orthopedics): Tue, Thu, Sat 11:00 AM - 04:00 PM (Fee: ₹750)\n"
+                "5. **Dr. Vikram Reddy** (Dermatology): Mon, Wed, Sat 02:00 PM - 06:00 PM (Fee: ₹650)\n"
+                "6. **Dr. Sunita Rao** (Internal Medicine): Mon-Sat 08:30 AM - 02:30 PM (Fee: ₹500)\n"
+                "7. **Dr. Priya Nair** (Emergency Medicine): 24/7 Rotational Coverage\n\n"
+                "*Please sign in on the right to reserve a consultation slot.*"
+            ),
+            quick_actions=[
+                {"label": "📋 Open Doctor Directory Tab", "action": "doctors"},
+                {"label": "💰 View Fee Schedule", "action": "fees"},
+            ],
+        )
+
+    # 4. Hours & Timings
+    if any(k in q for k in ["hour", "time", "open", "opd", "visit"]):
+        return ConciergeChatResponse(
+            reply=(
+                "⏰ **Hospital Operating & Visiting Hours:**\n\n"
+                "• **General Outpatient (OPD):** Monday to Saturday, 08:00 AM - 05:00 PM\n"
+                "• **Emergency & Trauma Center:** Open 24 Hours, 365 Days a Year\n"
+                "• **Diagnostic Pathology & Imaging (CT/MRI/X-Ray):** 24/7 Operations\n"
+                "• **Inpatient Visiting Hours:** Daily 04:00 PM - 07:00 PM\n"
+                "• **Central Pharmacy (Ground Floor):** Open 24/7"
+            ),
+            quick_actions=[
+                {"label": "👨‍⚕️ Available Doctor Slots", "action": "doctors"},
+                {"label": "🚨 Emergency Assistance", "action": "emergency"},
+            ],
+        )
+
+    # 5. Default Fallback
+    return ConciergeChatResponse(
+        reply=(
+            "Welcome to CarePulse! I can assist you with your outpatient hospital visit:\n\n"
+            "• **Doctor Time Slots:** Inquire about specific specialties or on-duty doctors.\n"
+            "• **Consultation Fees:** Transparent fee breakdown for general OPD and super-specialists.\n"
+            "• **Clinic Timings:** OPD consulting and visiting schedules.\n"
+            "• **Emergency Assistance:** Direct contact with our 24/7 Trauma Bay & Ambulance."
+        ),
+        quick_actions=[
+            {"label": "📅 Doctor Time Slots", "action": "doctors"},
+            {"label": "💰 Consultation Fees", "action": "fees"},
+            {"label": "🚨 Emergency Help", "action": "emergency"},
+        ],
+    )
+

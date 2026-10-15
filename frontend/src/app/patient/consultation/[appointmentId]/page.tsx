@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { api, API_BASE, telehealthApi, TelehealthRoomData } from '@/lib/api';
+import { api, telehealthApi, TelehealthRoomData, getTelehealthWsUrl } from '@/lib/api';
 import type { IceServerItem } from '@/lib/api';
 
 type CallState = 'idle' | 'connecting' | 'waiting' | 'negotiating' | 'active' | 'ended' | 'error';
@@ -21,13 +21,19 @@ export default function PatientConsultationRoomPage() {
     const [roomData, setRoomData] = useState<TelehealthRoomData | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [mediaError, setMediaError] = useState<string | null>(null);
+    const [mediaPermissionGranted, setMediaPermissionGranted] = useState(false);
 
-    // Media refs
+    // Media and peer states
+    const [localStream, setLocalStream] = useState<MediaStream | null>(null);
+    const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
+
     const localVideoRef = useRef<HTMLVideoElement>(null);
     const remoteVideoRef = useRef<HTMLVideoElement>(null);
     const localStreamRef = useRef<MediaStream | null>(null);
     const peerRef = useRef<RTCPeerConnection | null>(null);
     const wsRef = useRef<WebSocket | null>(null);
+    const isInitiatorRef = useRef<boolean>(false);
 
     // Call state controls
     const [callState, setCallState] = useState<CallState>('idle');
@@ -49,10 +55,47 @@ export default function PatientConsultationRoomPage() {
         if (timerRef.current) clearInterval(timerRef.current);
     }, []);
 
+    // ── Dedicated video element stream binding effects ────────────────────────
+    useEffect(() => {
+        if (localVideoRef.current && localStream) {
+            localVideoRef.current.srcObject = localStream;
+            localVideoRef.current.play().catch(err => {
+                console.warn('Patient local video autoplay prevented:', err);
+            });
+        }
+    }, [localStream, isLoading]);
+
+    useEffect(() => {
+        if (remoteVideoRef.current && remoteStream) {
+            remoteVideoRef.current.srcObject = remoteStream;
+            remoteVideoRef.current.play().catch(err => {
+                console.warn('Doctor remote video autoplay prevented:', err);
+            });
+        }
+    }, [remoteStream, callState]);
+
     // ── Signalling & WebRTC ───────────────────────────────────────────────────
     const sendSignal = useCallback((type: string, payload: unknown) => {
-        wsRef.current?.send(JSON.stringify({ type, payload }));
+        if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+            wsRef.current.send(JSON.stringify({ type, payload }));
+        }
     }, []);
+
+    const startOffer = useCallback(async () => {
+        const pc = peerRef.current;
+        if (!pc) return;
+        try {
+            setCallState('negotiating');
+            const offer = await pc.createOffer({
+                offerToReceiveAudio: true,
+                offerToReceiveVideo: true,
+            });
+            await pc.setLocalDescription(offer);
+            sendSignal('offer', offer);
+        } catch (offerErr) {
+            console.error('Failed to create WebRTC offer:', offerErr);
+        }
+    }, [sendSignal]);
 
     const createPeer = useCallback((servers: IceServerItem[]) => {
         const pc = new RTCPeerConnection({ iceServers: servers });
@@ -67,8 +110,12 @@ export default function PatientConsultationRoomPage() {
         };
 
         pc.ontrack = (event) => {
-            if (remoteVideoRef.current && event.streams[0]) {
-                remoteVideoRef.current.srcObject = event.streams[0];
+            if (event.streams && event.streams[0]) {
+                setRemoteStream(event.streams[0]);
+                if (remoteVideoRef.current) {
+                    remoteVideoRef.current.srcObject = event.streams[0];
+                    remoteVideoRef.current.play().catch(() => {});
+                }
             }
             setCallState('active');
             startTimer();
@@ -89,27 +136,115 @@ export default function PatientConsultationRoomPage() {
         if (!pc) return;
 
         switch (message.type) {
-            case 'offer':
-                setCallState('negotiating');
-                await pc.setRemoteDescription(new RTCSessionDescription(message.payload as RTCSessionDescriptionInit));
-                const answer = await pc.createAnswer();
-                await pc.setLocalDescription(answer);
-                sendSignal('answer', answer);
+            case 'room_joined': {
+                const payload = message.payload as { is_initiator?: boolean };
+                isInitiatorRef.current = !!payload?.is_initiator;
                 break;
+            }
 
-            case 'ice-candidate':
+            case 'peer_joined': {
+                if (isInitiatorRef.current) {
+                    await startOffer();
+                }
+                setCallState('negotiating');
+                break;
+            }
+
+            case 'offer': {
+                try {
+                    setCallState('negotiating');
+                    await pc.setRemoteDescription(new RTCSessionDescription(message.payload as RTCSessionDescriptionInit));
+                    const answer = await pc.createAnswer();
+                    await pc.setLocalDescription(answer);
+                    sendSignal('answer', answer);
+                } catch (offerHandleErr) {
+                    console.error('Failed to answer offer:', offerHandleErr);
+                }
+                break;
+            }
+
+            case 'answer': {
+                try {
+                    await pc.setRemoteDescription(new RTCSessionDescription(message.payload as RTCSessionDescriptionInit));
+                } catch (ansErr) {
+                    console.error('Failed to set remote description from answer:', ansErr);
+                }
+                break;
+            }
+
+            case 'ice-candidate': {
                 try {
                     await pc.addIceCandidate(new RTCIceCandidate(message.payload as RTCIceCandidateInit));
                 } catch { /* ignore stale candidates */ }
                 break;
+            }
 
             case 'bye':
-            case 'peer_left':
+            case 'peer_left': {
                 setCallState('ended');
                 stopTimer();
                 break;
+            }
         }
-    }, [sendSignal, stopTimer]);
+    }, [sendSignal, startOffer, stopTimer]);
+
+    // ── Acquire Local Media with Graceful Fallback ────────────────────────────
+    const acquireMediaStream = useCallback(async (): Promise<MediaStream | null> => {
+        setMediaError(null);
+        let stream: MediaStream | null = null;
+
+        if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
+            setMediaError('WebRTC camera/microphone access is not supported by this browser.');
+            return null;
+        }
+
+        try {
+            // Priority 1: User-facing video + stereo audio
+            stream = await navigator.mediaDevices.getUserMedia({
+                video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' },
+                audio: true,
+            });
+        } catch (err1) {
+            console.warn('HD camera acquisition failed, falling back to basic video/audio:', err1);
+            try {
+                // Priority 2: Unconstrained video + audio
+                stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+            } catch (err2) {
+                console.warn('Video+audio failed, trying video only:', err2);
+                try {
+                    // Priority 3: Video only
+                    stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+                } catch (err3) {
+                    console.warn('Video only failed, trying audio only:', err3);
+                    try {
+                        // Priority 4: Audio only
+                        stream = await navigator.mediaDevices.getUserMedia({ video: false, audio: true });
+                        setIsVideoOff(true);
+                    } catch (err4: any) {
+                        console.error('Media devices unavailable:', err4);
+                        const msg = err4?.name === 'NotAllowedError'
+                            ? 'Camera/microphone access was denied by the browser. Please allow permissions in your address bar.'
+                            : err4?.name === 'NotFoundError'
+                            ? 'No camera or microphone found on this device.'
+                            : 'Unable to start camera or microphone.';
+                        setMediaError(msg);
+                    }
+                }
+            }
+        }
+
+        if (stream) {
+            localStreamRef.current = stream;
+            setLocalStream(stream);
+            setMediaPermissionGranted(true);
+            if (localVideoRef.current) {
+                localVideoRef.current.srcObject = stream;
+                localVideoRef.current.play().catch(() => {});
+            }
+        }
+
+        return stream;
+    }, []);
 
     // ── Initialize Media & Call ───────────────────────────────────────────────
     const initCall = useCallback(async () => {
@@ -122,18 +257,10 @@ export default function PatientConsultationRoomPage() {
             // 1. Fetch room details
             const data = await telehealthApi.getRoom(appointmentId);
             setRoomData(data);
+            setIsLoading(false); // Unblock viewport so video elements mount immediately
 
-            // 2. Acquire local media
-            let stream: MediaStream | null = null;
-            try {
-                stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-                localStreamRef.current = stream;
-                if (localVideoRef.current) {
-                    localVideoRef.current.srcObject = stream;
-                }
-            } catch (mediaErr) {
-                console.warn('Could not acquire camera/mic:', mediaErr);
-            }
+            // 2. Acquire local media (runs while viewport is already mounted)
+            const stream = await acquireMediaStream();
 
             // 3. Get room token and Coturn ICE servers
             const tokenData = await telehealthApi.getRoomToken(appointmentId);
@@ -155,24 +282,28 @@ export default function PatientConsultationRoomPage() {
                 stream.getTracks().forEach(track => pc.addTrack(track, stream!));
             }
 
-            // 5. Connect WebSocket signalling relay
-            const wsBase = API_BASE.replace(/^http/, 'ws').replace('/api/v1', '');
+            // 5. Connect WebSocket signalling relay with valid absolute URL
             const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
-            const wsUrl = `${wsBase}/api/v1${tokenData.ws_url}${token ? `?token=${token}` : ''}`;
+            const wsUrl = getTelehealthWsUrl(tokenData.ws_url, token);
             const ws = new WebSocket(wsUrl);
             wsRef.current = ws;
 
-            ws.onopen = () => setCallState('waiting');
+            ws.onopen = () => {
+                setCallState('waiting');
+            };
+
             ws.onmessage = (ev) => {
                 try {
                     const msg = JSON.parse(ev.data);
                     handleSignal(msg);
                 } catch { /* ignore malformed */ }
             };
-            ws.onerror = () => {
-                setError('Signalling connection error. Please verify network.');
-                setCallState('error');
+
+            ws.onerror = (e) => {
+                console.warn('Signalling relay notice:', e);
+                // Do not immediately close video stage if local camera is already active
             };
+
             ws.onclose = () => {
                 if (callState !== 'ended' && callState !== 'error') {
                     setCallState('ended');
@@ -186,7 +317,7 @@ export default function PatientConsultationRoomPage() {
         } finally {
             setIsLoading(false);
         }
-    }, [appointmentId, createPeer, handleSignal, callState, stopTimer]);
+    }, [appointmentId, acquireMediaStream, createPeer, handleSignal, callState, stopTimer]);
 
     useEffect(() => {
         initCall();
@@ -220,7 +351,7 @@ export default function PatientConsultationRoomPage() {
         return u.includes('turn:') || u.includes('turns:');
     });
 
-    if (isLoading) {
+    if (isLoading && !roomData) {
         return (
             <div className="min-h-[70vh] flex flex-col items-center justify-center gap-3 text-slate-400">
                 <div className="w-10 h-10 border-3 border-indigo-600 border-t-transparent rounded-full animate-spin" />
@@ -237,12 +368,20 @@ export default function PatientConsultationRoomPage() {
                 </div>
                 <h2 className="text-lg font-bold text-slate-900 dark:text-white">Unable to Join Call</h2>
                 <p className="text-xs text-rose-600 dark:text-rose-300">{error || 'Session not found.'}</p>
-                <Link
-                    href="/patient/appointments"
-                    className="inline-block px-4 py-2 rounded-xl bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700 transition"
-                >
-                    Back to Appointments
-                </Link>
+                <div className="flex items-center justify-center gap-3 pt-2">
+                    <button
+                        onClick={() => initCall()}
+                        className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-800 dark:text-slate-200 text-xs font-semibold transition"
+                    >
+                        Try Again
+                    </button>
+                    <Link
+                        href="/patient/appointments"
+                        className="inline-block px-4 py-2 rounded-xl bg-indigo-600 text-white text-xs font-semibold hover:bg-indigo-700 transition"
+                    >
+                        Back to Appointments
+                    </Link>
+                </div>
             </div>
         );
     }
@@ -299,6 +438,23 @@ export default function PatientConsultationRoomPage() {
                 </Link>
             </div>
 
+            {/* Media Permission Warning Banner if blocked */}
+            {mediaError && (
+                <div className="p-3.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-xs text-amber-800 dark:text-amber-300 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                        <span>📹</span>
+                        <span>{mediaError}</span>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={() => acquireMediaStream()}
+                        className="px-3 py-1 rounded-lg bg-amber-200 dark:bg-amber-800 font-bold hover:bg-amber-300 transition"
+                    >
+                        Retry Camera
+                    </button>
+                </div>
+            )}
+
             {/* Video Viewport Stage */}
             <div className="bg-slate-950 rounded-2xl border border-slate-800 overflow-hidden shadow-xl h-[560px] relative flex flex-col justify-between">
                 {/* Doctor Video Area */}
@@ -324,7 +480,11 @@ export default function PatientConsultationRoomPage() {
                                         {roomData?.doctor_name || 'Attending Physician'}
                                     </h3>
                                     <p className="text-indigo-400 text-xs font-mono">
-                                        {callState === 'waiting' ? 'Waiting for doctor to join session…' : 'Connecting Coturn WebRTC…'}
+                                        {callState === 'waiting'
+                                            ? 'Waiting for doctor to join session…'
+                                            : callState === 'negotiating'
+                                            ? 'Establishing encrypted WebRTC link…'
+                                            : 'Connecting Coturn WebRTC…'}
                                     </p>
                                 </div>
                             </div>
@@ -344,6 +504,11 @@ export default function PatientConsultationRoomPage() {
                         {isVideoOff && (
                             <div className="absolute inset-0 flex items-center justify-center bg-slate-800 text-slate-400 text-xs">
                                 Camera Off
+                            </div>
+                        )}
+                        {!localStream && !isVideoOff && (
+                            <div className="absolute inset-0 flex items-center justify-center bg-slate-800/80 text-slate-400 text-[10px] text-center p-2">
+                                Starting Camera…
                             </div>
                         )}
                         <div className="absolute bottom-1 left-1 text-[9px] bg-black/60 text-white px-1.5 py-0.5 rounded">

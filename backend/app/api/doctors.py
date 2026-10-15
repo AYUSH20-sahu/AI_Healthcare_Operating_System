@@ -352,3 +352,82 @@ async def provision_junior_staff(
         "message": f"Successfully onboarded {req.full_name} ({req.designation}) into Department of {dept}.",
         "doctor": new_doctor,
     }
+
+
+class PublicDoctorDirectoryItem(BaseModel):
+    id: str
+    name: str
+    specialty: str
+    qualification: str
+    slots: list[str]
+    room: str
+    fee: int
+    followUpFee: str
+    status: str
+    phone: str
+
+
+@router.get("/public-directory", response_model=list[PublicDoctorDirectoryItem])
+async def get_public_doctor_directory(db: AsyncSession = Depends(get_db)):
+    """Public doctor roster and consultation fees for outpatient concierge and patient landing portal."""
+    stmt = select(Doctor).order_by(Doctor.full_name)
+    result = await db.execute(stmt)
+    doctors = result.scalars().all()
+
+    if not doctors:
+        # Default fallback list if no doctors yet provisioned in DB
+        return [
+            PublicDoctorDirectoryItem(
+                id="doc-1",
+                name="Dr. Rajesh Sharma",
+                specialty="Interventional Cardiology",
+                qualification="MD, DM (Cardiology), FACC",
+                slots=["Mon - Fri: 09:00 AM - 01:00 PM", "Mon - Thu: 04:00 PM - 06:00 PM"],
+                room="Room 302 (Cardiology Wing, 3rd Floor)",
+                fee=800,
+                followUpFee="Free within 7 days",
+                status="Available Today",
+                phone="+91-98765-43210",
+            )
+        ]
+
+    items = []
+    # Fee schedule mapping by specialty
+    fee_map = {
+        "cardiology": 800,
+        "neurology": 900,
+        "pediatrics": 600,
+        "orthopedics": 750,
+        "dermatology": 650,
+        "internal medicine": 500,
+        "emergency": 1000,
+    }
+
+    for d in doctors:
+        spec_key = (d.specialty or "").lower()
+        fee = 600
+        for k, v in fee_map.items():
+            if k in spec_key:
+                fee = v
+                break
+
+        room = d.room_number or "Main OPD Pavilion"
+        if not room.lower().startswith("room"):
+            room = f"Room {room}"
+
+        items.append(
+            PublicDoctorDirectoryItem(
+                id=str(d.doctor_id),
+                name=d.full_name if d.full_name.startswith("Dr.") else f"Dr. {d.full_name}",
+                specialty=d.specialty or "General Medicine",
+                qualification=d.qualifications or "MBBS, MD",
+                slots=[d.shift or "Mon - Fri: 09:00 AM - 02:00 PM"],
+                room=f"{room} ({d.department or 'Outpatient Complex'})",
+                fee=fee,
+                followUpFee="Free within 7 days",
+                status="Available Today",
+                phone=d.phone or "+91-98765-43210",
+            )
+        )
+
+    return items

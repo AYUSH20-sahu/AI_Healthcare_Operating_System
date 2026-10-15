@@ -2,6 +2,7 @@
 
 import React, { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { useAuth } from '@/lib/auth';
 import { getDefaultRouteForRole } from '@/lib/redirect-validator';
 import {
@@ -53,7 +54,7 @@ export default function HomePage() {
                     </p>
 
                     <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
-                        <a href="/doctor">
+                        <Link href="/doctor">
                             <Button size="lg" icon={
                                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
@@ -61,12 +62,12 @@ export default function HomePage() {
                             }>
                                 Open Doctor Copilot
                             </Button>
-                        </a>
-                        <a href="/auth/login">
+                        </Link>
+                        <Link href="/auth/login">
                             <Button variant="outline" size="lg">
                                 Sign In / Switch Role
                             </Button>
-                        </a>
+                        </Link>
                     </div>
                 </div>
 
@@ -104,11 +105,11 @@ export default function HomePage() {
                                 </li>
                             </ul>
                             <div className="mt-6">
-                                <a href="/doctor" className="block">
+                                <Link href="/doctor" className="block">
                                     <Button variant="secondary" size="sm" fullWidth>
                                         Launch Doctor Workspace →
                                     </Button>
-                                </a>
+                                </Link>
                             </div>
                         </CardContent>
                     </Card>
@@ -145,18 +146,18 @@ export default function HomePage() {
                                 </li>
                             </ul>
                             <div className="mt-6 flex flex-col gap-2">
-                                <a href="/patient" className="block">
+                                <Link href="/patient" className="block">
                                     <Button variant="secondary" size="sm" fullWidth>
                                         Open Patient Portal →
                                     </Button>
-                                </a>
+                                </Link>
                                 <div className="flex items-center justify-between text-[11px] px-1 text-slate-400">
-                                    <a href="/patient/login" className="hover:text-teal-600 dark:hover:text-teal-400 underline">
+                                    <Link href="/patient/login" className="hover:text-teal-600 dark:hover:text-teal-400 underline">
                                         Patient Sign In
-                                    </a>
-                                    <a href="/patient/register" className="hover:text-teal-600 dark:hover:text-teal-400 underline">
+                                    </Link>
+                                    <Link href="/patient/register" className="hover:text-teal-600 dark:hover:text-teal-400 underline">
                                         Register (Email & Phone)
-                                    </a>
+                                    </Link>
                                 </div>
                             </div>
                         </CardContent>
@@ -194,11 +195,11 @@ export default function HomePage() {
                                 </li>
                             </ul>
                             <div className="mt-6">
-                                <a href="/admin" className="block">
+                                <Link href="/admin" className="block">
                                     <Button variant="secondary" size="sm" fullWidth>
                                         Access Admin Console →
                                     </Button>
-                                </a>
+                                </Link>
                             </div>
                         </CardContent>
                     </Card>

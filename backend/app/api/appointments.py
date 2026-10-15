@@ -294,6 +294,8 @@ async def create_appointment(
         )
     
     appointment = Appointment(**appointment_data.model_dump())
+    if current_user.organization_id:
+        appointment.organization_id = current_user.organization_id
     if not appointment.meeting_link:
         appointment.telehealth_room_id = f"telehealth-{str(appointment.appointment_id)[:8]}"
         appointment.meeting_link = f"/doctor/consultations/{appointment.appointment_id}"

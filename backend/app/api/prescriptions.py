@@ -435,6 +435,7 @@ async def create_prescription(
         doctor_id=prescription_data.doctor_id,
         medications=[med.model_dump() for med in prescription_data.medications],
         status=PrescriptionStatus.DRAFT,
+        organization_id=current_user.organization_id,
     )
     db.add(prescription)
     await db.commit()
@@ -547,6 +548,7 @@ async def draft_prescription(
         medications=medications_data,
         status=PrescriptionStatus.DRAFT,
         notes=draft_req.notes,
+        organization_id=current_user.organization_id,
     )
     db.add(prescription)
     await db.commit()

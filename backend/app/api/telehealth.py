@@ -390,16 +390,17 @@ async def get_room_token(
     if not appointment:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Appointment not found.")
 
-    # Authorisation: only the patient or doctor of this appointment may join
+    # Authorisation: only the patient, doctor, or system admin may join
     is_doctor = current_user.role in [UserRole.DOCTOR, UserRole.HEAD_PHYSICIAN]
     is_patient = current_user.role == UserRole.PATIENT
+    is_admin = current_user.role == UserRole.ADMIN
 
-    if not (is_doctor or is_patient):
+    if not (is_doctor or is_patient or is_admin):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only the doctor or patient of this appointment may join.")
 
     # The room_id is deterministic for the appointment so both peers compute the same value
     room_id = f"room-{appointment_id}"
-    peer_role = "doctor" if is_doctor else "patient"
+    peer_role = "doctor" if (is_doctor or is_admin) else "patient"
 
     user_identifier = str(current_user.email or current_user.user_id)
     ice_config = TelehealthMediaService.generate_ice_servers(user_identifier=user_identifier)

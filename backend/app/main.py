@@ -26,6 +26,7 @@ from app.api import (
     nurses,
     websockets,
     clinical_documents,
+    claims,
 )
 
 from app.core.config import settings
@@ -153,6 +154,7 @@ app.include_router(observability.router, prefix="/api/v1")
 app.include_router(nurses.router, prefix="/api/v1")
 app.include_router(websockets.router, prefix="/api/v1")
 app.include_router(clinical_documents.router, prefix="/api/v1")
+app.include_router(claims.router, prefix="/api/v1")
 
 
 @app.on_event("startup")
@@ -218,6 +220,9 @@ async def startup_event():
                     "ALTER TABLE organizations ADD COLUMN IF NOT EXISTS emergency_hotline VARCHAR(50);",
                     "ALTER TABLE organizations ADD COLUMN IF NOT EXISTS operating_hours VARCHAR(255);",
                     "ALTER TABLE organizations ADD COLUMN IF NOT EXISTS clinical_review_policy TEXT;",
+                    "ALTER TABLE appointments ADD COLUMN IF NOT EXISTS organization_id UUID REFERENCES organizations(organization_id) ON DELETE SET NULL;",
+                    "ALTER TABLE medical_records ADD COLUMN IF NOT EXISTS organization_id UUID REFERENCES organizations(organization_id) ON DELETE SET NULL;",
+                    "ALTER TABLE prescriptions ADD COLUMN IF NOT EXISTS organization_id UUID REFERENCES organizations(organization_id) ON DELETE SET NULL;",
                 ]
                 for stmt in alter_stmts:
                     try:

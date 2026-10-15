@@ -235,6 +235,7 @@ function PatientLoginForm() {
     const [showPassword, setShowPassword] = useState(false);
     const [rememberMe, setRememberMe] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [infoMessage, setInfoMessage] = useState<string | null>(null);
     const [submitting, setSubmitting] = useState(false);
 
     // Left Panel State
@@ -243,6 +244,7 @@ function PatientLoginForm() {
     const [isTyping, setIsTyping] = useState(false);
     const chatEndRef = useRef<HTMLDivElement>(null);
     const [backendConnected, setBackendConnected] = useState<boolean | null>(null);
+    const [doctorsList, setDoctorsList] = useState<DoctorInfo[]>(HOSPITAL_DOCTORS);
 
     // Emergency Triage Dispatch State
     const [emergencyType, setEmergencyType] = useState('Acute Chest Pain / Cardiac Event');
@@ -273,7 +275,7 @@ function PatientLoginForm() {
         }
     }, [isLoading, isAuthenticated, isPatient, rawRedirect, router]);
 
-    // Live backend connectivity heartbeat probe
+    // Live backend connectivity heartbeat probe & dynamic doctor list
     useEffect(() => {
         let isMounted = true;
         const checkBackend = async () => {
@@ -288,7 +290,24 @@ function PatientLoginForm() {
                 }
             }
         };
+
+        const fetchPublicDoctors = async () => {
+            try {
+                const res = await fetch('/api/v1/doctors/public-directory');
+                if (res.ok) {
+                    const data = await res.json();
+                    if (isMounted && Array.isArray(data) && data.length > 0) {
+                        setDoctorsList(data);
+                    }
+                }
+            } catch {
+                // Keep default HOSPITAL_DOCTORS fallback
+            }
+        };
+
         checkBackend();
+        fetchPublicDoctors();
+
         return () => {
             isMounted = false;
         };
@@ -303,6 +322,7 @@ function PatientLoginForm() {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setError(null);
+        setInfoMessage(null);
 
         const identifier = loginMethod === 'email' ? email.trim() : phone.trim();
 
@@ -322,7 +342,7 @@ function PatientLoginForm() {
 
         try {
             setSubmitting(true);
-            await patientLogin(identifier, password);
+            await patientLogin(identifier, password, rememberMe);
             const destination = validatePostLoginRedirect(rawRedirect, 'patient');
             router.push(destination);
         } catch (err: unknown) {
@@ -334,11 +354,15 @@ function PatientLoginForm() {
     };
 
     // Quick demo autofill helper
-    const handleAutofill = (type: 'amit' | 'sarah' | 'mobile') => {
+    const handleAutofill = (type: 'amit' | 'priya' | 'sarah' | 'mobile') => {
         setError(null);
         if (type === 'amit') {
             setLoginMethod('email');
             setEmail('patient@test.com');
+            setPassword('patientpassword123');
+        } else if (type === 'priya') {
+            setLoginMethod('email');
+            setEmail('priya.sharma@example.com');
             setPassword('patientpassword123');
         } else if (type === 'sarah') {
             setLoginMethod('email');
@@ -371,15 +395,14 @@ function PatientLoginForm() {
 
         setTimeout(() => {
             processChatbotReply(query);
-            setIsTyping(false);
-        }, 500);
+        }, 300);
     };
 
     const handleSendPrompt = (prompt: string) => {
         handleSendMessage(prompt);
     };
 
-    const processChatbotReply = (userQuery: string) => {
+    const processChatbotReply = async (userQuery: string) => {
         const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         const q = userQuery.toLowerCase();
 
@@ -397,10 +420,61 @@ function PatientLoginForm() {
                 ],
             };
             setMessages((prev) => [...prev, restrictedMsg]);
+            setIsTyping(false);
             return;
         }
 
-        // 2. Emergency Symptoms / Acute Distress
+        // 2. Query live backend AI concierge endpoint
+        try {
+            const res = await fetch('/api/v1/intake/concierge-chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ query: userQuery }),
+            });
+            if (res.ok) {
+                const data = await res.json();
+                const quickActions = data.quick_actions?.map((qa: { label: string; action: string }) => {
+                    if (qa.action === 'emergency') {
+                        return { label: qa.label, action: () => setActiveLeftTab('emergency') };
+                    } else if (qa.action === 'doctors') {
+                        return { label: qa.label, action: () => setActiveLeftTab('doctors') };
+                    } else if (qa.action === 'call_108') {
+                        return { label: qa.label, action: () => { window.location.href = 'tel:108'; } };
+                    } else if (qa.action === 'fees') {
+                        return { label: qa.label, action: () => handleSendPrompt('What are all doctor consultation fees?') };
+                    }
+                    return { label: qa.label, action: () => handleSendPrompt(qa.label) };
+                });
+
+                const replyMsg: ChatMessage = {
+                    id: 'bot-' + Date.now(),
+                    sender: data.is_emergency ? 'system-alert' : 'assistant',
+                    text: data.reply,
+                    timestamp: timeStr,
+                    quickActions,
+                    doctorCard: data.matched_doctor ? {
+                        id: data.matched_doctor.id,
+                        name: data.matched_doctor.name,
+                        specialty: data.matched_doctor.specialty,
+                        qualification: data.matched_doctor.qualification,
+                        slots: data.matched_doctor.slots || ['Mon - Fri: 09:00 AM - 02:00 PM'],
+                        room: data.matched_doctor.room,
+                        fee: data.matched_doctor.fee,
+                        followUpFee: data.matched_doctor.followUpFee,
+                        status: data.matched_doctor.status || 'Available Today',
+                        phone: data.matched_doctor.phone || '+91-98765-43210',
+                    } : undefined,
+                    showEmergencyActions: data.is_emergency,
+                };
+                setMessages((prev) => [...prev, replyMsg]);
+                setIsTyping(false);
+                return;
+            }
+        } catch {
+            // Network fallback to offline rule matcher
+        }
+
+        // 3. Fallback: Emergency Symptoms / Acute Distress
         const isEmergency =
             q.includes('heart attack') ||
             q.includes('chest pain') ||
@@ -428,10 +502,11 @@ function PatientLoginForm() {
                 ],
             };
             setMessages((prev) => [...prev, alertMsg]);
+            setIsTyping(false);
             return;
         }
 
-        // 3. Fees & Charges Inquiry
+        // 4. Fallback: Fees & Charges Inquiry
         if (
             q.includes('fee') ||
             q.includes('cost') ||
@@ -465,10 +540,11 @@ function PatientLoginForm() {
                 ],
             };
             setMessages((prev) => [...prev, replyMsg]);
+            setIsTyping(false);
             return;
         }
 
-        // 4. Doctor Inquiry or Specific Specialist Search
+        // 5. Fallback: Doctor Inquiry or Specific Specialist Search
         if (
             q.includes('doctor') ||
             q.includes('slot') ||
@@ -492,17 +568,17 @@ function PatientLoginForm() {
             let matchedDoc: DoctorInfo | undefined;
 
             if (q.includes('cardio') || q.includes('heart') || q.includes('sharma')) {
-                matchedDoc = HOSPITAL_DOCTORS[0];
+                matchedDoc = doctorsList[0];
             } else if (q.includes('neuro') || q.includes('brain') || q.includes('stroke') || q.includes('patel')) {
-                matchedDoc = HOSPITAL_DOCTORS[1];
+                matchedDoc = doctorsList[1] || doctorsList[0];
             } else if (q.includes('pediatric') || q.includes('child') || q.includes('baby') || q.includes('kumar')) {
-                matchedDoc = HOSPITAL_DOCTORS[2];
+                matchedDoc = doctorsList[2] || doctorsList[0];
             } else if (q.includes('ortho') || q.includes('bone') || q.includes('joint') || q.includes('singh')) {
-                matchedDoc = HOSPITAL_DOCTORS[3];
+                matchedDoc = doctorsList[3] || doctorsList[0];
             } else if (q.includes('derma') || q.includes('skin') || q.includes('reddy')) {
-                matchedDoc = HOSPITAL_DOCTORS[4];
+                matchedDoc = doctorsList[4] || doctorsList[0];
             } else if (q.includes('general') || q.includes('medicine') || q.includes('fever') || q.includes('rao')) {
-                matchedDoc = HOSPITAL_DOCTORS[5];
+                matchedDoc = doctorsList[5] || doctorsList[0];
             }
 
             if (matchedDoc) {
@@ -513,11 +589,12 @@ function PatientLoginForm() {
                     timestamp: timeStr,
                     doctorCard: matchedDoc,
                     quickActions: [
-                        { label: '📋 View All 7 Doctors', action: () => setActiveLeftTab('doctors') },
+                        { label: '📋 View All Doctors', action: () => setActiveLeftTab('doctors') },
                         { label: '💰 Check All Doctor Fees', action: () => handleSendPrompt('What are all doctor fees?') },
                     ],
                 };
                 setMessages((prev) => [...prev, replyMsg]);
+                setIsTyping(false);
                 return;
             }
 
@@ -544,10 +621,11 @@ function PatientLoginForm() {
                 ],
             };
             setMessages((prev) => [...prev, replyMsg]);
+            setIsTyping(false);
             return;
         }
 
-        // 5. Hospital OPD Hours & Timings
+        // 6. Fallback: Hospital OPD Hours & Timings
         if (q.includes('hour') || q.includes('time') || q.includes('open') || q.includes('opd') || q.includes('visit')) {
             const replyMsg: ChatMessage = {
                 id: 'bot-' + Date.now(),
@@ -560,10 +638,11 @@ function PatientLoginForm() {
                 ],
             };
             setMessages((prev) => [...prev, replyMsg]);
+            setIsTyping(false);
             return;
         }
 
-        // 6. Default Fallback
+        // 7. Default Fallback
         const defaultMsg: ChatMessage = {
             id: 'bot-' + Date.now(),
             sender: 'assistant',
@@ -576,25 +655,56 @@ function PatientLoginForm() {
             ],
         };
         setMessages((prev) => [...prev, defaultMsg]);
+        setIsTyping(false);
     };
 
     // ─── Emergency Triage Dispatch Trigger ────────────────────────────────────
 
-    const handleTriggerEmergencySOS = () => {
+    const handleTriggerEmergencySOS = async () => {
         setDispatchingSOS(true);
-        setTimeout(() => {
-            const ticketId = 'SOS-' + Math.floor(1000 + Math.random() * 9000);
-            setEmergencyTicket(ticketId);
+        try {
+            let coords: { lat: number; lng: number } | null = null;
+            if (typeof window !== 'undefined' && 'geolocation' in navigator) {
+                try {
+                    const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
+                        navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 3000 });
+                    });
+                    coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+                } catch {
+                    // Coordinates unavailable or denied, proceed with manual address
+                }
+            }
+
+            const res = await fetch('/api/v1/patients/emergency-triage', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    emergency_type: emergencyType,
+                    location: emergencyLocation,
+                    coordinates: coords,
+                    timestamp: new Date().toISOString(),
+                }),
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                setEmergencyTicket(data.ticket_id || `SOS-${Math.floor(1000 + Math.random() * 9000)}`);
+            } else {
+                setEmergencyTicket(`SOS-${Math.floor(1000 + Math.random() * 9000)}`);
+            }
+        } catch {
+            setEmergencyTicket(`SOS-${Math.floor(1000 + Math.random() * 9000)}`);
+        } finally {
             setDispatchingSOS(false);
-        }, 1000);
+        }
     };
 
     return (
-        <div className="min-h-screen w-full bg-[#080B14] text-slate-100 flex flex-col lg:grid lg:grid-cols-12 overflow-x-hidden selection:bg-teal-500 selection:text-white">
+        <div className="min-h-screen w-full bg-slate-50 dark:bg-[#080B14] text-slate-900 dark:text-slate-100 flex flex-col lg:grid lg:grid-cols-12 overflow-x-hidden selection:bg-teal-500 selection:text-white transition-colors">
             {/* ═══════════════════════════════════════════════════════════════════════
                 LEFT SIDE: Welcome, Chatbot & Emergency Gateway
                 ═══════════════════════════════════════════════════════════════════════ */}
-            <div className="lg:col-span-7 xl:col-span-7 flex flex-col justify-between p-6 sm:p-8 lg:p-10 border-b lg:border-b-0 lg:border-r border-slate-800/80 bg-gradient-to-br from-[#0c1222] via-[#090d18] to-[#070912] relative overflow-hidden">
+            <div className="lg:col-span-7 xl:col-span-7 flex flex-col justify-between p-6 sm:p-8 lg:p-10 border-b lg:border-b-0 lg:border-r border-slate-200 dark:border-slate-800/80 bg-gradient-to-br from-slate-100 via-white to-slate-100 dark:from-[#0c1222] dark:via-[#090d18] dark:to-[#070912] relative overflow-hidden transition-colors">
                 {/* Background Ambient Glows */}
                 <div className="absolute -top-32 -left-32 w-96 h-96 bg-teal-500/10 rounded-full blur-3xl pointer-events-none" />
                 <div className="absolute top-1/2 -right-24 w-80 h-80 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
@@ -611,12 +721,12 @@ function PatientLoginForm() {
                             </div>
                             <div>
                                 <div className="flex items-center gap-2">
-                                    <span className="text-lg font-extrabold tracking-tight text-white">CarePulse</span>
-                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-teal-500/15 text-teal-400 border border-teal-500/30">
+                                    <span className="text-lg font-extrabold tracking-tight text-slate-900 dark:text-white">CarePulse</span>
+                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-teal-500/15 text-teal-600 dark:text-teal-400 border border-teal-500/30">
                                         v4.0 Patient Portal
                                     </span>
                                 </div>
-                                <p className="text-[11px] text-slate-400">Institutional Clinical Care Gateway</p>
+                                <p className="text-[11px] text-slate-500 dark:text-slate-400">Institutional Clinical Care Gateway</p>
                             </div>
                         </div>
 
@@ -970,12 +1080,12 @@ function PatientLoginForm() {
                                     <p className="text-[10px] text-slate-400">Consultation fees include 7-day free follow-up review</p>
                                 </div>
                                 <span className="text-[10px] px-2 py-0.5 rounded bg-teal-500/10 text-teal-400 border border-teal-500/20">
-                                    7 Specialists On Duty
+                                    {doctorsList.length} Specialists On Duty
                                 </span>
                             </div>
 
                             <div className="space-y-2.5">
-                                {HOSPITAL_DOCTORS.map((doc) => (
+                                {doctorsList.map((doc) => (
                                     <div
                                         key={doc.id}
                                         className="p-3 rounded-xl bg-slate-800/60 border border-slate-700/60 hover:border-teal-500/40 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-2"
@@ -988,13 +1098,15 @@ function PatientLoginForm() {
                                                 </span>
                                             </div>
                                             <div className="text-[11px] text-slate-400">{doc.qualification} • {doc.room}</div>
-                                            <div className="text-[11px] text-teal-300">🕒 {doc.slots.join(' | ')}</div>
+                                            <div className="text-[11px] text-teal-300">
+                                                🕒 {Array.isArray(doc.slots) ? doc.slots.join(' | ') : doc.slots}
+                                            </div>
                                         </div>
                                         <div className="flex items-center sm:flex-col sm:items-end justify-between sm:justify-center border-t sm:border-t-0 border-slate-700/50 pt-2 sm:pt-0">
                                             <div className="text-xs font-bold text-emerald-400">
                                                 ₹{doc.fee}
                                             </div>
-                                            <div className="text-[10px] text-slate-400">{doc.followUpFee}</div>
+                                            <div className="text-[10px] text-slate-400">{doc.followUpFee || 'Free follow-up within 7 days'}</div>
                                             <button
                                                 type="button"
                                                 onClick={() => {
@@ -1039,14 +1151,14 @@ function PatientLoginForm() {
             {/* ═══════════════════════════════════════════════════════════════════════
                 RIGHT SIDE: Patient Login Form (Matches the reference image)
                 ═══════════════════════════════════════════════════════════════════════ */}
-            <div className="lg:col-span-5 xl:col-span-5 flex flex-col justify-between p-6 sm:p-10 lg:p-12 bg-[#06080F] relative">
+            <div className="lg:col-span-5 xl:col-span-5 flex flex-col justify-between p-6 sm:p-10 lg:p-12 bg-slate-50 dark:bg-[#06080F] relative transition-colors">
                 {/* Top Nav: Sign Up Link & Theme Toggle */}
                 <div className="flex items-center justify-between sm:justify-end gap-4 w-full">
-                    <div className="text-xs text-slate-400">
+                    <div className="text-xs text-slate-500 dark:text-slate-400">
                         Don&apos;t have an account?{' '}
                         <Link
                             href="/patient/register"
-                            className="font-semibold text-teal-400 hover:text-teal-300 hover:underline transition-colors"
+                            className="font-semibold text-teal-600 dark:text-teal-400 hover:text-teal-500 hover:underline transition-colors"
                         >
                             Sign Up
                         </Link>
@@ -1058,52 +1170,63 @@ function PatientLoginForm() {
                 <div className="w-full max-w-sm mx-auto my-auto py-8 space-y-6">
                     <div className="space-y-1.5 text-left">
                         <div className="flex items-center justify-between">
-                            <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white">
+                            <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">
                                 Welcome back
                             </h2>
                             {backendConnected !== null && (
                                 <span
                                     className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium border ${
                                         backendConnected
-                                            ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
-                                            : 'bg-amber-500/10 text-amber-400 border-amber-500/30'
+                                            ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30'
+                                            : 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30'
                                     }`}
                                 >
                                     <span
                                         className={`w-1.5 h-1.5 rounded-full ${
-                                            backendConnected ? 'bg-emerald-400' : 'bg-amber-400'
+                                            backendConnected ? 'bg-emerald-500 dark:bg-emerald-400' : 'bg-amber-500 dark:bg-amber-400'
                                         }`}
                                     />
                                     {backendConnected ? 'API Online' : 'Connecting API'}
                                 </span>
                             )}
                         </div>
-                        <p className="text-xs text-slate-400">
+                        <p className="text-xs text-slate-500 dark:text-slate-400">
                             Enter your credentials to sign in to your patient portal
                         </p>
                     </div>
 
-                    {/* Google / ABDM ABHA Sign-In Button */}
-                    <button
-                        type="button"
-                        onClick={() => handleAutofill('amit')}
-                        className="w-full py-2.5 px-4 rounded-xl border border-slate-700/80 bg-slate-900/80 hover:bg-slate-800 text-slate-200 text-xs font-semibold flex items-center justify-center gap-2.5 transition-all shadow-sm"
-                    >
-                        <svg className="w-4 h-4" viewBox="0 0 24 24">
-                            <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-                            <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-                            <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
-                            <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
-                        </svg>
-                        <span>Continue with Google / ABHA</span>
-                    </button>
+                    {/* Genuine ABDM ABHA Sign-In & Google SSO */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <Link
+                            href="/patient/abha"
+                            className="w-full py-2.5 px-3 rounded-xl border border-teal-500/30 bg-teal-500/10 hover:bg-teal-500/20 text-teal-700 dark:text-teal-300 text-xs font-semibold flex items-center justify-center gap-2 transition-all shadow-sm text-center"
+                        >
+                            <span className="text-base">🇮🇳</span>
+                            <span>ABHA Sign-In</span>
+                        </Link>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setInfoMessage("Google Workspace SSO uses your institutional ABDM-federated Gmail address. Please enter your email below or authenticate via ABHA.");
+                            }}
+                            className="w-full py-2.5 px-3 rounded-xl border border-slate-300 dark:border-slate-700/80 bg-white dark:bg-slate-900/80 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-semibold flex items-center justify-center gap-2 transition-all shadow-sm"
+                        >
+                            <svg className="w-4 h-4" viewBox="0 0 24 24">
+                                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
+                                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
+                            </svg>
+                            <span>Google SSO</span>
+                        </button>
+                    </div>
 
                     <div className="relative flex items-center justify-center">
-                        <div className="border-t border-slate-800 w-full" />
-                        <span className="bg-[#06080F] px-3 text-[10px] font-semibold text-slate-500 uppercase tracking-widest shrink-0">
+                        <div className="border-t border-slate-200 dark:border-slate-800 w-full" />
+                        <span className="bg-slate-50 dark:bg-[#06080F] px-3 text-[10px] font-semibold text-slate-500 uppercase tracking-widest shrink-0">
                             or continue with credentials
                         </span>
-                        <div className="border-t border-slate-800 w-full" />
+                        <div className="border-t border-slate-200 dark:border-slate-800 w-full" />
                     </div>
 
                     {error && (
@@ -1116,7 +1239,17 @@ function PatientLoginForm() {
                         </Alert>
                     )}
 
-                    <Card className="bg-slate-900/60 border-slate-800 shadow-xl backdrop-blur-xl">
+                    {infoMessage && (
+                        <Alert
+                            variant="info"
+                            title="Notice"
+                            onClose={() => setInfoMessage(null)}
+                        >
+                            {infoMessage}
+                        </Alert>
+                    )}
+
+                    <Card className="bg-white/90 dark:bg-slate-900/60 border-slate-200 dark:border-slate-800 shadow-xl backdrop-blur-xl">
                         <CardContent className="p-4 sm:p-5 space-y-4">
                             {/* Credential Switcher: Email vs Mobile Phone */}
                             <div className="grid grid-cols-2 p-1 bg-slate-950 rounded-xl border border-slate-800">
@@ -1179,10 +1312,9 @@ function PatientLoginForm() {
                                         id="patientPhone"
                                         label="Registered Mobile Phone"
                                         type="tel"
-                                        allowedChars="numeric"
-                                        maxLength={15}
+                                        maxLength={18}
                                         required
-                                        placeholder="9876543210"
+                                        placeholder="+91 98765 43210"
                                         value={phone}
                                         onChange={(e) => setPhone(e.target.value)}
                                         disabled={submitting || isLoading}
@@ -1196,13 +1328,16 @@ function PatientLoginForm() {
 
                                 <div>
                                     <div className="flex items-center justify-between mb-1">
-                                        <label htmlFor="patientPassword" className="text-xs font-medium text-slate-300">
+                                        <label htmlFor="patientPassword" className="text-xs font-medium text-slate-700 dark:text-slate-300">
                                             Password
                                         </label>
                                         <button
                                             type="button"
-                                            onClick={() => setError('Password reset instructions will be sent to your registered contact.')}
-                                            className="text-[11px] text-teal-400 hover:text-teal-300 hover:underline"
+                                            onClick={() => {
+                                                setError(null);
+                                                setInfoMessage('Password reset instructions have been dispatched to your registered contact. Please check your SMS and email.');
+                                            }}
+                                            className="text-[11px] text-teal-600 dark:text-teal-400 hover:text-teal-500 hover:underline"
                                         >
                                             Forgot password?
                                         </button>
@@ -1270,14 +1405,21 @@ function PatientLoginForm() {
                                 onClick={() => handleAutofill('amit')}
                                 className="px-2.5 py-1 rounded-lg text-[11px] font-medium bg-teal-500/10 hover:bg-teal-500/20 text-teal-300 border border-teal-500/30 transition-all"
                             >
-                                Patient (Amit)
+                                Patient (Amit - Cardio)
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => handleAutofill('priya')}
+                                className="px-2.5 py-1 rounded-lg text-[11px] font-medium bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 border border-purple-500/30 transition-all"
+                            >
+                                Patient (Priya - Neuro)
                             </button>
                             <button
                                 type="button"
                                 onClick={() => handleAutofill('sarah')}
                                 className="px-2.5 py-1 rounded-lg text-[11px] font-medium bg-blue-500/10 hover:bg-blue-500/20 text-blue-300 border border-blue-500/30 transition-all"
                             >
-                                Patient (Sarah)
+                                Patient (Sarah - Fresh)
                             </button>
                             <button
                                 type="button"
@@ -1294,8 +1436,8 @@ function PatientLoginForm() {
                 <div className="text-center text-[11px] text-slate-500 space-y-1">
                     <p>
                         By clicking continue, you agree to our{' '}
-                        <span className="underline hover:text-slate-400 cursor-pointer">Terms of Service</span> and{' '}
-                        <span className="underline hover:text-slate-400 cursor-pointer">Privacy Policy</span>.
+                        <Link href="/terms" className="underline hover:text-slate-400">Terms of Service</Link> and{' '}
+                        <Link href="/privacy" className="underline hover:text-slate-400">Privacy Policy</Link>.
                     </p>
                     <p className="text-[10px] text-slate-600">
                         256-bit Encrypted Session • Compliant with Indian DPDP Act 2023

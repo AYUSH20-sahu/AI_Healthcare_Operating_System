@@ -74,7 +74,7 @@ elif DATABASE_URL.startswith("postgres://"):
 async def seed_database():
     """Seed the database with complete clinical dummy data."""
     print("=" * 75)
-    print("AI-HOS: CLINICAL DUMMY DATA SEEDER (30 DOCTORS/PHYSICIANS, 20 NURSES)")
+    print("AI-HOS: CLINICAL DUMMY DATA SEEDER (30 DOCTORS, 20 NURSES, 20 PATIENTS)")
     print("=" * 75)
 
     connect_args = {"command_timeout": 35}
@@ -279,7 +279,7 @@ async def seed_database():
 
             await session.commit()
             print("\n" + "=" * 75)
-            print("✅ SUCCESS: ALL 30 DOCTORS, 20 PHYSICIANS & 20 NURSES SEEDED SUCCESSFULLY!")
+            print("✅ SUCCESS: ALL 30 DOCTORS, 20 PHYSICIANS, 20 NURSES & 20 PATIENTS SEEDED SUCCESSFULLY!")
             print("=" * 75)
 
         except Exception as e:
@@ -681,78 +681,183 @@ async def seed_nurses(session: AsyncSession, org_id: uuid.UUID) -> list:
 
 
 async def seed_patients(session: AsyncSession, user_map: dict) -> list:
-    """Seed patient cohort."""
+    """Seed comprehensive 20-patient cohort across Cardiology, Neurology, Pediatrics, Orthopedics, and Dermatology."""
+    pwd_hash = hash_password("patientpassword123")
     primary_pat_uid = user_map.get("patient@test.com")
 
-    patients_data = [
-        {
-            "patient_id": uuid.UUID("aaaaaaaa-0000-0000-0000-000000000001"),
-            "user_id": primary_pat_uid,
-            "abha_address": "amit.kumar@abdm",
-            "full_name": "Amit Kumar",
-            "date_of_birth": date(1985, 3, 15),
-            "gender": "male",
-            "phone": "+91-98765-11111",
-            "email": "patient@test.com",
-            "address": "B-204, Green Park Heights, New Delhi 110016",
-            "emergency_contact_name": "Sunita Kumar (Wife)",
-            "emergency_contact_phone": "+91-98765-11112",
-        },
-        {
-            "patient_id": uuid.UUID("aaaaaaaa-0000-0000-0000-000000000002"),
-            "user_id": None,
-            "abha_address": "priya.sharma@abdm",
-            "full_name": "Priya Sharma",
-            "date_of_birth": date(1992, 7, 22),
-            "gender": "female",
-            "phone": "+91-98765-22222",
-            "email": "priya.sharma@example.com",
-            "address": "Flat 502, Silver Oaks Apartments, Gurgaon, Haryana 122002",
-            "emergency_contact_name": "Vikram Sharma (Brother)",
-            "emergency_contact_phone": "+91-98765-22223",
-        },
-        {
-            "patient_id": uuid.UUID("aaaaaaaa-0000-0000-0000-000000000003"),
-            "user_id": None,
-            "abha_address": "rahul.singh@abdm",
-            "full_name": "Rahul Singh",
-            "date_of_birth": date(1978, 11, 5),
-            "gender": "male",
-            "phone": "+91-98765-33333",
-            "email": "rahul.singh@example.com",
-            "address": "House 14, Sector 17, Chandigarh 160017",
-            "emergency_contact_name": "Meena Singh (Spouse)",
-            "emergency_contact_phone": "+91-98765-33334",
-        },
-        {
-            "patient_id": uuid.UUID("aaaaaaaa-0000-0000-0000-000000000004"),
-            "user_id": None,
-            "abha_address": "anjali.gupta@abdm",
-            "full_name": "Anjali Gupta",
-            "date_of_birth": date(1995, 1, 30),
-            "gender": "female",
-            "phone": "+91-98765-44444",
-            "email": "anjali.gupta@example.com",
-            "address": "401 Royal Palms, Indiranagar, Bangalore 560038",
-            "emergency_contact_name": "Deepak Gupta (Father)",
-            "emergency_contact_phone": "+91-98765-44445",
-        },
-        {
-            "patient_id": uuid.UUID("aaaaaaaa-0000-0000-0000-000000000005"),
-            "user_id": None,
-            "abha_address": "suresh.nair@abdm",
-            "full_name": "Suresh Nair",
-            "date_of_birth": date(1963, 9, 12),
-            "gender": "male",
-            "phone": "+91-98765-55555",
-            "email": "suresh.nair@example.com",
-            "address": "C-12, Palm Meadows, Kochi, Kerala 682001",
-            "emergency_contact_name": "Lakshmi Nair (Daughter)",
-            "emergency_contact_phone": "+91-98765-55556",
-        },
+    # Fetch pre-existing patients and users to prevent any collision
+    existing_pats = await session.execute(text("SELECT patient_id, abha_address, email, user_id FROM patients"))
+    pat_rows = existing_pats.fetchall()
+    pat_by_abha = {r[1]: r[0] for r in pat_rows if r[1]}
+    pat_by_email = {r[2]: r[0] for r in pat_rows if r[2]}
+    existing_pids = {r[0] for r in pat_rows}
+
+    user_rows = (await session.execute(text("SELECT email, phone, user_id FROM users"))).fetchall()
+    user_by_email = {r[0]: r[2] for r in user_rows if r[0]}
+    user_by_phone = {r[1]: r[2] for r in user_rows if r[1]}
+    existing_uids = {r[2] for r in user_rows}
+
+    raw_cohort = [
+        # ─── Department: CARDIOLOGY (4 Patients) ───
+        (
+            1, "Amit Kumar", "patient@test.com", "+919876511111", "amit.kumar@abdm",
+            date(1985, 3, 15), "male", "B-204, Green Park Heights, New Delhi 110016",
+            "Sunita Kumar (Wife)", "+919876511121", "Cardiology"
+        ),
+        (
+            2, "Priya Sharma", "priya.sharma@example.com", "+919876522221", "priya.sharma@abdm",
+            date(1992, 7, 22), "female", "Flat 502, Silver Oaks Apartments, Gurgaon 122002",
+            "Vikram Sharma (Brother)", "+919876522231", "Neurology"
+        ),
+        (
+            3, "Rahul Singh", "rahul.singh@example.com", "+919876544441", "rahul.singh@abdm",
+            date(1978, 11, 5), "male", "House 14, Sector 17, Chandigarh 160017",
+            "Meena Singh (Spouse)", "+919876544451", "Orthopedics"
+        ),
+        (
+            4, "Anjali Gupta", "anjali.gupta@example.com", "+919876555551", "anjali.gupta@abdm",
+            date(1995, 1, 30), "female", "401 Royal Palms, Indiranagar, Bangalore 560038",
+            "Deepak Gupta (Father)", "+919876555561", "Dermatology"
+        ),
+        (
+            5, "Suresh Nair", "suresh.nair@example.com", "+919876555554", "suresh.nair@abdm",
+            date(1963, 9, 12), "male", "C-12, Palm Meadows, Kochi, Kerala 682001",
+            "Lakshmi Nair (Daughter)", "+919876555564", "Dermatology"
+        ),
+        (
+            6, "Sarah Jenkins", "freshpatient@test.com", "+919876511112", "sarah.jenkins@abdm",
+            date(1990, 8, 20), "female", "Villa 12, Palm Grove Residences, Gurgaon 122001",
+            "Michael Jenkins (Spouse)", "+919876511122", "Cardiology"
+        ),
+        (
+            7, "Ramesh Chawla", "ramesh.chawla@example.com", "+919876511113", "ramesh.chawla@abdm",
+            date(1968, 5, 10), "male", "Flat 4B, Shivalik Enclave, South Extension, New Delhi 110049",
+            "Alka Chawla (Wife)", "+919876511123", "Cardiology"
+        ),
+        (
+            8, "Sunita Rao", "sunita.rao@example.com", "+919876511114", "sunita.rao@abdm",
+            date(1975, 11, 28), "female", "78, Anand Niketan, New Delhi 110021",
+            "Kishore Rao (Husband)", "+919876511124", "Cardiology"
+        ),
+
+        # ─── Department: NEUROLOGY (3 more Patients, Priya is #2) ───
+        (
+            9, "Rahul Verma", "rahul.verma@example.com", "+919876522222", "rahul.verma@abdm",
+            date(1986, 4, 18), "male", "C-44, Greater Kailash-I, New Delhi 110048",
+            "Pooja Verma (Wife)", "+919876522232", "Neurology"
+        ),
+        (
+            10, "Meera Iyer", "meera.iyer@example.com", "+919876522223", "meera.iyer@abdm",
+            date(1993, 12, 5), "female", "D-102, Mayur Vihar Phase 1, Delhi 110091",
+            "Ramanathan Iyer (Father)", "+919876522233", "Neurology"
+        ),
+        (
+            11, "Vikramaditya Bose", "vikram.bose@example.com", "+919876522224", "vikram.bose@abdm",
+            date(1960, 9, 14), "male", "A-15, Chittaranjan Park, New Delhi 110019",
+            "Aparna Bose (Daughter)", "+919876522234", "Neurology"
+        ),
+
+        # ─── Department: PEDIATRICS (4 Patients) ───
+        (
+            12, "Aarav Patel", "aarav.patel@example.com", "+919876533331", "aarav.patel@abdm",
+            date(2018, 6, 12), "male", "Row House 7, Nirvana Country, Gurgaon 122018",
+            "Sanjay Patel (Father)", "+919876533341", "Pediatrics"
+        ),
+        (
+            13, "Ananya Deshmukh", "ananya.deshmukh@example.com", "+919876533332", "ananya.deshmukh@abdm",
+            date(2019, 11, 25), "female", "Tower 3, Flat 904, DLF Phase 5, Gurgaon 122009",
+            "Sneha Deshmukh (Mother)", "+919876533342", "Pediatrics"
+        ),
+        (
+            14, "Kabir Malhotra", "kabir.malhotra@example.com", "+919876533333", "kabir.malhotra@abdm",
+            date(2016, 2, 14), "male", "E-22, Hauz Khas, New Delhi 110016",
+            "Ritu Malhotra (Mother)", "+919876533343", "Pediatrics"
+        ),
+        (
+            15, "Diya Sengupta", "diya.sengupta@example.com", "+919876533334", "diya.sengupta@abdm",
+            date(2020, 8, 8), "female", "B-601, Express Greens, Sector 1, Noida 201301",
+            "Amit Sengupta (Father)", "+919876533344", "Pediatrics"
+        ),
+
+        # ─── Department: ORTHOPEDICS (3 more Patients, Rahul Singh is #3) ───
+        (
+            16, "Gurpreet Singh", "gurpreet.singh@example.com", "+919876544442", "gurpreet.singh@abdm",
+            date(1983, 1, 19), "male", "House 89, Phase 7, Mohali, Punjab 160062",
+            "Harpreet Kaur (Wife)", "+919876544452", "Orthopedics"
+        ),
+        (
+            17, "Deepa Namboodiri", "deepa.namboodiri@example.com", "+919876544443", "deepa.namboodiri@abdm",
+            date(1972, 10, 30), "female", "Flat 302, Sobha City, Sector 108, Gurgaon 122017",
+            "Unnikrishnan N (Spouse)", "+919876544453", "Orthopedics"
+        ),
+        (
+            18, "Mohanlal Khatri", "mohanlal.khatri@example.com", "+919876544444", "mohanlal.khatri@abdm",
+            date(1958, 3, 22), "male", "112, Model Town, Jalandhar, Punjab 144003",
+            "Rajesh Khatri (Son)", "+919876544454", "Orthopedics"
+        ),
+
+        # ─── Department: DERMATOLOGY (2 more Patients, Anjali is #4, Suresh is #5) ───
+        (
+            19, "Rohan Saxena", "rohan.saxena@example.com", "+919876555552", "rohan.saxena@abdm",
+            date(2001, 7, 17), "male", "Flat 12B, ATS Greens, Sector 93A, Noida 201304",
+            "Manish Saxena (Father)", "+919876555562", "Dermatology"
+        ),
+        (
+            20, "Kavita Menon", "kavita.menon@example.com", "+919876555553", "kavita.menon@abdm",
+            date(1988, 4, 9), "female", "House 31, Koramangala 4th Block, Bangalore 560034",
+            "Suresh Menon (Husband)", "+919876555563", "Dermatology"
+        ),
     ]
 
-    for p in patients_data:
+    patients_data = []
+
+    for idx, name, email, phone, abha, dob, gender, addr, ec_name, ec_phone, dept in raw_cohort:
+        # Determine unique user_id
+        if idx == 1 and primary_pat_uid:
+            user_id = primary_pat_uid
+        elif email in user_by_email:
+            user_id = user_by_email[email]
+        elif phone in user_by_phone:
+            user_id = user_by_phone[phone]
+        else:
+            default_uid = uuid.UUID(f"88888888-0000-0000-0000-{idx:012d}")
+            user_id = uuid.uuid4() if default_uid in existing_uids else default_uid
+
+        # Determine unique patient_id
+        if abha in pat_by_abha:
+            pat_id = pat_by_abha[abha]
+        elif email in pat_by_email:
+            pat_id = pat_by_email[email]
+        else:
+            default_pid = uuid.UUID(f"aaaaaaaa-0000-0000-0000-{idx:012d}")
+            pat_id = uuid.uuid4() if default_pid in existing_pids else default_pid
+
+        # Ensure user account exists so each patient can log in
+        await session.execute(text("""
+            INSERT INTO users (
+                user_id, email, phone, hashed_password, full_name, role, organization_id,
+                department, designation, is_active, created_at, updated_at
+            ) VALUES (
+                :user_id, :email, :phone, :hashed_password, :full_name, 'patient', NULL,
+                :department, 'Registered Patient', True, NOW(), NOW()
+            )
+            ON CONFLICT (email) DO UPDATE SET
+                full_name = EXCLUDED.full_name,
+                hashed_password = EXCLUDED.hashed_password,
+                phone = EXCLUDED.phone,
+                role = 'patient',
+                is_active = True,
+                updated_at = NOW()
+        """), {
+            "user_id": user_id,
+            "email": email,
+            "phone": phone,
+            "hashed_password": pwd_hash,
+            "full_name": name,
+            "department": dept,
+        })
+
+        # Insert / Update Patient profile
         await session.execute(text("""
             INSERT INTO patients (
                 patient_id, user_id, abha_address, full_name, date_of_birth, gender,
@@ -763,12 +868,49 @@ async def seed_patients(session: AsyncSession, user_map: dict) -> list:
                 :phone, :email, :address, :emergency_contact_name, :emergency_contact_phone,
                 NOW(), NOW()
             )
-            ON CONFLICT (abha_address) DO UPDATE SET
-                full_name = EXCLUDED.full_name,
+            ON CONFLICT (patient_id) DO UPDATE SET
+                abha_address = EXCLUDED.abha_address,
                 user_id = EXCLUDED.user_id,
+                full_name = EXCLUDED.full_name,
+                date_of_birth = EXCLUDED.date_of_birth,
+                gender = EXCLUDED.gender,
                 phone = EXCLUDED.phone,
+                email = EXCLUDED.email,
+                address = EXCLUDED.address,
+                emergency_contact_name = EXCLUDED.emergency_contact_name,
+                emergency_contact_phone = EXCLUDED.emergency_contact_phone,
                 updated_at = NOW()
-        """), p)
+        """), {
+            "patient_id": pat_id,
+            "user_id": user_id,
+            "abha_address": abha,
+            "full_name": name,
+            "date_of_birth": dob,
+            "gender": gender,
+            "phone": phone,
+            "email": email,
+            "address": addr,
+            "emergency_contact_name": ec_name,
+            "emergency_contact_phone": ec_phone,
+        })
+
+        # Track in our maps to prevent any collisions in later items
+        existing_pids.add(pat_id)
+        pat_by_abha[abha] = pat_id
+        pat_by_email[email] = pat_id
+        existing_uids.add(user_id)
+        user_by_email[email] = user_id
+        user_by_phone[phone] = user_id
+
+        patients_data.append({
+            "patient_id": pat_id,
+            "user_id": user_id,
+            "abha_address": abha,
+            "full_name": name,
+            "department": dept,
+            "email": email,
+            "phone": phone,
+        })
 
     return patients_data
 
@@ -776,12 +918,13 @@ async def seed_patients(session: AsyncSession, user_map: dict) -> list:
 async def seed_appointments(session: AsyncSession, doctors: list, patients: list) -> list:
     """Seed scheduled and completed appointments."""
     base_time = datetime.now().replace(minute=0, second=0, microsecond=0)
+    pat_map = {p["full_name"]: p["patient_id"] for p in patients}
 
     appts = [
         # 1. Upcoming Cardiology Appointment (Amit Kumar with Dr. Rajesh Sharma)
         {
             "appointment_id": uuid.UUID("bbbbbbbb-0000-0000-0000-000000000001"),
-            "patient_id": patients[0]["patient_id"],
+            "patient_id": pat_map.get("Amit Kumar", patients[0]["patient_id"]),
             "doctor_id": doctors[0]["doctor_id"],
             "scheduled_at": base_time + timedelta(days=1, hours=2),
             "duration_minutes": 30,
@@ -794,7 +937,7 @@ async def seed_appointments(session: AsyncSession, doctors: list, patients: list
         # 2. Upcoming Neurology Appointment (Priya Sharma with Dr. Priya Patel)
         {
             "appointment_id": uuid.UUID("bbbbbbbb-0000-0000-0000-000000000002"),
-            "patient_id": patients[1]["patient_id"],
+            "patient_id": pat_map.get("Priya Sharma", patients[1]["patient_id"]),
             "doctor_id": doctors[2]["doctor_id"],
             "scheduled_at": base_time + timedelta(days=2, hours=4),
             "duration_minutes": 30,
@@ -804,10 +947,62 @@ async def seed_appointments(session: AsyncSession, doctors: list, patients: list
             "meeting_link": "https://meet.ai-hos.org/room-neuro-201",
             "telehealth_room_id": "apex-room-neuro-201",
         },
-        # 3. Completed Past Consultation (Amit Kumar with Dr. Rajesh Sharma)
+        # 3. Upcoming Pediatrics Appointment (Aarav Patel with Dr. Arjun Kumar)
         {
             "appointment_id": uuid.UUID("bbbbbbbb-0000-0000-0000-000000000003"),
-            "patient_id": patients[0]["patient_id"],
+            "patient_id": pat_map.get("Aarav Patel", patients[11]["patient_id"] if len(patients) > 11 else patients[0]["patient_id"]),
+            "doctor_id": doctors[4]["doctor_id"],
+            "scheduled_at": base_time + timedelta(days=1, hours=5),
+            "duration_minutes": 30,
+            "status": "scheduled",
+            "notes": "Pediatric routine asthma review and peak flow assessment.",
+            "reason": "Wheezing with weather change",
+            "meeting_link": "https://meet.ai-hos.org/room-pedi-301",
+            "telehealth_room_id": "apex-room-pedi-301",
+        },
+        # 4. Upcoming Orthopedics Appointment (Rahul Singh with Dr. Kavya Singh)
+        {
+            "appointment_id": uuid.UUID("bbbbbbbb-0000-0000-0000-000000000004"),
+            "patient_id": pat_map.get("Rahul Singh", patients[2]["patient_id"]),
+            "doctor_id": doctors[6]["doctor_id"],
+            "scheduled_at": base_time + timedelta(days=3, hours=1),
+            "duration_minutes": 30,
+            "status": "scheduled",
+            "notes": "Post-ACL surgery 6-month mobility and range of motion check.",
+            "reason": "Knee joint stiffness and follow-up",
+            "meeting_link": "https://meet.ai-hos.org/room-ortho-401",
+            "telehealth_room_id": "apex-room-ortho-401",
+        },
+        # 5. Upcoming Dermatology Appointment (Anjali Gupta with Dr. Vikram Reddy)
+        {
+            "appointment_id": uuid.UUID("bbbbbbbb-0000-0000-0000-000000000005"),
+            "patient_id": pat_map.get("Anjali Gupta", patients[3]["patient_id"]),
+            "doctor_id": doctors[8]["doctor_id"],
+            "scheduled_at": base_time + timedelta(days=2, hours=6),
+            "duration_minutes": 25,
+            "status": "scheduled",
+            "notes": "Psoriasis flare-up skin examination and topical regimen titration.",
+            "reason": "Persistent dry erythematous plaques on elbows",
+            "meeting_link": "https://meet.ai-hos.org/room-derm-501",
+            "telehealth_room_id": "apex-room-derm-501",
+        },
+        # 6. Active Telehealth In-Progress (Sarah Jenkins with Dr. Anita Desai)
+        {
+            "appointment_id": uuid.UUID("bbbbbbbb-0000-0000-0000-000000000006"),
+            "patient_id": pat_map.get("Sarah Jenkins", patients[5]["patient_id"]),
+            "doctor_id": doctors[1]["doctor_id"],
+            "scheduled_at": base_time,
+            "duration_minutes": 25,
+            "status": "in_progress",
+            "notes": "Active tele-consultation for lipid profile review and palpitations.",
+            "reason": "Occasional palpitations at rest",
+            "meeting_link": "https://meet.ai-hos.org/room-cardio-102",
+            "telehealth_room_id": "apex-room-cardio-102",
+        },
+        # 7. Completed Past Consultation (Ramesh Chawla with Dr. Rajesh Sharma)
+        {
+            "appointment_id": uuid.UUID("bbbbbbbb-0000-0000-0000-000000000007"),
+            "patient_id": pat_map.get("Ramesh Chawla", patients[6]["patient_id"]),
             "doctor_id": doctors[0]["doctor_id"],
             "scheduled_at": base_time - timedelta(days=5, hours=3),
             "duration_minutes": 30,
@@ -816,19 +1011,6 @@ async def seed_appointments(session: AsyncSession, doctors: list, patients: list
             "reason": "Stage 1 Hypertension check",
             "meeting_link": None,
             "telehealth_room_id": None,
-        },
-        # 4. In-Progress Consultation (Rahul Singh with Dr. Arjun Kumar)
-        {
-            "appointment_id": uuid.UUID("bbbbbbbb-0000-0000-0000-000000000004"),
-            "patient_id": patients[2]["patient_id"],
-            "doctor_id": doctors[4]["doctor_id"],
-            "scheduled_at": base_time,
-            "duration_minutes": 25,
-            "status": "in_progress",
-            "notes": "Active clinical tele-consultation in room.",
-            "reason": "Seasonal asthma flare-up",
-            "meeting_link": "https://meet.ai-hos.org/room-pedi-301",
-            "telehealth_room_id": "apex-room-pedi-301",
         },
     ]
 
@@ -867,13 +1049,14 @@ async def seed_appointments(session: AsyncSession, doctors: list, patients: list
 
 async def seed_medical_records(session: AsyncSession, doctors: list, patients: list, appointments: list) -> list:
     """Seed finalized records and drafts for the Doctor Review Gate."""
+    pat_map = {p["full_name"]: p["patient_id"] for p in patients}
     records = [
         # Record 1: Finalized Historical Encounter
         {
             "record_id": uuid.UUID("cccccccc-0000-0000-0000-000000000001"),
-            "patient_id": patients[0]["patient_id"],
+            "patient_id": pat_map.get("Amit Kumar", patients[0]["patient_id"]),
             "doctor_id": doctors[0]["doctor_id"],
-            "appointment_id": appointments[2]["appointment_id"],
+            "appointment_id": appointments[6]["appointment_id"],
             "content": json.dumps({
                 "chief_complaint": "Persistent elevated blood pressure with occasional morning dizziness.",
                 "history_present_illness": "Patient reports blood pressure readings fluctuating around 145/95 mmHg over the past 3 weeks. Low-sodium diet compliance confirmed.",
@@ -890,7 +1073,7 @@ async def seed_medical_records(session: AsyncSession, doctors: list, patients: l
         # Record 2: DRAFT awaiting Doctor Review Gate in /doctor/approvals
         {
             "record_id": uuid.UUID("cccccccc-0000-0000-0000-000000000002"),
-            "patient_id": patients[0]["patient_id"],
+            "patient_id": pat_map.get("Amit Kumar", patients[0]["patient_id"]),
             "doctor_id": doctors[0]["doctor_id"],
             "appointment_id": appointments[0]["appointment_id"],
             "content": json.dumps({
@@ -906,10 +1089,10 @@ async def seed_medical_records(session: AsyncSession, doctors: list, patients: l
             "status": "DRAFT",
             "finalized_at": None,
         },
-        # Record 3: DRAFT awaiting Doctor Review Gate for Patient 2 (Neurology)
+        # Record 3: DRAFT awaiting Doctor Review Gate for Patient (Neurology)
         {
             "record_id": uuid.UUID("cccccccc-0000-0000-0000-000000000003"),
-            "patient_id": patients[1]["patient_id"],
+            "patient_id": pat_map.get("Priya Sharma", patients[1]["patient_id"]),
             "doctor_id": doctors[2]["doctor_id"],
             "appointment_id": appointments[1]["appointment_id"],
             "content": json.dumps({
@@ -963,12 +1146,13 @@ async def seed_medical_records(session: AsyncSession, doctors: list, patients: l
 
 async def seed_prescriptions(session: AsyncSession, doctors: list, patients: list, records: list) -> list:
     """Seed finalized and draft prescriptions."""
+    pat_map = {p["full_name"]: p["patient_id"] for p in patients}
     prescriptions = [
         # Rx 1: Finalized Prescription linked to completed record
         {
             "prescription_id": uuid.UUID("dddddddd-0000-0000-0000-000000000001"),
             "medical_record_id": records[0]["record_id"],
-            "patient_id": patients[0]["patient_id"],
+            "patient_id": pat_map.get("Amit Kumar", patients[0]["patient_id"]),
             "doctor_id": doctors[0]["doctor_id"],
             "medications": json.dumps([
                 {
@@ -994,7 +1178,7 @@ async def seed_prescriptions(session: AsyncSession, doctors: list, patients: lis
         {
             "prescription_id": uuid.UUID("dddddddd-0000-0000-0000-000000000002"),
             "medical_record_id": records[1]["record_id"],
-            "patient_id": patients[0]["patient_id"],
+            "patient_id": pat_map.get("Amit Kumar", patients[0]["patient_id"]),
             "doctor_id": doctors[0]["doctor_id"],
             "medications": json.dumps([
                 {
@@ -1055,10 +1239,11 @@ async def seed_prescriptions(session: AsyncSession, doctors: list, patients: lis
 
 async def seed_consents(session: AsyncSession, patients: list, doctors: list) -> list:
     """Seed data access consents."""
+    pat_map = {p["full_name"]: p["patient_id"] for p in patients}
     consents = [
         {
             "consent_id": uuid.UUID("eeeeeeee-0000-0000-0000-000000000001"),
-            "patient_id": patients[0]["patient_id"],
+            "patient_id": pat_map.get("Amit Kumar", patients[0]["patient_id"]),
             "provider_id": doctors[0]["doctor_id"],
             "record_scope": "full_access",
             "granted_at": datetime.now() - timedelta(days=30),
@@ -1066,7 +1251,7 @@ async def seed_consents(session: AsyncSession, patients: list, doctors: list) ->
         },
         {
             "consent_id": uuid.UUID("eeeeeeee-0000-0000-0000-000000000002"),
-            "patient_id": patients[1]["patient_id"],
+            "patient_id": pat_map.get("Priya Sharma", patients[1]["patient_id"]),
             "provider_id": doctors[2]["doctor_id"],
             "record_scope": "full_access",
             "granted_at": datetime.now() - timedelta(days=20),
@@ -1074,7 +1259,7 @@ async def seed_consents(session: AsyncSession, patients: list, doctors: list) ->
         },
         {
             "consent_id": uuid.UUID("eeeeeeee-0000-0000-0000-000000000003"),
-            "patient_id": patients[2]["patient_id"],
+            "patient_id": pat_map.get("Rahul Singh", patients[2]["patient_id"]),
             "provider_id": doctors[4]["doctor_id"],
             "record_scope": "records_only",
             "granted_at": datetime.now() - timedelta(days=10),
@@ -1114,6 +1299,7 @@ async def seed_consents(session: AsyncSession, patients: list, doctors: list) ->
 
 async def seed_inpatient_workstation(session: AsyncSession, org_id: uuid.UUID, patients: list) -> int:
     """Seed inpatient beds, historical vitals logs and shift tasks."""
+    pat_map = {p["full_name"]: p["patient_id"] for p in patients}
     beds = [
         {
             "bed_id": uuid.UUID("ffffffff-0000-0000-0000-000000000001"),
@@ -1121,7 +1307,7 @@ async def seed_inpatient_workstation(session: AsyncSession, org_id: uuid.UUID, p
             "ward": "Cardiology Step-Down Ward",
             "status": "occupied",
             "clinical_status": "Stable",
-            "patient_id": patients[0]["patient_id"],
+            "patient_id": pat_map.get("Amit Kumar", patients[0]["patient_id"]),
             "patient_name": "Amit Kumar",
             "uhid": "UHID-APEX-2026-9041",
             "age": 41,
@@ -1152,7 +1338,7 @@ async def seed_inpatient_workstation(session: AsyncSession, org_id: uuid.UUID, p
             "ward": "Intensive Care Unit (ICU)",
             "status": "occupied",
             "clinical_status": "Attention",
-            "patient_id": patients[2]["patient_id"],
+            "patient_id": pat_map.get("Rahul Singh", patients[2]["patient_id"]),
             "patient_name": "Rahul Singh",
             "uhid": "UHID-APEX-2026-8812",
             "age": 48,
@@ -1239,11 +1425,14 @@ async def seed_inpatient_workstation(session: AsyncSession, org_id: uuid.UUID, p
 
 async def seed_patient_extras(session: AsyncSession, patients: list) -> int:
     """Seed patient reminders and uploaded lab reports."""
+    pat_map = {p["full_name"]: p["patient_id"] for p in patients}
+    amit_pid = pat_map.get("Amit Kumar", patients[0]["patient_id"])
+
     # 1. Medicine Reminders
     reminders = [
         {
             "reminder_id": uuid.UUID("11111111-2222-3333-4444-555555555551"),
-            "patient_id": patients[0]["patient_id"],
+            "patient_id": amit_pid,
             "medication_name": "Telmisartan 40mg",
             "dosage": "1 Tablet",
             "frequency": "Once daily",
@@ -1253,7 +1442,7 @@ async def seed_patient_extras(session: AsyncSession, patients: list) -> int:
         },
         {
             "reminder_id": uuid.UUID("11111111-2222-3333-4444-555555555552"),
-            "patient_id": patients[0]["patient_id"],
+            "patient_id": amit_pid,
             "medication_name": "Amlodipine 5mg",
             "dosage": "1 Tablet",
             "frequency": "Once daily",
@@ -1278,7 +1467,7 @@ async def seed_patient_extras(session: AsyncSession, patients: list) -> int:
     # 2. Patient Report
     report = {
         "report_id": uuid.UUID("22222222-3333-4444-5555-666666666661"),
-        "patient_id": patients[0]["patient_id"],
+        "patient_id": amit_pid,
         "title": "Comprehensive Lipid Panel & HbA1c Report",
         "report_type": "lab",
         "file_name": "lipid_profile_amit_kumar.pdf",

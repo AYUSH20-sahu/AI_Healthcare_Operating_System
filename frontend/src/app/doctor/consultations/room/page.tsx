@@ -3,7 +3,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
-import { api, API_BASE, telehealthApi, voiceNotesApi } from '@/lib/api';
+import { api, API_BASE, telehealthApi, voiceNotesApi, getTelehealthWsUrl } from '@/lib/api';
 import type { IceServerItem, RecordingMetadata } from '@/lib/api';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -383,9 +383,8 @@ export default function TelehealthRoomPage() {
             stream.getTracks().forEach(track => pc.addTrack(track, stream));
 
             // 4. Connect to signalling WebSocket
-            const wsBase = API_BASE.replace(/^http/, 'ws').replace('/api/v1', '');
             const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
-            const wsUrl = `${wsBase}/api/v1${tokenData.ws_url}${token ? `?token=${token}` : ''}`;
+            const wsUrl = getTelehealthWsUrl(tokenData.ws_url, token);
             const ws = new WebSocket(wsUrl);
             wsRef.current = ws;
 

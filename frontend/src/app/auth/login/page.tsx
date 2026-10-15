@@ -46,7 +46,7 @@ function LoginForm() {
 
         try {
             setSubmitting(true);
-            const loggedInUser = await login(email.trim(), password);
+            const loggedInUser = await login(email.trim(), password, rememberMe);
             const destination = validatePostLoginRedirect(redirectUrl, loggedInUser.role);
             router.push(destination);
         } catch (err: unknown) {
@@ -57,7 +57,7 @@ function LoginForm() {
         }
     };
 
-    const handleAutofill = (role: 'superadmin' | 'admin' | 'doctor') => {
+    const handleAutofill = (role: 'superadmin' | 'admin' | 'doctor' | 'nurse') => {
         setError(null);
         if (role === 'superadmin') {
             setEmail('superadmin@aihos.org');
@@ -68,6 +68,9 @@ function LoginForm() {
         } else if (role === 'doctor') {
             setEmail('doctor@test.com');
             setPassword('doctorpassword123');
+        } else if (role === 'nurse') {
+            setEmail('nurse@test.com');
+            setPassword('nursepassword123');
         }
     };
 
@@ -218,9 +221,16 @@ function LoginForm() {
                                 >
                                     Doctor (Rajesh)
                                 </button>
+                                <button
+                                    type="button"
+                                    onClick={() => handleAutofill('nurse')}
+                                    className="px-2.5 py-1 rounded-lg text-xs font-medium bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30 transition-all"
+                                >
+                                    Nurse (Sunita)
+                                </button>
                             </div>
                             <p className="text-[10px] text-slate-500 dark:text-slate-400 pt-1.5">
-                                Super Admin & Hospital Admin route to <code>/admin</code>. Doctor routes to <code>/doctor</code>.
+                                Super Admin & Hospital Admin route to <code>/admin</code>. Doctor routes to <code>/doctor</code>. Nurse routes to <code>/nurse</code>.
                             </p>
                         </div>
                     </CardContent>

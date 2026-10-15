@@ -450,6 +450,9 @@ class Appointment(Base):
     telehealth_room_id: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
     telehealth_started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     telehealth_ended_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    organization_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("organizations.organization_id"), nullable=True, index=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -492,6 +495,9 @@ class MedicalRecord(Base):
     status: Mapped[MedicalRecordStatus] = mapped_column(
         Enum(MedicalRecordStatus), default=MedicalRecordStatus.DRAFT, index=True
     )
+    organization_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("organizations.organization_id"), nullable=True, index=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     finalized_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
@@ -530,6 +536,9 @@ class Prescription(Base):
         Enum(PrescriptionStatus), default=PrescriptionStatus.DRAFT, index=True
     )
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    organization_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("organizations.organization_id"), nullable=True, index=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     finalized_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

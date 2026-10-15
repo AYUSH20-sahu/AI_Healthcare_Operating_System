@@ -94,6 +94,7 @@ async def create_medical_record(
         appointment_id=record_data.appointment_id,
         content=record_data.content.model_dump(),
         status=MedicalRecordStatus.DRAFT,
+        organization_id=current_user.organization_id,
     )
     db.add(record)
     await db.commit()

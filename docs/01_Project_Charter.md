@@ -1,47 +1,55 @@
-# Project Charter — AI-HOS
+# AI-HOS Project Charter & Governance
 
-## Vision
-AI-HOS (AI Healthcare Operating System) is an AI-powered platform connecting hospitals, clinics, doctors, and patients in one ecosystem. It is an intelligent assistant, NOT a diagnostic authority — a licensed clinician stays in control of every clinical decision.
+## 1. Vision & Strategic Mission
+The **AI Healthcare Operating System (AI-HOS)** is designed as an end-to-end hospital operating platform that unites patient care, physician workflows, administrative management, and national interoperability into a single modern web application.
 
-## MVP Scope
-- AI Receptionist (voice intake)
-- AI Triage (symptom collection + department recommendation)
-- Appointment Booking
-- Doctor Dashboard (AI Copilot, voice notes, medical scribe, prescription draft)
-- Multilingual Voice Support
+The core objective is to drastically reduce physician administrative burden—especially manual documentation and repetitive data entry—while maintaining rigorous patient safety, strict regulatory compliance, and seamless multi-facility scaling.
 
-## Out of Scope for MVP
-- Wearables
-- Insurance/claims automation beyond basic billing
-- Predictive analytics
-- Digital-twin modeling
+---
 
-## Build Order
-Get the Doctor Copilot vertical (ambient scribe + prescription draft) fully working end-to-end as the first pilot slice before completing the Patient and Admin apps.
+## 2. Core Pillars
 
-## Architecture (Five Layers)
-1. **Client Layer**: Three separate apps — Patient (web+voice), Doctor (dense dashboard), Admin (ops/analytics)
-2. **Gateway Layer**: Single API gateway — auth, routing, TLS termination only
-3. **Service Layer** (deterministic, testable):
-   - Auth service: RBAC + consent management
-   - Core API: Sole writer of clinical truth to PostgreSQL
-   - Integration service: FHIR/ABDM/HIE
-   - Orchestrator: Routes work to AI agents with timeouts, retries, fallback-to-human
-4. **Agent Layer** (generative, non-deterministic):
-   - Intake & triage: symptom capture, urgency detection, routing
-   - Doctor copilot: ambient scribing + prescription drafting
-   - Ops & follow-up: reminders, follow-up messaging, admin record summaries
-5. **Data Layer**: PostgreSQL (system of record), Redis (session/cache only), ABDM/FHIR HIE (external)
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    AI-HOS CORE PILLARS                          │
+├─────────────────┬─────────────────┬─────────────┬───────────────┤
+│   Clinical AI   │   Virtual Care  │ Inter-op    │ Governance    │
+│   Assistance    │   & Telehealth  │ & Standards │ & Security    │
+├─────────────────┼─────────────────┼─────────────┼───────────────┤
+│ • Ambient Scribe│ • WebRTC Video  │ • ABDM M1-M3│ • Multi-tenant│
+│ • Copilot SOAP  │ • Coturn STUN   │ • FHIR R4   │ • RBAC Matrix │
+│ • Drug Check    │ • WebSocket Rel.│ • NHCX Claim│ • Audit Logs  │
+│ • HITL Approval │ • PIP Previews  │ • ABHA ID   │ • K8s Ready   │
+└─────────────────┴─────────────────┴─────────────┴───────────────┘
+```
 
-## Compliance Context
-- India: DPDP Act 2023; ABDM ecosystem (ABHA IDs, Consent Manager, HIE, HFR/HPR)
-- HIPAA Privacy/Security Rules (if U.S. patient data processed)
-- HL7 FHIR R4 as canonical interoperability format
-- Data residency: production data should be able to be hosted in-region
+1. **Clinical AI Under Human Supervision**:
+   - AI draft generation for SOAP notes, prescriptions, and triage summaries is strictly assistive.
+   - A qualified, licensed physician must review, modify, and officially sign every generated record before persistence into permanent patient records.
+2. **Encrypted Telehealth Consultation**:
+   - Zero-plugin browser WebRTC video calls connecting patients and physicians with automated ICE/STUN/TURN negotiation for traversal through hospital firewalls.
+3. **National Health Interoperability (India ABDM & NHCX)**:
+   - Full support for the Ayushman Bharat Digital Mission (Milestones 1, 2, and 3) allowing patients to link ABHA numbers and securely consent to record sharing.
+   - National Health Claims Exchange (NHCX) claim life-cycle processing for electronic pre-authorization and reimbursement settlement.
+4. **Multi-Tenancy & Operational Sovereignty**:
+   - Logical multi-tenant data architecture allowing multiple hospital networks, clinics, or departments to operate securely on a single managed deployment.
 
-## Non-Functional Targets
-- API P95 latency < 500ms for non-AI endpoints; AI conversational turn < 3s
-- 99.9% uptime target for patient-facing services
-- Multi-tenant data isolation per hospital/clinic
-- WCAG 2.1 AA for patient-facing interfaces
-- Defined code coverage target; automated CI/CD; isolated dev/staging/prod
+---
+
+## 3. Operational Roles & Boundaries
+
+| Role | Operational Scope & Responsibilities |
+| :--- | :--- |
+| **System Administrator (`ADMIN`)** | Platform configuration, staff provisioning, organization onboarding, system health monitoring, and claim reconciliation. |
+| **Head Physician (`HEAD_PHYSICIAN`)** | Clinical governance, departmental oversight, prescription protocol management, and peer review. |
+| **Attending Doctor (`DOCTOR`)** | Outpatient consultations, virtual telehealth calls, clinical SOAP drafting, electronic prescriptions, and diagnostic ordering. |
+| **Staff Nurse (`NURSE`)** | Inpatient ward rounds, triage intake, vital signs telemetry capture, and patient queue flow management. |
+| **Patient (`PATIENT`)** | Self-service appointment booking, teleconsultation room attendance, health records access, and ABHA consent management. |
+
+---
+
+## 4. Architectural Boundaries
+
+- **Assisted Decision Making, Not Autonomous Treatment**: The AI models generate diagnostic hypotheses and interaction alerts, but never execute prescriptive decisions without doctor approval.
+- **Strict Data Segregation**: Every database query scoped to clinical data is filtered by `organization_id` to prevent cross-facility data leakage.
+- **Standardized API Contracts**: All data exchange adheres to Pydantic v2 schemas and JSON REST conventions, with bidirectional translation to FHIR-R4.

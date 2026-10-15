@@ -20,7 +20,8 @@ def init_db():
 
     if not is_sqlite:
         connect_args["command_timeout"] = 15
-        if "localhost" not in settings.DATABASE_URL and "127.0.0.1" not in settings.DATABASE_URL:
+        is_local = any(h in settings.DATABASE_URL for h in ("localhost", "127.0.0.1", "@postgres:", "@ai-hos-postgres:", "postgres:5432"))
+        if not is_local:
             connect_args["ssl"] = True
 
     url = settings.DATABASE_URL
@@ -28,6 +29,10 @@ def init_db():
         url = url.replace("postgres://", "postgresql+asyncpg://", 1)
     elif url.startswith("postgresql://") and not url.startswith("postgresql+asyncpg://"):
         url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
+
+    import logging
+    masked_target = url.split("@")[-1] if "@" in url else url
+    logging.getLogger("aihos.database").info(f"Database initializing: target={masked_target}, ssl={connect_args.get('ssl', False)}")
 
     engine_kwargs = {
         "echo": False,

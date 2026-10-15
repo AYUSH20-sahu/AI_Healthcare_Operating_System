@@ -14,6 +14,9 @@ export interface Appointment {
     duration_minutes: number;
     status: 'scheduled' | 'completed' | 'cancelled' | 'no_show';
     notes: string | null;
+    reason?: string | null;
+    meeting_link?: string | null;
+    telehealth_room_id?: string | null;
     created_at: string;
     updated_at: string;
     patient?: Patient;

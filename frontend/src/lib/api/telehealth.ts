@@ -136,3 +136,28 @@ export const telehealthApi = {
     getRecordingStatus: (appointmentId: string) =>
         api.get<RecordingStatusResponse>(`/telehealth/room/${appointmentId}/recording/status`),
 };
+
+/**
+ * Constructs an absolute WebSocket URL (ws:// or wss://) for WebRTC telehealth signalling.
+ * Ensures reliable connection across local development (port 8000) and production TLS ingress.
+ */
+export function getTelehealthWsUrl(wsPath: string, token?: string | null): string {
+    if (typeof window === 'undefined') return '';
+
+    const cleanPath = wsPath.startsWith('/') ? wsPath : `/${wsPath}`;
+    const tokenQuery = token ? `?token=${encodeURIComponent(token)}` : '';
+
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+    if (apiUrl && apiUrl.startsWith('http')) {
+        try {
+            const url = new URL(apiUrl);
+            const wsProto = url.protocol === 'https:' ? 'wss:' : 'ws:';
+            return `${wsProto}//${url.host}${cleanPath}${tokenQuery}`;
+        } catch {
+            // fallback to window.location
+        }
+    }
+
+    const wsProto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    return `${wsProto}//${window.location.host}${cleanPath}${tokenQuery}`;
+}

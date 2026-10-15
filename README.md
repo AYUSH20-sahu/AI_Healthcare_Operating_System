@@ -171,13 +171,49 @@ To explore and test all portals across the Five-Layer Architecture, use the cred
 
 ---
 
+#### 5. Patient Cohort (20 Patients across 5 Key Departments)
+*All patients sign in at [`/patient/login`](http://localhost:3000/patient/login) using either Email or Phone with password:* `patientpassword123`
+
+##### ⚡ Three Quick Demo Patient Credentials (Featured in Patient Login)
+| Persona & Department | Email | Mobile Phone | Password | ABHA Address | Clinical Profile |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Amit Kumar** (Cardiology) | `patient@test.com` | `+919876511111` | `patientpassword123` | `amit.kumar@abdm` | Stage 1 Essential Hypertension, post-PCI monitoring, active vitals logging |
+| **Priya Sharma** (Neurology) | `priya.sharma@example.com` | `+919876522221` | `patientpassword123` | `priya.sharma@abdm` | Chronic Migraine with visual aura, upcoming video consultation |
+| **Sarah Jenkins** (Cardiology / Intake) | `freshpatient@test.com` | `+919876511112` | `patientpassword123` | `sarah.jenkins@abdm` | Hyperlipidemia, palpitations, active tele-consultation room |
+
+##### 📋 Full 20-Patient Census Registry
+| # | Patient Name | Department | Email | Phone | Gender & DOB | ABHA Address | Emergency Contact |
+| :- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| 1 | Amit Kumar | **Cardiology** | `patient@test.com` | `+919876511111` | Male (1985-03-15) | `amit.kumar@abdm` | Sunita Kumar (Wife) |
+| 2 | Priya Sharma | **Neurology** | `priya.sharma@example.com` | `+919876522221` | Female (1992-07-22) | `priya.sharma@abdm` | Vikram Sharma (Brother) |
+| 3 | Rahul Singh | **Orthopedics** | `rahul.singh@example.com` | `+919876544441` | Male (1978-11-05) | `rahul.singh@abdm` | Meena Singh (Spouse) |
+| 4 | Anjali Gupta | **Dermatology** | `anjali.gupta@example.com` | `+919876555551` | Female (1995-01-30) | `anjali.gupta@abdm` | Deepak Gupta (Father) |
+| 5 | Suresh Nair | **Dermatology** | `suresh.nair@example.com` | `+919876555554` | Male (1963-09-12) | `suresh.nair@abdm` | Lakshmi Nair (Daughter) |
+| 6 | Sarah Jenkins | **Cardiology** | `freshpatient@test.com` | `+919876511112` | Female (1990-08-20) | `sarah.jenkins@abdm` | Michael Jenkins (Spouse) |
+| 7 | Ramesh Chawla | **Cardiology** | `ramesh.chawla@example.com` | `+919876511113` | Male (1968-05-10) | `ramesh.chawla@abdm` | Alka Chawla (Wife) |
+| 8 | Sunita Rao | **Cardiology** | `sunita.rao@example.com` | `+919876511114` | Female (1975-11-28) | `sunita.rao@abdm` | Kishore Rao (Husband) |
+| 9 | Rahul Verma | **Neurology** | `rahul.verma@example.com` | `+919876522222` | Male (1986-04-18) | `rahul.verma@abdm` | Pooja Verma (Wife) |
+| 10 | Meera Iyer | **Neurology** | `meera.iyer@example.com` | `+919876522223` | Female (1993-12-05) | `meera.iyer@abdm` | Ramanathan Iyer (Father) |
+| 11 | Vikramaditya Bose | **Neurology** | `vikram.bose@example.com` | `+919876522224` | Male (1960-09-14) | `vikram.bose@abdm` | Aparna Bose (Daughter) |
+| 12 | Aarav Patel | **Pediatrics** | `aarav.patel@example.com` | `+919876533331` | Male (2018-06-12) | `aarav.patel@abdm` | Sanjay Patel (Father) |
+| 13 | Ananya Deshmukh | **Pediatrics** | `ananya.deshmukh@example.com` | `+919876533332` | Female (2019-11-25) | `ananya.deshmukh@abdm` | Sneha Deshmukh (Mother) |
+| 14 | Kabir Malhotra | **Pediatrics** | `kabir.malhotra@example.com` | `+919876533333` | Male (2016-02-14) | `kabir.malhotra@abdm` | Ritu Malhotra (Mother) |
+| 15 | Diya Sengupta | **Pediatrics** | `diya.sengupta@example.com` | `+919876533334` | Female (2020-08-08) | `diya.sengupta@abdm` | Amit Sengupta (Father) |
+| 16 | Gurpreet Singh | **Orthopedics** | `gurpreet.singh@example.com` | `+919876544442` | Male (1983-01-19) | `gurpreet.singh@abdm` | Harpreet Kaur (Wife) |
+| 17 | Deepa Namboodiri | **Orthopedics** | `deepa.namboodiri@example.com` | `+919876544443` | Female (1972-10-30) | `deepa.namboodiri@abdm` | Unnikrishnan N (Spouse) |
+| 18 | Mohanlal Khatri | **Orthopedics** | `mohanlal.khatri@example.com` | `+919876544444` | Male (1958-03-22) | `mohanlal.khatri@abdm` | Rajesh Khatri (Son) |
+| 19 | Rohan Saxena | **Dermatology** | `rohan.saxena@example.com` | `+919876555552` | Male (2001-07-17) | `rohan.saxena@abdm` | Manish Saxena (Father) |
+| 20 | Kavita Menon | **Dermatology** | `kavita.menon@example.com` | `+919876555553` | Female (1988-04-09) | `kavita.menon@abdm` | Suresh Menon (Husband) |
+
+---
+
 ### Populating the Clinical Dummy Dataset
 
 The project includes an idempotent seeder (`database/seed.py`) that populates the complete clinical ecosystem:
 - **Flagship Facility**: Apex Multi-Specialty Hospital & Research Center (`APEX-HOSP-01`, 150 Beds, 30 ICU Beds, NABH licensed, ABDM `IN-DL-AIHOS-001`).
 - **Clinicians**: 10 Departmental Specialists + 20 Physicians across disciplines with verified medical licenses.
 - **Nursing Staff**: 20 Inpatient Ward, ICU, and Trauma Nurses with role-based workstation credentials.
-- **Patient Cohort**: 5 Patients with verified ABHA addresses (`amit.kumar@abdm`, `priya.sharma@abdm`, etc.).
+- **Patient Cohort**: 20 Patients across 5 Key Departments (Cardiology, Neurology, Pediatrics, Orthopedics, Dermatology) with ABHA addresses and active patient portal logins.
 - **Consultations & Telehealth**: Scheduled upcoming visits, active video consultations, and completed encounters.
 - **Medical Records & Approvals**: Finalized SOAP records plus drafts queued in the clinician review gate ([`/doctor/approvals`](http://localhost:3000/doctor/approvals)).
 - **Prescriptions**: Formatted medication regimens with drug-drug and allergy interaction screening.
