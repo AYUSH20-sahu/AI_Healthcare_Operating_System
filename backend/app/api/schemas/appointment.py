@@ -26,12 +26,42 @@ class AppointmentUpdate(BaseModel):
     notes: str | None = None
 
 
+class AppointmentPatientInfo(BaseModel):
+    """Patient summary nested in appointment response."""
+    patient_id: UUID
+    full_name: str
+    email: str | None = None
+    phone: str | None = None
+    gender: str | None = None
+    date_of_birth: datetime | None = None
+    abha_address: str | None = None
+
+    class Config:
+        from_attributes = True
+
+
+class AppointmentDoctorInfo(BaseModel):
+    """Doctor summary nested in appointment response."""
+    doctor_id: UUID
+    full_name: str
+    specialty: str | None = None
+    hospital_affiliation: str | None = None
+
+    class Config:
+        from_attributes = True
+
+
 class AppointmentResponse(AppointmentBase):
     """Schema for appointment response."""
     appointment_id: UUID
     status: str
+    reason: str | None = None
+    meeting_link: str | None = None
+    telehealth_room_id: str | None = None
     created_at: datetime
     updated_at: datetime
+    patient: AppointmentPatientInfo | None = None
+    doctor: AppointmentDoctorInfo | None = None
 
     class Config:
         from_attributes = True

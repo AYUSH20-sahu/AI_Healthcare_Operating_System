@@ -233,7 +233,13 @@ async def book_patient_appointment(
         duration_minutes=payload.duration_minutes,
         status=AppointmentStatus.SCHEDULED,
         notes=notes_text.strip() or None,
+        reason=payload.reason or notes_text.strip() or None,
     )
+    if doctor.organization_id:
+        appointment.organization_id = doctor.organization_id
+    elif current_user.organization_id:
+        appointment.organization_id = current_user.organization_id
+
     db.add(appointment)
     await db.flush()
 
@@ -243,6 +249,32 @@ async def book_patient_appointment(
 
     await db.commit()
     await db.refresh(appointment)
+
+    # Attach relationship references for response serialization
+    appointment.patient = patient
+    appointment.doctor = doctor
+
+    # Broadcast real-time queue update to doctor and organization
+    try:
+        from app.core.websocket_manager import queue_manager
+        org_key = str(appointment.organization_id or "default").lower().strip()
+        event_payload = {
+            "event": "QUEUE_STATUS_UPDATED",
+            "organization_id": org_key,
+            "appointment_id": str(appointment.appointment_id),
+            "patient_name": patient.full_name,
+            "doctor_name": doctor.full_name,
+            "doctor_id": str(doctor.doctor_id),
+            "old_status": None,
+            "new_status": "scheduled",
+            "scheduled_at": appointment.scheduled_at.isoformat(),
+        }
+        await queue_manager.broadcast(f"queue:{org_key}", event_payload)
+        await queue_manager.broadcast(f"doctor:{str(doctor.doctor_id)}", event_payload)
+        await queue_manager.broadcast("queue:all", event_payload)
+    except Exception as ws_err:
+        logger.warning(f"Queue broadcast notice: {ws_err}")
+
     return appointment
 
 
@@ -333,7 +365,14 @@ async def get_appointment(
     current_user: User = Depends(get_current_active_user),
 ):
     """Get an appointment by ID."""
-    appointment = await db.get(Appointment, appointment_id)
+    from sqlalchemy.orm import selectinload
+    stmt = (
+        select(Appointment)
+        .options(selectinload(Appointment.patient), selectinload(Appointment.doctor))
+        .where(Appointment.appointment_id == appointment_id)
+    )
+    res = await db.execute(stmt)
+    appointment = res.scalar_one_or_none()
     if not appointment:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -523,8 +562,9 @@ async def list_appointments(
     current_user: User = Depends(get_current_active_user),
 ):
     """List appointments with pagination and filters."""
-    # Build query
-    query = select(Appointment)
+    # Build query with eager loading of patient and doctor details
+    from sqlalchemy.orm import selectinload
+    query = select(Appointment).options(selectinload(Appointment.patient), selectinload(Appointment.doctor))
     count_query = select(func.count(Appointment.appointment_id))
     
     # Apply RBAC filters
@@ -545,7 +585,7 @@ async def list_appointments(
                 page_size=page_size,
                 total_pages=0,
             )
-    elif current_user.role == UserRole.DOCTOR:
+    elif current_user.role in (UserRole.DOCTOR, UserRole.HEAD_PHYSICIAN):
         doctor_result = await db.execute(
             select(Doctor).where(Doctor.user_id == current_user.user_id)
         )
@@ -596,6 +636,9 @@ async def list_appointments(
     total_result = await db.execute(count_query)
     total = total_result.scalar()
     
+    # Order by newest/scheduled time first
+    query = query.order_by(Appointment.scheduled_at.desc())
+
     # Apply pagination
     query = query.offset((page - 1) * page_size).limit(page_size)
     result = await db.execute(query)

@@ -264,6 +264,12 @@ export default function PatientConsultationRoomPage() {
 
             // 3. Get room token and Coturn ICE servers
             const tokenData = await telehealthApi.getRoomToken(appointmentId);
+
+            // Notify attending doctor in real-time that patient is calling
+            await telehealthApi.notifyIncomingCall(appointmentId).catch((err) => {
+                console.warn('Call notification dispatch note:', err);
+            });
+
             let iceServers = tokenData.ice_servers;
             if (!iceServers || iceServers.length === 0) {
                 try {

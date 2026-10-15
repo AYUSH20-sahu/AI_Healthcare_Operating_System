@@ -7,6 +7,9 @@ import { useAuth } from '@/lib/auth';
 import { ThemeToggle, Badge } from '@/components/ui';
 import { getDefaultRouteForRole } from '@/lib/redirect-validator';
 
+import { telehealthApi } from '@/lib/api';
+import { useQueueStream, QueueStreamPayload } from '@/lib/hooks/useQueueStream';
+
 interface TopNavProps {
     collapsed: boolean;
     onMenuClick: () => void;
@@ -26,10 +29,95 @@ export function TopNav({ collapsed, onMenuClick }: TopNavProps) {
         title: string;
         desc: string;
         time: string;
-        type: string;
+        type: 'critical' | 'call' | 'info';
+        link?: string;
+        actionLabel?: string;
     }
 
-    const [notifications] = useState<NotificationAlert[]>([]);
+    const [notifications, setNotifications] = useState<NotificationAlert[]>([]);
+    const [incomingCall, setIncomingCall] = useState<{
+        appointment_id: string;
+        patient_name: string;
+        meeting_link?: string;
+        scheduled_at?: string;
+    } | null>(null);
+
+    const isDoctor = user?.role === 'doctor' || user?.role === 'physician' || user?.role === 'head_physician' || user?.role === 'admin';
+
+    // Poll for active calls every 6 seconds as a robust fallback for the doctor
+    const checkActiveCalls = React.useCallback(async () => {
+        if (!isDoctor) return;
+        try {
+            const calls = await telehealthApi.getActiveCalls();
+            if (calls && calls.length > 0) {
+                const latest = calls[0];
+                setIncomingCall({
+                    appointment_id: latest.appointment_id,
+                    patient_name: latest.patient_name,
+                    meeting_link: latest.meeting_link,
+                    scheduled_at: latest.started_at,
+                });
+                setNotifications((prev) => {
+                    const exists = prev.some(n => n.id === `call-${latest.appointment_id}`);
+                    if (exists) return prev;
+                    return [
+                        {
+                            id: `call-${latest.appointment_id}`,
+                            title: '📹 Incoming Video Call',
+                            desc: `${latest.patient_name} is in the video consultation room awaiting your arrival.`,
+                            time: 'Just now',
+                            type: 'call',
+                            link: latest.meeting_link || `/doctor/consultations/${latest.appointment_id}`,
+                            actionLabel: 'Answer Call 📹',
+                        },
+                        ...prev,
+                    ];
+                });
+            } else {
+                setIncomingCall(null);
+                setNotifications((prev) => prev.filter(n => !n.id.startsWith('call-')));
+            }
+        } catch {
+            // silent catch
+        }
+    }, [isDoctor]);
+
+    useEffect(() => {
+        checkActiveCalls();
+        const interval = setInterval(checkActiveCalls, 6000);
+        return () => clearInterval(interval);
+    }, [checkActiveCalls]);
+
+    // Real-time WebSocket listener for immediate instant notification
+    useQueueStream({
+        organizationId: user?.organization_id || 'default',
+        enabled: isDoctor,
+        onQueueUpdated: (payload: QueueStreamPayload) => {
+            if (payload.event === 'INCOMING_VIDEO_CALL' && payload.appointment_id) {
+                setIncomingCall({
+                    appointment_id: payload.appointment_id,
+                    patient_name: payload.patient_name || 'Patient',
+                    meeting_link: payload.meeting_link,
+                    scheduled_at: payload.scheduled_at,
+                });
+                setNotifications((prev) => [
+                    {
+                        id: `call-${payload.appointment_id}`,
+                        title: '📹 Incoming Video Call',
+                        desc: `${payload.patient_name || 'Patient'} is calling for their telehealth video consultation!`,
+                        time: 'Live',
+                        type: 'call',
+                        link: payload.meeting_link || `/doctor/consultations/${payload.appointment_id}`,
+                        actionLabel: 'Answer Call 📹',
+                    },
+                    ...prev.filter(n => n.id !== `call-${payload.appointment_id}`),
+                ]);
+            } else if (payload.event === 'CALL_ENDED' && payload.appointment_id) {
+                setIncomingCall((prev) => (prev?.appointment_id === payload.appointment_id ? null : prev));
+                setNotifications((prev) => prev.filter(n => n.id !== `call-${payload.appointment_id}`));
+            }
+        },
+    });
 
     useEffect(() => {
         const handleClickOutside = (e: MouseEvent) => {
@@ -159,15 +247,19 @@ export function TopNav({ collapsed, onMenuClick }: TopNavProps) {
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
                             </svg>
                             {notifications.length > 0 && (
-                                <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-rose-500 ring-2 ring-white dark:ring-slate-900" />
+                                <span className={`absolute top-1.5 right-1.5 w-2.5 h-2.5 rounded-full ring-2 ring-white dark:ring-slate-900 ${
+                                    incomingCall ? 'bg-emerald-500 animate-ping' : 'bg-rose-500'
+                                }`} />
                             )}
                         </button>
 
                         {alertsOpen && (
-                            <div className="absolute right-0 top-full mt-2 w-80 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xl overflow-hidden z-50 text-xs">
+                            <div className="absolute right-0 top-full mt-2 w-84 sm:w-96 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xl overflow-hidden z-50 text-xs">
                                 <div className="p-3.5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
-                                    <span className="font-semibold text-slate-900 dark:text-white">Active Clinical Alerts</span>
-                                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300 font-medium">
+                                    <span className="font-semibold text-slate-900 dark:text-white">Active Alerts & Telehealth</span>
+                                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
+                                        incomingCall ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300' : 'bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300'
+                                    }`}>
                                         {notifications.length} Pending
                                     </span>
                                 </div>
@@ -175,21 +267,45 @@ export function TopNav({ collapsed, onMenuClick }: TopNavProps) {
                                     <div className="p-6 text-center text-xs text-slate-500 dark:text-slate-400">
                                         <span className="text-xl block mb-1.5">🔔</span>
                                         <p className="font-semibold text-slate-800 dark:text-slate-200">No Active Clinical Alerts</p>
-                                        <p className="text-[11px] text-slate-400 mt-1">Telemetry parameters and drug interaction checks are all normal.</p>
+                                        <p className="text-[11px] text-slate-400 mt-1">Telemetry parameters and consultation queues are quiet.</p>
                                     </div>
                                 ) : (
-                                    <div className="divide-y divide-slate-100 dark:divide-slate-800 max-h-72 overflow-y-auto">
+                                    <div className="divide-y divide-slate-100 dark:divide-slate-800 max-h-80 overflow-y-auto">
                                         {notifications.map((n) => (
-                                            <div key={n.id} className="p-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors space-y-1">
+                                            <div
+                                                key={n.id}
+                                                className={`p-3 transition-colors space-y-1.5 ${
+                                                    n.type === 'call'
+                                                        ? 'bg-emerald-50/70 dark:bg-emerald-950/30 hover:bg-emerald-100/60 dark:hover:bg-emerald-900/40 border-l-4 border-emerald-500'
+                                                        : 'hover:bg-slate-50 dark:hover:bg-slate-800/50'
+                                                }`}
+                                            >
                                                 <div className="flex items-center justify-between">
-                                                    <span className={`font-semibold ${
-                                                        n.type === 'critical' ? 'text-rose-600 dark:text-rose-400' : 'text-slate-800 dark:text-slate-200'
+                                                    <span className={`font-semibold flex items-center gap-1.5 ${
+                                                        n.type === 'call'
+                                                            ? 'text-emerald-700 dark:text-emerald-300 font-bold'
+                                                            : n.type === 'critical'
+                                                            ? 'text-rose-600 dark:text-rose-400'
+                                                            : 'text-slate-800 dark:text-slate-200'
                                                     }`}>
+                                                        {n.type === 'call' && <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping shrink-0" />}
                                                         {n.title}
                                                     </span>
-                                                    <span className="text-[10px] text-slate-400">{n.time}</span>
+                                                    <span className="text-[10px] text-slate-400 shrink-0">{n.time}</span>
                                                 </div>
-                                                <p className="text-slate-500 dark:text-slate-400 leading-relaxed">{n.desc}</p>
+                                                <p className="text-slate-600 dark:text-slate-300 leading-relaxed text-[11px]">{n.desc}</p>
+                                                {n.link && (
+                                                    <div className="pt-1">
+                                                        <Link
+                                                            href={n.link}
+                                                            onClick={() => setAlertsOpen(false)}
+                                                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-lg transition shadow-sm"
+                                                        >
+                                                            <span>📹</span>
+                                                            <span>{n.actionLabel || 'Answer Call'}</span>
+                                                        </Link>
+                                                    </div>
+                                                )}
                                             </div>
                                         ))}
                                     </div>
@@ -219,6 +335,55 @@ export function TopNav({ collapsed, onMenuClick }: TopNavProps) {
                     </div>
                 </div>
             </div>
+
+            {/* Real-time Floating Incoming Video Call Alert Banner for Doctors */}
+            {incomingCall && (
+                <div className="fixed top-18 right-4 sm:right-8 z-50 max-w-sm w-full bg-slate-900/95 dark:bg-slate-950/95 border-2 border-emerald-500 rounded-2xl shadow-2xl p-4 text-white backdrop-blur-md animate-in fade-in slide-in-from-top-4 duration-300">
+                    <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 flex items-center justify-center text-xl animate-pulse shrink-0">
+                                📹
+                            </div>
+                            <div className="min-w-0">
+                                <span className="text-[10px] font-bold tracking-wider uppercase text-emerald-400 flex items-center gap-1.5">
+                                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping shrink-0" />
+                                    Incoming Video Call
+                                </span>
+                                <h4 className="text-sm font-bold text-white truncate">
+                                    {incomingCall.patient_name}
+                                </h4>
+                                <p className="text-[11px] text-slate-300">
+                                    Patient has joined consultation room.
+                                </p>
+                            </div>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => setIncomingCall(null)}
+                            className="text-slate-400 hover:text-white text-xs p-1 rounded-lg hover:bg-slate-800 transition"
+                            title="Dismiss popup"
+                        >
+                            ✕
+                        </button>
+                    </div>
+                    <div className="mt-3 flex items-center gap-2">
+                        <Link
+                            href={incomingCall.meeting_link || `/doctor/consultations/${incomingCall.appointment_id}`}
+                            onClick={() => setIncomingCall(null)}
+                            className="flex-1 py-2 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs text-center transition flex items-center justify-center gap-1.5 shadow-lg shadow-emerald-600/30"
+                        >
+                            <span>📞 Answer Video Call</span>
+                        </Link>
+                        <button
+                            type="button"
+                            onClick={() => setIncomingCall(null)}
+                            className="py-2 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs transition"
+                        >
+                            Dismiss
+                        </button>
+                    </div>
+                </div>
+            )}
         </header>
     );
 }

@@ -9,28 +9,40 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 
+import { useQueueStream } from '@/lib/hooks/useQueueStream';
+
 export default function DoctorAppointmentsPage() {
     const { user } = useAuth();
     const [appointments, setAppointments] = useState<Appointment[]>([]);
     const [loading, setLoading] = useState(true);
     const [statusFilter, setStatusFilter] = useState<string>('ALL');
 
-    useEffect(() => {
-        async function loadAppointments() {
-            try {
-                setLoading(true);
-                const res = await appointmentsApi.list({ page_size: 50 });
-                if (res && res.appointments) {
-                    setAppointments(res.appointments);
-                }
-            } catch (err) {
-                console.error('Failed to load doctor appointments:', err);
-            } finally {
-                setLoading(false);
+    const loadAppointments = React.useCallback(async () => {
+        try {
+            setLoading(true);
+            const res = await appointmentsApi.list({ page_size: 50 });
+            if (res && res.appointments) {
+                setAppointments(res.appointments);
             }
+        } catch (err) {
+            console.error('Failed to load doctor appointments:', err);
+        } finally {
+            setLoading(false);
         }
-        loadAppointments();
     }, []);
+
+    useEffect(() => {
+        loadAppointments();
+    }, [loadAppointments]);
+
+    // Live WebSocket listener to automatically show newly booked appointments in real time
+    useQueueStream({
+        organizationId: user?.organization_id || 'default',
+        enabled: true,
+        onQueueUpdated: () => {
+            loadAppointments();
+        },
+    });
 
     const filtered = appointments.filter(a => {
         if (statusFilter === 'ALL') return true;
@@ -132,11 +144,19 @@ export default function DoctorAppointmentsPage() {
                                                 <StatusBadge status={appt.status.toUpperCase() as any} />
                                             </td>
                                             <td className="p-3.5 text-right whitespace-nowrap">
-                                                <Link href={`/doctor?selected=${appt.patient_id}`}>
-                                                    <Button size="sm" variant="secondary">
-                                                        Open Copilot →
-                                                    </Button>
-                                                </Link>
+                                                <div className="flex items-center justify-end gap-2">
+                                                    <Link href={`/doctor/consultations/${appt.appointment_id}`}>
+                                                        <Button size="sm" variant="primary" className="bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-semibold flex items-center gap-1">
+                                                            <span>📹</span>
+                                                            <span>Telehealth</span>
+                                                        </Button>
+                                                    </Link>
+                                                    <Link href={`/doctor?selected=${appt.patient_id}`}>
+                                                        <Button size="sm" variant="secondary" className="text-[11px]">
+                                                            Copilot →
+                                                        </Button>
+                                                    </Link>
+                                                </div>
                                             </td>
                                         </tr>
                                     ))}

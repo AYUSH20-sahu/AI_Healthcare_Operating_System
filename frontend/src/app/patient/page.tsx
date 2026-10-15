@@ -254,6 +254,12 @@ export default function PatientDashboardPage() {
                                             Manage Schedule
                                         </Button>
                                     </Link>
+                                    <Link href={`/patient/consultation/${dashboardData.next_appointment.appointment_id}`}>
+                                        <Button variant="primary" size="sm" className="bg-indigo-600 hover:bg-indigo-700 text-white font-medium flex items-center gap-1.5 shadow-sm">
+                                            <span>📹</span>
+                                            <span>Join Video Consultation</span>
+                                        </Button>
+                                    </Link>
                                 </div>
                             </CardContent>
                         </Card>

@@ -135,6 +135,21 @@ export const telehealthApi = {
         ),
     getRecordingStatus: (appointmentId: string) =>
         api.get<RecordingStatusResponse>(`/telehealth/room/${appointmentId}/recording/status`),
+    notifyIncomingCall: (appointmentId: string) =>
+        api.post<{ status: string; appointment_id: string }>(`/telehealth/rooms/${appointmentId}/notify-call`, {}),
+    getActiveCalls: () =>
+        api.get<Array<{
+            appointment_id: string;
+            patient_id: string;
+            patient_name: string;
+            doctor_id: string;
+            doctor_name: string;
+            meeting_link: string;
+            room_id: string;
+            started_at: string;
+            status: string;
+            message?: string;
+        }>>('/telehealth/active-calls'),
 };
 
 /**

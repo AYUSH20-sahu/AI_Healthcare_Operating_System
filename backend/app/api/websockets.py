@@ -21,7 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.core.websocket_manager import queue_manager, telemetry_manager
 from app.database import get_db
-from app.models import User, UserRole
+from app.models import Doctor, User, UserRole
 
 logger = logging.getLogger("ai_hos.websockets_api")
 
@@ -134,12 +134,26 @@ async def queue_broadcast_websocket(
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Unauthorized")
         return
 
-    channel = f"queue:{organization_id.lower().strip()}"
-    await queue_manager.connect(websocket, channel)
+    channels = [
+        f"queue:{organization_id.lower().strip()}",
+        f"user:{str(user.user_id)}",
+        "queue:all",
+    ]
+
+    # If the user is a doctor, subscribe to their doctor-specific channel
+    if user.role in (UserRole.DOCTOR, UserRole.HEAD_PHYSICIAN):
+        d_res = await db.execute(select(Doctor).where(Doctor.user_id == user.user_id))
+        doc = d_res.scalar_one_or_none()
+        if doc:
+            channels.append(f"doctor:{str(doc.doctor_id)}")
+
+    for ch in channels:
+        await queue_manager.connect(websocket, ch)
 
     await websocket.send_json({
         "event": "CONNECTED",
-        "channel": channel,
+        "channel": channels[0],
+        "channels": channels,
         "organization_id": organization_id,
         "authenticated_as": user.full_name or user.email,
     })
@@ -150,10 +164,12 @@ async def queue_broadcast_websocket(
             if data == "ping":
                 await websocket.send_text("pong")
     except WebSocketDisconnect:
-        await queue_manager.disconnect(websocket, channel)
+        for ch in channels:
+            await queue_manager.disconnect(websocket, ch)
     except Exception as exc:
-        logger.warning(f"Error in queue WebSocket ({channel}): {exc}")
-        await queue_manager.disconnect(websocket, channel)
+        logger.warning(f"Error in queue WebSocket: {exc}")
+        for ch in channels:
+            await queue_manager.disconnect(websocket, ch)
 
 
 @router.get("/status")

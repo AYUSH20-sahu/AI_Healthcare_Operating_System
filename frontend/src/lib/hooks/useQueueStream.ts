@@ -3,14 +3,21 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 
 export interface QueueStreamPayload {
-    event: 'QUEUE_STATUS_UPDATED' | 'CONNECTED';
+    event: 'QUEUE_STATUS_UPDATED' | 'CONNECTED' | 'INCOMING_VIDEO_CALL' | 'CALL_ENDED';
     organization_id?: string;
     appointment_id?: string;
+    patient_id?: string;
     patient_name?: string;
     doctor_name?: string;
+    doctor_id?: string;
+    doctor_user_id?: string;
+    meeting_link?: string;
+    room_id?: string;
     old_status?: string;
     new_status?: string;
     scheduled_at?: string;
+    message?: string;
+    timestamp?: string;
 }
 
 interface UseQueueStreamOptions {
@@ -76,7 +83,7 @@ export function useQueueStream({
                     const data: QueueStreamPayload = JSON.parse(event.data);
                     setLastEvent(data);
 
-                    if (data.event === 'QUEUE_STATUS_UPDATED' && onQueueUpdatedRef.current) {
+                    if (onQueueUpdatedRef.current) {
                         onQueueUpdatedRef.current(data);
                     }
                 } catch {

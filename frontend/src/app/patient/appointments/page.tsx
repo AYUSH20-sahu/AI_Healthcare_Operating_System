@@ -34,11 +34,14 @@ export default function PatientAppointmentsPage() {
 
     const filteredAppointments = appointments.filter((appt) => {
         const apptDate = new Date(appt.scheduled_at);
+        const isScheduledOrActive = appt.status.toUpperCase() === 'SCHEDULED' || appt.status.toUpperCase() === 'IN_PROGRESS';
+        const isFinishedOrCancelled = appt.status.toUpperCase() === 'CANCELLED' || appt.status.toUpperCase() === 'COMPLETED';
+
         if (activeTab === 'upcoming') {
-            return apptDate >= now && appt.status.toUpperCase() !== 'CANCELLED';
+            return (apptDate >= now || isScheduledOrActive) && !isFinishedOrCancelled;
         }
         if (activeTab === 'past') {
-            return apptDate < now || appt.status.toUpperCase() === 'CANCELLED';
+            return (apptDate < now && !isScheduledOrActive) || isFinishedOrCancelled;
         }
         return true;
     });
@@ -110,7 +113,7 @@ export default function PatientAppointmentsPage() {
                             : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
                     }`}
                 >
-                    Upcoming Consultations ({appointments.filter(a => new Date(a.scheduled_at) >= now && a.status.toUpperCase() !== 'CANCELLED').length})
+                    Upcoming Consultations ({appointments.filter(a => (new Date(a.scheduled_at) >= now || a.status.toUpperCase() === 'SCHEDULED' || a.status.toUpperCase() === 'IN_PROGRESS') && a.status.toUpperCase() !== 'CANCELLED' && a.status.toUpperCase() !== 'COMPLETED').length})
                 </button>
                 <button
                     onClick={() => setActiveTab('past')}
@@ -120,7 +123,7 @@ export default function PatientAppointmentsPage() {
                             : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
                     }`}
                 >
-                    Past & Cancelled ({appointments.filter(a => new Date(a.scheduled_at) < now || a.status.toUpperCase() === 'CANCELLED').length})
+                    Past & Cancelled ({appointments.filter(a => (new Date(a.scheduled_at) < now && a.status.toUpperCase() !== 'SCHEDULED' && a.status.toUpperCase() !== 'IN_PROGRESS') || a.status.toUpperCase() === 'CANCELLED' || a.status.toUpperCase() === 'COMPLETED').length})
                 </button>
                 <button
                     onClick={() => setActiveTab('all')}

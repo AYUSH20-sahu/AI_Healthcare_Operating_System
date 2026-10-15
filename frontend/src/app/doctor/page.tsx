@@ -79,17 +79,42 @@ export default function DoctorDashboardPage() {
 
     const handleQueueStream = useCallback((payload: QueueStreamPayload) => {
         if (!payload.appointment_id) return;
-        setQueue((prev) =>
-            prev.map((item) => {
-                if (item.appointment_id === payload.appointment_id) {
-                    return {
-                        ...item,
-                        status: (payload.new_status as any) || item.status,
-                    };
-                }
-                return item;
-            })
-        );
+        setQueue((prev) => {
+            const exists = prev.some(item => item.appointment_id === payload.appointment_id);
+            if (exists) {
+                return prev.map((item) => {
+                    if (item.appointment_id === payload.appointment_id) {
+                        return {
+                            ...item,
+                            status: (payload.event === 'INCOMING_VIDEO_CALL' ? 'in_progress' : (payload.new_status as any) || item.status),
+                        };
+                    }
+                    return item;
+                });
+            } else if (payload.patient_name) {
+                // Newly booked appointment: insert into doctor live queue
+                const newItem: QueuePatientItem = {
+                    appointment_id: payload.appointment_id!,
+                    patient_id: payload.patient_id || `patient-${Date.now()}`,
+                    full_name: payload.patient_name,
+                    age: 38,
+                    gender: 'Not specified',
+                    blood_group: 'B+',
+                    abha_address: `${payload.patient_name.toLowerCase().replace(/\s+/g, '')}@abdm`,
+                    phone: '+91-98765-00000',
+                    scheduled_at: payload.scheduled_at || new Date().toISOString(),
+                    duration_minutes: 30,
+                    status: (payload.new_status as any) || 'scheduled',
+                    triage_priority: 'priority',
+                    chief_complaint: 'Patient scheduled outpatient consultation',
+                    vitals: { bp: '120/80', hr: 72, spo2: 99, temp: 98.6, glucose: 100 },
+                    allergies: [],
+                    risk_flags: [],
+                };
+                return [newItem, ...prev];
+            }
+            return prev;
+        });
     }, []);
 
     const { isConnected: isQueueLive } = useQueueStream({

@@ -39,6 +39,41 @@ router = APIRouter(prefix="/telehealth", tags=["telehealth"])
 # ─── WebRTC Signalling State ──────────────────────────────────────────────────
 # Maps room_id → list[WebSocket] (max 2 peers: doctor + patient)
 _signalling_rooms: dict[str, list[WebSocket]] = {}
+# Maps appointment_id → active call notification details
+_active_patient_calls: dict[str, dict] = {}
+
+
+async def broadcast_incoming_call(
+    appointment: Appointment,
+    patient: Patient,
+    doctor: Doctor,
+):
+    """Notify the attending doctor across real-time WebSocket channels of an incoming consultation call."""
+    from app.core.websocket_manager import queue_manager
+    call_info = {
+        "event": "INCOMING_VIDEO_CALL",
+        "appointment_id": str(appointment.appointment_id),
+        "patient_id": str(patient.patient_id),
+        "patient_name": patient.full_name,
+        "doctor_id": str(doctor.doctor_id),
+        "doctor_user_id": str(doctor.user_id),
+        "doctor_name": doctor.full_name,
+        "meeting_link": appointment.meeting_link or f"/doctor/consultations/{appointment.appointment_id}",
+        "room_id": appointment.telehealth_room_id or f"telehealth-{str(appointment.appointment_id)[:8]}",
+        "scheduled_at": appointment.scheduled_at.isoformat() if appointment.scheduled_at else None,
+        "timestamp": datetime.utcnow().isoformat(),
+        "message": f"Patient {patient.full_name} is calling for their telehealth video consultation!",
+    }
+    _active_patient_calls[str(appointment.appointment_id)] = call_info
+
+    org_key = str(doctor.organization_id or "default").lower().strip()
+    try:
+        await queue_manager.broadcast(f"doctor:{str(doctor.doctor_id)}", call_info)
+        await queue_manager.broadcast(f"user:{str(doctor.user_id)}", call_info)
+        await queue_manager.broadcast(f"queue:{org_key}", call_info)
+        await queue_manager.broadcast("queue:all", call_info)
+    except Exception as exc:
+        pass
 
 
 # Defined clinical red-flag patterns for emergency detection & triage
@@ -356,6 +391,19 @@ async def end_telehealth_consultation(
     await db.commit()
     await db.refresh(appointment)
 
+    # Clean up active call and notify doctor channels
+    _active_patient_calls.pop(str(appointment_id), None)
+    try:
+        from app.core.websocket_manager import queue_manager
+        end_event = {
+            "event": "CALL_ENDED",
+            "appointment_id": str(appointment_id),
+            "status": "completed",
+        }
+        await queue_manager.broadcast("queue:all", end_event)
+    except Exception:
+        pass
+
     return TelehealthActionResponse(
         appointment_id=appointment.appointment_id,
         status=appointment.status.value,
@@ -364,6 +412,57 @@ async def end_telehealth_consultation(
         telehealth_started_at=appointment.telehealth_started_at,
         telehealth_ended_at=appointment.telehealth_ended_at,
     )
+
+
+@router.post("/rooms/{appointment_id}/notify-call")
+async def notify_doctor_incoming_call(
+    appointment_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Trigger real-time alert and notification to the attending doctor that a patient has initiated a video call."""
+    stmt = select(Appointment).where(Appointment.appointment_id == appointment_id)
+    res = await db.execute(stmt)
+    appointment = res.scalar_one_or_none()
+    if not appointment:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Appointment not found.")
+
+    p_res = await db.execute(select(Patient).where(Patient.patient_id == appointment.patient_id))
+    patient = p_res.scalar_one_or_none()
+
+    d_res = await db.execute(select(Doctor).where(Doctor.doctor_id == appointment.doctor_id))
+    doctor = d_res.scalar_one_or_none()
+
+    if patient and doctor:
+        await broadcast_incoming_call(appointment, patient, doctor)
+
+    return {
+        "status": "notified",
+        "appointment_id": str(appointment_id),
+        "doctor_name": doctor.full_name if doctor else None,
+        "patient_name": patient.full_name if patient else None,
+    }
+
+
+@router.get("/active-calls")
+async def get_doctor_active_calls(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Retrieve active incoming video calls for the logged-in doctor/clinician."""
+    if current_user.role not in (UserRole.DOCTOR, UserRole.HEAD_PHYSICIAN, UserRole.ADMIN):
+        return []
+
+    d_res = await db.execute(select(Doctor).where(Doctor.user_id == current_user.user_id))
+    doctor = d_res.scalar_one_or_none()
+    doc_id_str = str(doctor.doctor_id) if doctor else None
+
+    results = []
+    for appt_id, call in list(_active_patient_calls.items()):
+        if current_user.role == UserRole.ADMIN or (doc_id_str and call.get("doctor_id") == doc_id_str):
+            results.append(call)
+
+    return results
 
 
 # =============================================================================
@@ -401,6 +500,15 @@ async def get_room_token(
     # The room_id is deterministic for the appointment so both peers compute the same value
     room_id = f"room-{appointment_id}"
     peer_role = "doctor" if (is_doctor or is_admin) else "patient"
+
+    # If the patient is requesting the token, automatically broadcast incoming call notification to doctor
+    if peer_role == "patient":
+        d_res = await db.execute(select(Doctor).where(Doctor.doctor_id == appointment.doctor_id))
+        doctor = d_res.scalar_one_or_none()
+        p_res = await db.execute(select(Patient).where(Patient.patient_id == appointment.patient_id))
+        patient = p_res.scalar_one_or_none()
+        if doctor and patient:
+            await broadcast_incoming_call(appointment, patient, doctor)
 
     user_identifier = str(current_user.email or current_user.user_id)
     ice_config = TelehealthMediaService.generate_ice_servers(user_identifier=user_identifier)

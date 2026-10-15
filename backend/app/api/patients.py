@@ -270,8 +270,8 @@ async def get_my_patient_appointments(
             hospital_affiliation=doc.hospital_affiliation,
             scheduled_at=appt.scheduled_at,
             duration_minutes=appt.duration_minutes,
-            status=appt.status.value,
-            reason=appt.reason,
+            status=appt.status.value if hasattr(appt.status, "value") else str(appt.status),
+            reason=appt.reason or appt.notes,
             meeting_link=appt.meeting_link,
         )
         for appt, doc in results
