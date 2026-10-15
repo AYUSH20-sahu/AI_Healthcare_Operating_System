@@ -9,6 +9,7 @@ export interface RecentConsultationItem {
     record_id: string;
     patient_id: string;
     patient_name: string;
+    appointment_id?: string;
     created_at: string;
     status: 'DRAFT' | 'FINALIZED' | 'AMENDED';
     chief_complaint: string;

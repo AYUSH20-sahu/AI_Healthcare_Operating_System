@@ -133,6 +133,31 @@ const MOCK_SYNTHESIZED_SOAP: SoapNoteData = {
     },
 };
 
+function parseTranscriptToUtterances(transcription?: string): TranscriptUtterance[] {
+    if (!transcription || !transcription.trim()) {
+        return MOCK_TRANSCRIPT_DIALOGUE;
+    }
+    const lines = transcription.split('\n').map((l) => l.trim()).filter(Boolean);
+    const parsed: TranscriptUtterance[] = [];
+
+    lines.forEach((line, index) => {
+        const isDoctor = line.toUpperCase().startsWith('DOCTOR:') || line.toUpperCase().startsWith('PHYSICIAN:');
+        const isPatient = line.toUpperCase().startsWith('PATIENT:') || line.toUpperCase().startsWith('USER:');
+
+        const speaker: 'doctor' | 'patient' = isDoctor ? 'doctor' : isPatient ? 'patient' : (index % 2 === 0 ? 'doctor' : 'patient');
+        const text = line.replace(/^(DOCTOR|PHYSICIAN|PATIENT|USER):\s*/i, '');
+
+        parsed.push({
+            id: `u-${index + 1}`,
+            speaker,
+            timestamp: `00:${String((index + 1) * 6).padStart(2, '0')}`,
+            text,
+        });
+    });
+
+    return parsed.length > 0 ? parsed : MOCK_TRANSCRIPT_DIALOGUE;
+}
+
 export default function DoctorScribePage() {
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -429,12 +454,12 @@ export default function DoctorScribePage() {
 
             // 2. Groq STT Transcription phase
             setAiProgressStage('transcribing');
-            setUtterances(MOCK_TRANSCRIPT_DIALOGUE);
 
             // 3. Ambient Scribe End-to-End Pipeline (U-09)
             if (vnId) {
                 await triggerScribePipeline(vnId);
             } else {
+                setUtterances(MOCK_TRANSCRIPT_DIALOGUE);
                 await triggerCopilotSynthesis(MOCK_TRANSCRIPT_DIALOGUE);
             }
         }, 800);
@@ -456,6 +481,12 @@ export default function DoctorScribePage() {
                 chief_complaint: 'Exertional retrosternal chest pain',
             });
 
+            if ((res as any)?.transcription) {
+                setUtterances(parseTranscriptToUtterances((res as any).transcription));
+            } else {
+                setUtterances(MOCK_TRANSCRIPT_DIALOGUE);
+            }
+
             if (res.soap_note) {
                 setSoapData(res.soap_note);
                 setDraftRecordId(res.medical_record_id);
@@ -469,6 +500,7 @@ export default function DoctorScribePage() {
             }
         } catch (err: unknown) {
             console.warn('Scribe processing error, falling back to Copilot synthesis:', err);
+            setUtterances(MOCK_TRANSCRIPT_DIALOGUE);
             await triggerCopilotSynthesis(MOCK_TRANSCRIPT_DIALOGUE);
         } finally {
             setIsProcessing(false);

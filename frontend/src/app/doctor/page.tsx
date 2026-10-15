@@ -341,11 +341,13 @@ export default function DoctorDashboardPage() {
                         <Button
                             variant="primary"
                             onClick={() => {
-                                alert('Consultation audio transcribed! Drafting SOAP note...');
+                                const patientId = activePatient?.patient_id || '';
+                                const apptId = selectedConsultation?.appointment_id || queue.find(q => q.patient_id === patientId)?.appointment_id || '';
                                 setActiveModal(null);
+                                router.push(`/doctor/scribe?patient_id=${patientId}&appointment_id=${apptId}`);
                             }}
                         >
-                            Complete & Generate SOAP Note
+                            Open Ambient Scribe Workstation →
                         </Button>
                     </div>
                 </div>
@@ -441,11 +443,12 @@ export default function DoctorDashboardPage() {
                         <Button
                             variant="primary"
                             onClick={() => {
-                                alert('Prescription drafted and screened! Ready for signature.');
+                                const patientId = activePatient?.patient_id || '';
                                 setActiveModal(null);
+                                router.push(`/doctor/prescriptions?patient_id=${patientId}`);
                             }}
                         >
-                            Screen & Draft Rx
+                            Open Prescription Drafter →
                         </Button>
                     </div>
                 </div>
@@ -470,11 +473,11 @@ export default function DoctorDashboardPage() {
                         <Button
                             variant="primary"
                             onClick={() => {
-                                alert('Follow-up appointment scheduled in calendar.');
                                 setActiveModal(null);
+                                router.push('/doctor/appointments');
                             }}
                         >
-                            Confirm Booking
+                            Manage Clinical Schedule →
                         </Button>
                     </div>
                 </div>
@@ -504,11 +507,16 @@ export default function DoctorDashboardPage() {
                         <Button
                             variant="primary"
                             onClick={() => {
-                                alert('Diagnostic order placed to hospital laboratory!');
+                                const patientId = activePatient?.patient_id || '';
                                 setActiveModal(null);
+                                if (patientId) {
+                                    router.push(`/doctor/patients/${patientId}`);
+                                } else {
+                                    router.push('/doctor/patients');
+                                }
                             }}
                         >
-                            Submit Requisition
+                            View Patient Diagnostic Chart →
                         </Button>
                     </div>
                 </div>
