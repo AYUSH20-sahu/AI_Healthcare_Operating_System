@@ -106,18 +106,22 @@ export default function PatientRegisterPage() {
                 {error && (
                     <Alert
                         variant="error"
-                        title="Account Notice"
+                        title="Registration Notice"
                         onClose={() => setError(null)}
                     >
-                        <div className="space-y-1.5">
-                            <p>{error}</p>
+                        <div className="space-y-2">
+                            <p className="font-medium text-xs sm:text-sm">{error}</p>
                             {error.toLowerCase().includes('already exists') && (
-                                <div className="pt-1">
+                                <div className="pt-2 border-t border-red-200/60 dark:border-red-900/40 space-y-2">
+                                    <p className="text-xs text-slate-700 dark:text-slate-300">
+                                        These credentials are already registered in the hospital database. Please sign in using your existing email or mobile phone:
+                                    </p>
                                     <Link
-                                        href="/patient/login"
-                                        className="inline-flex items-center gap-1 font-bold underline text-emerald-700 dark:text-emerald-300 hover:text-emerald-900"
+                                        href={`/patient/login?identifier=${encodeURIComponent(email || phone)}`}
+                                        className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs shadow-md transition-all"
                                     >
-                                        Log in with your existing credentials →
+                                        <span>Sign in with Existing Credentials</span>
+                                        <span>→</span>
                                     </Link>
                                 </div>
                             )}

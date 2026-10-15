@@ -1,6 +1,8 @@
 """Auth service - signup, login, JWT handling."""
 
 from datetime import datetime, timedelta
+import importlib
+import time
 from uuid import UUID
 
 import bcrypt
@@ -12,7 +14,6 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-import importlib
 from app.database import get_db
 from app.models import Doctor, Patient, User
 
@@ -230,7 +231,7 @@ async def check_credentials_available(
         if user_res.scalar_one_or_none():
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="An account with this email address already exists. Please log in using your credentials.",
+                detail="An account with this email address already exists in the database. Please log in using your existing credentials.",
             )
 
         # Check patients table
@@ -241,7 +242,7 @@ async def check_credentials_available(
         if pat and (not exclude_user_id or pat.user_id != exclude_user_id):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="An account with this email address already exists. Please log in using your credentials.",
+                detail="An account with this email address already exists in the database. Please log in using your existing credentials.",
             )
 
         # Check doctors table
@@ -252,7 +253,7 @@ async def check_credentials_available(
         if doc and (not exclude_user_id or doc.user_id != exclude_user_id):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="An account with this email address already exists. Please log in using your credentials.",
+                detail="An account with this email address already exists in the database. Please log in using your existing credentials.",
             )
 
     # 2. Verify Mobile Phone Number
@@ -267,7 +268,7 @@ async def check_credentials_available(
         if user_phone_res.scalar_one_or_none():
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="An account with this mobile phone number already exists. Please log in using your credentials.",
+                detail="An account with this mobile phone number already exists in the database. Please log in using your existing credentials.",
             )
 
         # Check patients table
@@ -280,7 +281,7 @@ async def check_credentials_available(
         if pat and (not exclude_user_id or pat.user_id != exclude_user_id):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="An account with this mobile phone number already exists. Please log in using your credentials.",
+                detail="An account with this mobile phone number already exists in the database. Please log in using your existing credentials.",
             )
 
         # Check doctors table
@@ -293,7 +294,7 @@ async def check_credentials_available(
         if doc and (not exclude_user_id or doc.user_id != exclude_user_id):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="An account with this mobile phone number already exists. Please log in using your credentials.",
+                detail="An account with this mobile phone number already exists in the database. Please log in using your existing credentials.",
             )
 
 
@@ -380,9 +381,12 @@ async def authenticate_user(db: AsyncSession, identifier: str, password: str) ->
 
 
 async def create_user(db: AsyncSession, user_data: UserCreate, role: str = "patient") -> User:
-    """Create a new user with password strength validation."""
+    """Create a new user with credential uniqueness and password strength validation."""
     from app.core.security import validate_password_strength
     from app.models import UserRole
+
+    # Verify that neither email nor mobile phone already exists in the database
+    await check_credentials_available(db, email=user_data.email, phone=user_data.phone)
 
     # Enforce password strength
     is_valid, msg = validate_password_strength(user_data.password)

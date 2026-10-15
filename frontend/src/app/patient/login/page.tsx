@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth';
+import { authApi, ForgotPasswordResponse } from '@/lib/api/auth';
 import { validatePostLoginRedirect } from '@/lib/redirect-validator';
 import {
     Card,
@@ -226,17 +227,70 @@ function PatientLoginForm() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const rawRedirect = searchParams.get('redirect');
+    const rawIdentifier = searchParams.get('identifier');
 
-    const { patientLogin, isLoading, isAuthenticated, isPatient } = useAuth();
+    const { patientLogin, googleLogin, isLoading, isAuthenticated, isPatient } = useAuth();
     const [loginMethod, setLoginMethod] = useState<LoginMethod>('email');
     const [email, setEmail] = useState('');
     const [phone, setPhone] = useState('');
+
+    useEffect(() => {
+        if (rawIdentifier) {
+            if (rawIdentifier.includes('@')) {
+                setLoginMethod('email');
+                setEmail(rawIdentifier);
+            } else {
+                setLoginMethod('phone');
+                setPhone(rawIdentifier);
+            }
+        }
+    }, [rawIdentifier]);
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
     const [rememberMe, setRememberMe] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [infoMessage, setInfoMessage] = useState<string | null>(null);
     const [submitting, setSubmitting] = useState(false);
+
+    // Standard Google Accounts OAuth 2.0 State
+    const [googleLoading, setGoogleLoading] = useState(false);
+
+    useEffect(() => {
+        const urlError = searchParams.get('error');
+        if (urlError) {
+            setError(decodeURIComponent(urlError));
+        }
+    }, [searchParams]);
+
+    // Forgot Password Modal State
+    const [showForgotModal, setShowForgotModal] = useState(false);
+    const [forgotEmail, setForgotEmail] = useState('');
+    const [forgotLoading, setForgotLoading] = useState(false);
+    const [forgotError, setForgotError] = useState<string | null>(null);
+    const [forgotSuccess, setForgotSuccess] = useState<ForgotPasswordResponse | null>(null);
+
+    const handleForgotPasswordSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setForgotError(null);
+        setForgotSuccess(null);
+
+        const cleanEmail = forgotEmail.trim();
+        if (!cleanEmail) {
+            setForgotError('Please enter your registered email address.');
+            return;
+        }
+
+        try {
+            setForgotLoading(true);
+            const res = await authApi.forgotPassword({ email: cleanEmail });
+            setForgotSuccess(res);
+        } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : 'Unable to dispatch password reset email. Please try again.';
+            setForgotError(msg);
+        } finally {
+            setForgotLoading(false);
+        }
+    };
 
     // Left Panel State
     const [activeLeftTab, setActiveLeftTab] = useState<LeftPanelTab>('chat');
@@ -699,6 +753,46 @@ function PatientLoginForm() {
         }
     };
 
+    // ─── Standard Google Accounts OAuth 2.0 Flow (accounts.google.com) ───────────
+
+    const handleStandardGoogleSignIn = async () => {
+        setError(null);
+        setInfoMessage(null);
+        setGoogleLoading(true);
+
+        try {
+            const envClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
+            const redirectUri = typeof window !== 'undefined'
+                ? `${window.location.origin}/auth/callback/google`
+                : 'http://localhost:3000/auth/callback/google';
+
+            if (envClientId && envClientId.trim()) {
+                const params = new URLSearchParams({
+                    client_id: envClientId.trim(),
+                    redirect_uri: redirectUri,
+                    response_type: 'code',
+                    scope: 'openid email profile',
+                    access_type: 'offline',
+                    prompt: 'select_account',
+                });
+                window.location.href = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
+                return;
+            }
+
+            // Fetch live Google OAuth URL from backend
+            const res = await authApi.getGoogleAuthUrl(redirectUri);
+            if (res.auth_url) {
+                window.location.href = res.auth_url;
+                return;
+            }
+        } catch (err: unknown) {
+            const errorMsg = err instanceof Error ? err.message : 'Google OAuth is not configured.';
+            setError(`Google Accounts OAuth 2.0 Notice: ${errorMsg}\n\nTo enable live sign-in via accounts.google.com, please add your GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET to the .env file.`);
+        } finally {
+            setGoogleLoading(false);
+        }
+    };
+
     return (
         <div className="min-h-screen w-full bg-slate-50 dark:bg-[#080B14] text-slate-900 dark:text-slate-100 flex flex-col lg:grid lg:grid-cols-12 overflow-x-hidden selection:bg-teal-500 selection:text-white transition-colors">
             {/* ═══════════════════════════════════════════════════════════════════════
@@ -733,7 +827,7 @@ function PatientLoginForm() {
                         {/* Emergency Quick Dial Pill */}
                         <a
                             href="tel:108"
-                            className="hidden sm:inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-red-500/15 hover:bg-red-500/25 border border-red-500/30 text-red-300 text-xs font-semibold transition-all shadow-sm group"
+                            className="hidden sm:inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-700 dark:text-red-300 text-xs font-semibold transition-all shadow-sm group"
                         >
                             <span className="w-2 h-2 rounded-full bg-red-500 animate-ping" />
                             <span>Emergency SOS: <strong>108</strong></span>
@@ -742,30 +836,30 @@ function PatientLoginForm() {
 
                     {/* Hero Title & Pill */}
                     <div className="space-y-2">
-                        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium bg-slate-800/80 text-teal-300 border border-slate-700/60 shadow-inner">
-                            <span className="text-teal-400">✦</span>
+                        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-teal-50 dark:bg-slate-800/80 text-teal-800 dark:text-teal-300 border border-teal-200 dark:border-slate-700/60 shadow-inner">
+                            <span className="text-teal-600 dark:text-teal-400">✦</span>
                             <span>24/7 Patient Guidance & Instant Triage</span>
                         </div>
-                        <h1 className="text-2xl sm:text-3xl xl:text-4xl font-extrabold tracking-tight text-white leading-tight">
+                        <h1 className="text-2xl sm:text-3xl xl:text-4xl font-black tracking-tight text-slate-900 dark:text-white leading-tight">
                             Intelligent clinical care & instantaneous assistance for every patient.
                         </h1>
-                        <p className="text-xs sm:text-sm text-slate-400 max-w-xl">
+                        <p className="text-xs sm:text-sm text-slate-700 dark:text-slate-300 max-w-xl font-normal leading-relaxed">
                             Resolve doctor time slots and consultation fees with our digital concierge, or trigger 24/7 emergency response before signing in.
                         </p>
                     </div>
 
                     {/* Interactive Feature Tabs */}
-                    <div className="flex items-center gap-2 border-b border-slate-800 pb-2">
+                    <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-800 pb-2">
                         <button
                             type="button"
                             onClick={() => setActiveLeftTab('chat')}
-                            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                                 activeLeftTab === 'chat'
-                                    ? 'bg-teal-500/20 text-teal-300 border border-teal-500/40 shadow-sm'
-                                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                                    ? 'bg-teal-600 text-white border border-teal-600 shadow-sm dark:bg-teal-500/20 dark:text-teal-300 dark:border-teal-500/40'
+                                    : 'bg-white dark:bg-slate-800/60 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800'
                             }`}
                         >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg className={`w-4 h-4 ${activeLeftTab === 'chat' ? 'text-white' : 'text-teal-600 dark:text-teal-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
                             </svg>
                             <span>💬 Patient Concierge Bot</span>
@@ -774,28 +868,28 @@ function PatientLoginForm() {
                         <button
                             type="button"
                             onClick={() => setActiveLeftTab('emergency')}
-                            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                                 activeLeftTab === 'emergency'
-                                    ? 'bg-red-500/20 text-red-300 border border-red-500/40 shadow-sm'
-                                    : 'text-slate-400 hover:text-red-300 hover:bg-red-500/10'
+                                    ? 'bg-red-600 text-white border border-red-600 shadow-sm dark:bg-red-500/20 dark:text-red-300 dark:border-red-500/40'
+                                    : 'bg-white dark:bg-slate-800/60 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-500/30 hover:bg-red-50 dark:hover:bg-red-950/40'
                             }`}
                         >
-                            <svg className="w-4 h-4 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg className={`w-4 h-4 ${activeLeftTab === 'emergency' ? 'text-white' : 'text-red-600 dark:text-red-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                             </svg>
-                            <span className="font-semibold text-red-400">🚨 Emergency & Trauma SOS</span>
+                            <span>🚨 Emergency & Trauma SOS</span>
                         </button>
 
                         <button
                             type="button"
                             onClick={() => setActiveLeftTab('doctors')}
-                            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                            className={`flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                                 activeLeftTab === 'doctors'
-                                    ? 'bg-blue-500/20 text-blue-300 border border-blue-500/40 shadow-sm'
-                                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                                    ? 'bg-blue-600 text-white border border-blue-600 shadow-sm dark:bg-blue-500/20 dark:text-blue-300 dark:border-blue-500/40'
+                                    : 'bg-white dark:bg-slate-800/60 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800'
                             }`}
                         >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg className={`w-4 h-4 ${activeLeftTab === 'doctors' ? 'text-white' : 'text-blue-600 dark:text-blue-400'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
                             </svg>
                             <span>👨‍⚕️ Doctors & Fee Schedule</span>
@@ -804,30 +898,30 @@ function PatientLoginForm() {
 
                     {/* Tab 1: AI Patient Concierge Chatbot */}
                     {activeLeftTab === 'chat' && (
-                        <div className="flex-1 flex flex-col min-h-[380px] max-h-[460px] rounded-2xl bg-slate-900/70 border border-slate-800/80 shadow-2xl backdrop-blur-md overflow-hidden">
+                        <div className="flex-1 flex flex-col min-h-[380px] max-h-[460px] rounded-2xl bg-white dark:bg-slate-900/90 border border-slate-300 dark:border-slate-800/80 shadow-xl dark:shadow-2xl overflow-hidden">
                             {/* Chat Header */}
-                            <div className="px-4 py-3 bg-slate-800/60 border-b border-slate-800 flex items-center justify-between">
+                            <div className="px-4 py-3 bg-slate-50 dark:bg-slate-800/70 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
                                 <div className="flex items-center gap-2.5">
-                                    <div className="w-7 h-7 rounded-lg bg-teal-500/20 border border-teal-500/30 flex items-center justify-center text-teal-400">
+                                    <div className="w-7 h-7 rounded-lg bg-teal-50 dark:bg-teal-500/20 border border-teal-200 dark:border-teal-500/30 flex items-center justify-center text-teal-600 dark:text-teal-400">
                                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                                         </svg>
                                     </div>
                                     <div>
-                                        <div className="text-xs font-semibold text-white flex items-center gap-1.5">
+                                        <div className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
                                             Hospital Patient Concierge
-                                            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                                            <span className="w-2 h-2 rounded-full bg-emerald-500 dark:bg-emerald-400 animate-pulse" />
                                         </div>
-                                        <div className="text-[10px] text-slate-400">Instant Doctor Slots, Fees & OPD Guidance</div>
+                                        <div className="text-[10px] text-slate-600 dark:text-slate-400 font-medium">Instant Doctor Slots, Fees & OPD Guidance</div>
                                     </div>
                                 </div>
-                                <span className="text-[10px] px-2 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700">
+                                <span className="text-[10px] px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-300 dark:border-slate-700 font-semibold">
                                     Safe & Restricted Helpdesk
                                 </span>
                             </div>
 
                             {/* Chat Message Scrollable Container */}
-                            <div className="flex-1 p-4 overflow-y-auto space-y-3 text-xs">
+                            <div className="flex-1 p-4 overflow-y-auto space-y-3 text-xs bg-slate-50/50 dark:bg-slate-950/30">
                                 {messages.map((msg) => (
                                     <div
                                         key={msg.id}
@@ -838,26 +932,26 @@ function PatientLoginForm() {
                                         <div
                                             className={`max-w-[85%] rounded-2xl p-3 sm:p-3.5 space-y-2 leading-relaxed ${
                                                 msg.sender === 'user'
-                                                    ? 'bg-teal-600 text-white rounded-br-none shadow-md'
+                                                    ? 'bg-teal-600 text-white rounded-br-none shadow-md font-medium'
                                                     : msg.sender === 'system-alert'
-                                                    ? 'bg-red-950/80 text-red-200 border border-red-500/40 rounded-bl-none shadow-lg'
-                                                    : 'bg-slate-800/90 text-slate-200 border border-slate-700/60 rounded-bl-none shadow-sm'
+                                                    ? 'bg-red-50 text-red-900 border border-red-200 dark:bg-red-950/80 dark:text-red-200 dark:border-red-500/40 rounded-bl-none shadow-lg'
+                                                    : 'bg-white text-slate-900 border border-slate-200 dark:bg-slate-800/90 dark:text-slate-100 dark:border-slate-700/60 rounded-bl-none shadow-sm'
                                             }`}
                                         >
                                             <div className="whitespace-pre-wrap">{msg.text}</div>
 
                                             {/* Doctor Card Attachment if present */}
                                             {msg.doctorCard && (
-                                                <div className="mt-2 p-2.5 rounded-xl bg-slate-900/90 border border-teal-500/30 text-slate-300 space-y-1">
+                                                <div className="mt-2 p-2.5 rounded-xl bg-slate-50 dark:bg-slate-900/90 border border-teal-200 dark:border-teal-500/30 text-slate-800 dark:text-slate-300 space-y-1 shadow-sm">
                                                     <div className="flex items-center justify-between">
-                                                        <span className="font-bold text-teal-300">{msg.doctorCard.name}</span>
-                                                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-teal-500/20 text-teal-300 border border-teal-500/30">
+                                                        <span className="font-bold text-teal-800 dark:text-teal-300">{msg.doctorCard.name}</span>
+                                                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-teal-100 text-teal-800 border border-teal-200 dark:bg-teal-500/20 dark:text-teal-300 dark:border-teal-500/30 font-semibold">
                                                             {msg.doctorCard.status}
                                                         </span>
                                                     </div>
-                                                    <div className="text-[11px] text-slate-400">{msg.doctorCard.specialty} • {msg.doctorCard.qualification}</div>
-                                                    <div className="text-[11px] text-slate-300">📍 {msg.doctorCard.room}</div>
-                                                    <div className="text-[11px] font-semibold text-emerald-400">
+                                                    <div className="text-[11px] text-slate-600 dark:text-slate-400 font-medium">{msg.doctorCard.specialty} • {msg.doctorCard.qualification}</div>
+                                                    <div className="text-[11px] text-slate-700 dark:text-slate-300">📍 {msg.doctorCard.room}</div>
+                                                    <div className="text-[11px] font-bold text-emerald-700 dark:text-emerald-400">
                                                         Fee: ₹{msg.doctorCard.fee} ({msg.doctorCard.followUpFee})
                                                     </div>
                                                 </div>
@@ -865,13 +959,13 @@ function PatientLoginForm() {
 
                                             {/* Quick Actions Buttons */}
                                             {msg.quickActions && (
-                                                <div className="flex flex-wrap gap-1.5 pt-1.5 border-t border-slate-700/40">
+                                                <div className="flex flex-wrap gap-1.5 pt-1.5 border-t border-slate-200 dark:border-slate-700/40">
                                                     {msg.quickActions.map((action, idx) => (
                                                         <button
                                                             key={idx}
                                                             type="button"
                                                             onClick={action.action}
-                                                            className="text-[11px] px-2.5 py-1 rounded-md bg-slate-700/60 hover:bg-teal-600 hover:text-white text-slate-300 transition-colors border border-slate-600/50"
+                                                            className="text-[11px] px-2.5 py-1 rounded-md bg-slate-50 hover:bg-teal-600 hover:text-white text-slate-800 dark:bg-slate-700/80 dark:hover:bg-teal-600 dark:hover:text-white dark:text-slate-200 transition-colors border border-slate-300 dark:border-slate-600/50 shadow-sm font-medium"
                                                         >
                                                             {action.label}
                                                         </button>
@@ -879,17 +973,17 @@ function PatientLoginForm() {
                                                 </div>
                                             )}
                                         </div>
-                                        <span className="text-[10px] text-slate-500 mt-1 px-1">
+                                        <span className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 px-1 font-medium">
                                             {msg.timestamp}
                                         </span>
                                     </div>
                                 ))}
 
                                 {isTyping && (
-                                    <div className="flex items-center gap-1.5 text-xs text-slate-400 p-2">
-                                        <div className="w-1.5 h-1.5 rounded-full bg-teal-400 animate-bounce" />
-                                        <div className="w-1.5 h-1.5 rounded-full bg-teal-400 animate-bounce [animation-delay:0.2s]" />
-                                        <div className="w-1.5 h-1.5 rounded-full bg-teal-400 animate-bounce [animation-delay:0.4s]" />
+                                    <div className="flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-400 p-2 font-medium">
+                                        <div className="w-1.5 h-1.5 rounded-full bg-teal-500 dark:bg-teal-400 animate-bounce" />
+                                        <div className="w-1.5 h-1.5 rounded-full bg-teal-500 dark:bg-teal-400 animate-bounce [animation-delay:0.2s]" />
+                                        <div className="w-1.5 h-1.5 rounded-full bg-teal-500 dark:bg-teal-400 animate-bounce [animation-delay:0.4s]" />
                                         <span className="text-[11px] ml-1">Consulting hospital directory...</span>
                                     </div>
                                 )}
@@ -902,14 +996,14 @@ function PatientLoginForm() {
                                     e.preventDefault();
                                     handleSendMessage();
                                 }}
-                                className="p-2.5 bg-slate-900 border-t border-slate-800 flex items-center gap-2"
+                                className="p-2.5 bg-slate-50 dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 flex items-center gap-2"
                             >
                                 <input
                                     type="text"
                                     value={chatInput}
                                     onChange={(e) => setChatInput(e.target.value)}
                                     placeholder="Ask doctor slots, fees, timings, or emergency..."
-                                    className="flex-1 bg-slate-800/80 border border-slate-700/70 rounded-xl px-3.5 py-2 text-xs text-white placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-teal-500 transition-all"
+                                    className="flex-1 bg-white dark:bg-slate-800/80 border border-slate-300 dark:border-slate-700/70 rounded-xl px-3.5 py-2 text-xs text-slate-900 dark:text-white placeholder-slate-500 dark:placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-teal-500 transition-all shadow-sm"
                                 />
                                 <button
                                     type="submit"
@@ -927,21 +1021,21 @@ function PatientLoginForm() {
 
                     {/* Tab 2: Dedicated Emergency & Trauma SOS Center */}
                     {activeLeftTab === 'emergency' && (
-                        <div className="flex-1 flex flex-col rounded-2xl bg-slate-900/80 border border-red-500/30 p-5 space-y-4 shadow-2xl backdrop-blur-md overflow-y-auto max-h-[460px]">
+                        <div className="flex-1 flex flex-col rounded-2xl bg-white dark:bg-slate-900/80 border border-red-200 dark:border-red-500/30 p-5 space-y-4 shadow-xl dark:shadow-2xl backdrop-blur-md overflow-y-auto max-h-[460px]">
                             {/* Emergency Header */}
-                            <div className="flex items-center justify-between pb-3 border-b border-red-500/20">
+                            <div className="flex items-center justify-between pb-3 border-b border-red-100 dark:border-red-500/20">
                                 <div className="flex items-center gap-2.5">
-                                    <div className="w-9 h-9 rounded-xl bg-red-500/20 border border-red-500/40 flex items-center justify-center text-red-400">
+                                    <div className="w-9 h-9 rounded-xl bg-red-100 dark:bg-red-500/20 border border-red-200 dark:border-red-500/40 flex items-center justify-center text-red-600 dark:text-red-400">
                                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                                         </svg>
                                     </div>
                                     <div>
-                                        <h3 className="text-sm font-bold text-red-300">24/7 Hospital Emergency & Trauma Desk</h3>
-                                        <p className="text-[11px] text-slate-400">Immediate Ambulance, Triage, and Critical Care Dispatch</p>
+                                        <h3 className="text-sm font-bold text-red-700 dark:text-red-300">24/7 Hospital Emergency & Trauma Desk</h3>
+                                        <p className="text-[11px] text-slate-500 dark:text-slate-400">Immediate Ambulance, Triage, and Critical Care Dispatch</p>
                                     </div>
                                 </div>
-                                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-red-500/20 text-red-400 border border-red-500/30 animate-pulse">
+                                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-red-100 dark:bg-red-500/20 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-500/30 animate-pulse">
                                     TRAUMA BAY ACTIVE
                                 </span>
                             </div>
@@ -950,61 +1044,61 @@ function PatientLoginForm() {
                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                                 <a
                                     href="tel:108"
-                                    className="p-3 rounded-xl bg-red-950/60 border border-red-500/40 hover:bg-red-900/60 transition-all flex flex-col justify-between group"
+                                    className="p-3 rounded-xl bg-red-50 dark:bg-red-950/60 border border-red-200 dark:border-red-500/40 hover:bg-red-100 dark:hover:bg-red-900/60 transition-all flex flex-col justify-between group shadow-sm"
                                 >
-                                    <div className="flex items-center justify-between text-xs text-red-300 font-semibold">
+                                    <div className="flex items-center justify-between text-xs text-red-700 dark:text-red-300 font-semibold">
                                         <span>Ambulance Direct</span>
                                         <span className="text-xs">🚑</span>
                                     </div>
-                                    <div className="text-lg font-black text-white mt-1 group-hover:text-red-300 transition-colors">
+                                    <div className="text-lg font-black text-red-900 dark:text-white mt-1 group-hover:text-red-700 dark:group-hover:text-red-300 transition-colors">
                                         108
                                     </div>
-                                    <div className="text-[10px] text-slate-400">Toll-free 24/7 Dispatch</div>
+                                    <div className="text-[10px] text-slate-500 dark:text-slate-400">Toll-free 24/7 Dispatch</div>
                                 </a>
 
                                 <a
                                     href="tel:01123456789"
-                                    className="p-3 rounded-xl bg-slate-800/80 border border-slate-700/80 hover:bg-slate-700/80 transition-all flex flex-col justify-between group"
+                                    className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 hover:bg-slate-100 dark:hover:bg-slate-700/80 transition-all flex flex-col justify-between group shadow-sm"
                                 >
-                                    <div className="flex items-center justify-between text-xs text-teal-300 font-semibold">
+                                    <div className="flex items-center justify-between text-xs text-teal-700 dark:text-teal-300 font-semibold">
                                         <span>Trauma Bay 1</span>
                                         <span className="text-xs">🏥</span>
                                     </div>
-                                    <div className="text-sm font-bold text-white mt-1 group-hover:text-teal-300 transition-colors">
+                                    <div className="text-sm font-bold text-slate-900 dark:text-white mt-1 group-hover:text-teal-600 dark:group-hover:text-teal-300 transition-colors">
                                         +91 011-2345-6789
                                     </div>
-                                    <div className="text-[10px] text-slate-400">On-Duty Medical Officer</div>
+                                    <div className="text-[10px] text-slate-500 dark:text-slate-400">On-Duty Medical Officer</div>
                                 </a>
 
                                 <a
                                     href="tel:112"
-                                    className="p-3 rounded-xl bg-slate-800/80 border border-slate-700/80 hover:bg-slate-700/80 transition-all flex flex-col justify-between group"
+                                    className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700/80 hover:bg-slate-100 dark:hover:bg-slate-700/80 transition-all flex flex-col justify-between group shadow-sm"
                                 >
-                                    <div className="flex items-center justify-between text-xs text-amber-300 font-semibold">
+                                    <div className="flex items-center justify-between text-xs text-amber-700 dark:text-amber-300 font-semibold">
                                         <span>National SOS</span>
                                         <span className="text-xs">🆘</span>
                                     </div>
-                                    <div className="text-lg font-black text-white mt-1 group-hover:text-amber-300 transition-colors">
+                                    <div className="text-lg font-black text-slate-900 dark:text-white mt-1 group-hover:text-amber-600 dark:group-hover:text-amber-300 transition-colors">
                                         112
                                     </div>
-                                    <div className="text-[10px] text-slate-400">Unified Emergency Helpline</div>
+                                    <div className="text-[10px] text-slate-500 dark:text-slate-400">Unified Emergency Helpline</div>
                                 </a>
                             </div>
 
                             {/* Emergency Dispatch Ticket Simulator */}
-                            <div className="p-3.5 rounded-xl bg-slate-900 border border-slate-800 space-y-3">
-                                <div className="text-xs font-semibold text-slate-200 flex items-center justify-between">
+                            <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-3">
+                                <div className="text-xs font-semibold text-slate-800 dark:text-slate-200 flex items-center justify-between">
                                     <span>Trigger Urgent Triage Beacon</span>
-                                    <span className="text-[10px] text-slate-400">Instant Hospital Trauma Alert</span>
+                                    <span className="text-[10px] text-slate-500 dark:text-slate-400">Instant Hospital Trauma Alert</span>
                                 </div>
 
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
                                     <div>
-                                        <label className="text-[10px] text-slate-400 block mb-1">Select Emergency Type</label>
+                                        <label className="text-[10px] text-slate-600 dark:text-slate-400 block mb-1">Select Emergency Type</label>
                                         <select
                                             value={emergencyType}
                                             onChange={(e) => setEmergencyType(e.target.value)}
-                                            className="w-full bg-slate-800 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:ring-1 focus:ring-red-500"
+                                            className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-red-500"
                                         >
                                             <option>Acute Chest Pain / Cardiac Event</option>
                                             <option>Acute Respiratory Distress / Asthma</option>
@@ -1014,27 +1108,26 @@ function PatientLoginForm() {
                                         </select>
                                     </div>
                                     <div>
-                                        <label className="text-[10px] text-slate-400 block mb-1">Patient Location / Landmark</label>
+                                        <label className="text-[10px] text-slate-600 dark:text-slate-400 block mb-1">Patient Location / Landmark</label>
                                         <input
                                             type="text"
                                             value={emergencyLocation}
                                             onChange={(e) => setEmergencyLocation(e.target.value)}
                                             placeholder="e.g. Ground Floor Gate 2, or Street Address"
-                                            className="w-full bg-slate-800 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-red-500"
-                                        >
-                                        </input>
+                                            className="w-full bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+                                        />
                                     </div>
                                 </div>
 
                                 {emergencyTicket ? (
-                                    <div className="p-3 rounded-lg bg-emerald-950/60 border border-emerald-500/40 text-xs text-emerald-200 space-y-1">
-                                        <div className="font-bold flex items-center gap-1.5 text-emerald-300">
+                                    <div className="p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-500/40 text-xs text-emerald-800 dark:text-emerald-200 space-y-1">
+                                        <div className="font-bold flex items-center gap-1.5 text-emerald-700 dark:text-emerald-300">
                                             <span>✓ Emergency Alert Dispatched</span>
-                                            <span className="font-mono text-[11px] bg-emerald-900/80 px-2 py-0.5 rounded border border-emerald-700">
+                                            <span className="font-mono text-[11px] bg-emerald-100 dark:bg-emerald-900/80 px-2 py-0.5 rounded border border-emerald-300 dark:border-emerald-700">
                                                 Ticket #{emergencyTicket}
                                             </span>
                                         </div>
-                                        <div className="text-[11px] text-slate-300">
+                                        <div className="text-[11px] text-slate-700 dark:text-slate-300">
                                             Ambulance unit & trauma nursing team notified for <strong>{emergencyType}</strong>.
                                             {emergencyLocation && <span> Location: <em>{emergencyLocation}</em>.</span>}
                                             {' '}Estimated response: 3-5 mins.
@@ -1062,8 +1155,8 @@ function PatientLoginForm() {
                             </div>
 
                             {/* Emergency Action Protocol */}
-                            <div className="text-[11px] text-slate-400 space-y-1.5 pt-1">
-                                <div className="font-semibold text-slate-300 text-xs">Immediate First-Aid Guidelines:</div>
+                            <div className="text-[11px] text-slate-600 dark:text-slate-400 space-y-1.5 pt-1">
+                                <div className="font-semibold text-slate-800 dark:text-slate-300 text-xs">Immediate First-Aid Guidelines:</div>
                                 <p>• <strong>Heart Attack:</strong> Sit resting, loosen tight collar, chew Aspirin 300mg if not allergic.</p>
                                 <p>• <strong>Stroke (F.A.S.T):</strong> Face drooping, Arm weakness, Speech difficulty → Call 108 instantly.</p>
                                 <p>• <strong>Bleeding:</strong> Apply continuous direct pressure with clean cloth. Elevate injured limb.</p>
@@ -1073,13 +1166,13 @@ function PatientLoginForm() {
 
                     {/* Tab 3: Doctors Directory & Fees */}
                     {activeLeftTab === 'doctors' && (
-                        <div className="flex-1 flex flex-col rounded-2xl bg-slate-900/80 border border-slate-800 p-4 space-y-3 shadow-2xl backdrop-blur-md overflow-y-auto max-h-[460px]">
-                            <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+                        <div className="flex-1 flex flex-col rounded-2xl bg-white dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 p-4 space-y-3 shadow-xl dark:shadow-2xl backdrop-blur-md overflow-y-auto max-h-[460px]">
+                            <div className="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-slate-800">
                                 <div>
-                                    <h3 className="text-xs font-bold text-white">Hospital Specialist Directory & Outpatient Slots</h3>
-                                    <p className="text-[10px] text-slate-400">Consultation fees include 7-day free follow-up review</p>
+                                    <h3 className="text-xs font-bold text-slate-900 dark:text-white">Hospital Specialist Directory & Outpatient Slots</h3>
+                                    <p className="text-[10px] text-slate-500 dark:text-slate-400">Consultation fees include 7-day free follow-up review</p>
                                 </div>
-                                <span className="text-[10px] px-2 py-0.5 rounded bg-teal-500/10 text-teal-400 border border-teal-500/20">
+                                <span className="text-[10px] px-2 py-0.5 rounded bg-teal-50 dark:bg-teal-500/10 text-teal-700 dark:text-teal-400 border border-teal-200 dark:border-teal-500/20 font-semibold">
                                     {doctorsList.length} Specialists On Duty
                                 </span>
                             </div>
@@ -1088,32 +1181,32 @@ function PatientLoginForm() {
                                 {doctorsList.map((doc) => (
                                     <div
                                         key={doc.id}
-                                        className="p-3 rounded-xl bg-slate-800/60 border border-slate-700/60 hover:border-teal-500/40 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-2"
+                                        className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 hover:border-teal-400 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-sm"
                                     >
                                         <div className="space-y-0.5">
                                             <div className="flex items-center gap-2">
-                                                <span className="font-bold text-xs text-white">{doc.name}</span>
-                                                <span className="text-[10px] px-1.5 py-0.2 rounded bg-slate-700 text-slate-300">
+                                                <span className="font-bold text-xs text-slate-900 dark:text-white">{doc.name}</span>
+                                                <span className="text-[10px] px-1.5 py-0.2 rounded bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300">
                                                     {doc.specialty}
                                                 </span>
                                             </div>
-                                            <div className="text-[11px] text-slate-400">{doc.qualification} • {doc.room}</div>
-                                            <div className="text-[11px] text-teal-300">
+                                            <div className="text-[11px] text-slate-500 dark:text-slate-400">{doc.qualification} • {doc.room}</div>
+                                            <div className="text-[11px] text-teal-700 dark:text-teal-300 font-medium">
                                                 🕒 {Array.isArray(doc.slots) ? doc.slots.join(' | ') : doc.slots}
                                             </div>
                                         </div>
-                                        <div className="flex items-center sm:flex-col sm:items-end justify-between sm:justify-center border-t sm:border-t-0 border-slate-700/50 pt-2 sm:pt-0">
-                                            <div className="text-xs font-bold text-emerald-400">
+                                        <div className="flex items-center sm:flex-col sm:items-end justify-between sm:justify-center border-t sm:border-t-0 border-slate-200 dark:border-slate-700/50 pt-2 sm:pt-0">
+                                            <div className="text-xs font-bold text-emerald-600 dark:text-emerald-400">
                                                 ₹{doc.fee}
                                             </div>
-                                            <div className="text-[10px] text-slate-400">{doc.followUpFee || 'Free follow-up within 7 days'}</div>
+                                            <div className="text-[10px] text-slate-500 dark:text-slate-400">{doc.followUpFee || 'Free follow-up within 7 days'}</div>
                                             <button
                                                 type="button"
                                                 onClick={() => {
                                                     setActiveLeftTab('chat');
                                                     handleSendMessage(`Tell me about ${doc.name} and fees`);
                                                 }}
-                                                className="text-[10px] text-teal-400 hover:underline mt-1"
+                                                className="text-[10px] font-semibold text-teal-600 dark:text-teal-400 hover:underline mt-1"
                                             >
                                                 Ask Bot About Doctor →
                                             </button>
@@ -1124,19 +1217,19 @@ function PatientLoginForm() {
                         </div>
                     )}
 
-                    {/* Bottom Testimonial / Trust Seal (Matches the design in the image) */}
-                    <div className="pt-2 border-t border-slate-800/80 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs text-slate-400">
+                    {/* Bottom Testimonial / Trust Seal */}
+                    <div className="pt-2 border-t border-slate-200 dark:border-slate-800/80 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs text-slate-600 dark:text-slate-400">
                         <div className="space-y-0.5">
-                            <p className="italic text-slate-300 text-[11px]">
+                            <p className="italic text-slate-700 dark:text-slate-300 text-[11px]">
                                 &ldquo;CarePulse provides immediate emergency triage access and secure ABDM-compliant health record management for all patients.&rdquo;
                             </p>
-                            <p className="text-[10px] text-slate-500 font-medium">
+                            <p className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">
                                 Dr. Rajesh Sharma — Chief Medical Officer & Head of Cardiology
                             </p>
                         </div>
-                        <div className="flex items-center gap-3 shrink-0 text-[10px] text-slate-500">
-                            <span className="flex items-center gap-1">
-                                <svg className="w-3.5 h-3.5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <div className="flex items-center gap-3 shrink-0 text-[10px] text-slate-500 dark:text-slate-400 font-medium">
+                            <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
+                                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
                                 </svg>
                                 ABDM Compliant
@@ -1195,38 +1288,34 @@ function PatientLoginForm() {
                         </p>
                     </div>
 
-                    {/* Genuine ABDM ABHA Sign-In & Google SSO */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                        <Link
-                            href="/patient/abha"
-                            className="w-full py-2.5 px-3 rounded-xl border border-teal-500/30 bg-teal-500/10 hover:bg-teal-500/20 text-teal-700 dark:text-teal-300 text-xs font-semibold flex items-center justify-center gap-2 transition-all shadow-sm text-center"
-                        >
-                            <span className="text-base">🇮🇳</span>
-                            <span>ABHA Sign-In</span>
-                        </Link>
+                    {/* Google Accounts OAuth 2.0 (Official accounts.google.com Flow) */}
+                    <div>
                         <button
                             type="button"
-                            onClick={() => {
-                                setInfoMessage("Google Workspace SSO uses your institutional ABDM-federated Gmail address. Please enter your email below or authenticate via ABHA.");
-                            }}
-                            className="w-full py-2.5 px-3 rounded-xl border border-slate-300 dark:border-slate-700/80 bg-white dark:bg-slate-900/80 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-semibold flex items-center justify-center gap-2 transition-all shadow-sm"
+                            disabled={googleLoading || submitting}
+                            onClick={handleStandardGoogleSignIn}
+                            className="w-full py-2.5 px-4 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-100 text-xs sm:text-sm font-semibold flex items-center justify-center gap-3 transition-all shadow-sm hover:shadow disabled:opacity-50"
                         >
-                            <svg className="w-4 h-4" viewBox="0 0 24 24">
-                                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-                                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-                                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
-                                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
-                            </svg>
-                            <span>Google SSO</span>
+                            {googleLoading ? (
+                                <div className="w-4 h-4 border-2 border-teal-600 border-t-transparent rounded-full animate-spin" />
+                            ) : (
+                                <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24">
+                                    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                                    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                                    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
+                                    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
+                                </svg>
+                            )}
+                            <span>{googleLoading ? 'Redirecting to accounts.google.com...' : 'Sign in with Google'}</span>
                         </button>
                     </div>
 
                     <div className="relative flex items-center justify-center">
-                        <div className="border-t border-slate-200 dark:border-slate-800 w-full" />
-                        <span className="bg-slate-50 dark:bg-[#06080F] px-3 text-[10px] font-semibold text-slate-500 uppercase tracking-widest shrink-0">
+                        <div className="border-t border-slate-300 dark:border-slate-800 w-full" />
+                        <span className="bg-slate-50 dark:bg-[#06080F] px-3 text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest shrink-0">
                             or continue with credentials
                         </span>
-                        <div className="border-t border-slate-200 dark:border-slate-800 w-full" />
+                        <div className="border-t border-slate-300 dark:border-slate-800 w-full" />
                     </div>
 
                     {error && (
@@ -1252,7 +1341,7 @@ function PatientLoginForm() {
                     <Card className="bg-white/90 dark:bg-slate-900/60 border-slate-200 dark:border-slate-800 shadow-xl backdrop-blur-xl">
                         <CardContent className="p-4 sm:p-5 space-y-4">
                             {/* Credential Switcher: Email vs Mobile Phone */}
-                            <div className="grid grid-cols-2 p-1 bg-slate-950 rounded-xl border border-slate-800">
+                            <div className="grid grid-cols-2 p-1 bg-slate-100 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-slate-800">
                                 <button
                                     type="button"
                                     onClick={() => {
@@ -1261,8 +1350,8 @@ function PatientLoginForm() {
                                     }}
                                     className={`flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg text-xs font-semibold transition-all ${
                                         loginMethod === 'email'
-                                            ? 'bg-slate-800 text-teal-300 shadow-sm'
-                                            : 'text-slate-400 hover:text-white'
+                                            ? 'bg-white dark:bg-slate-800 text-teal-700 dark:text-teal-300 shadow-sm border border-slate-200/80 dark:border-transparent'
+                                            : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                                     }`}
                                 >
                                     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1279,8 +1368,8 @@ function PatientLoginForm() {
                                     }}
                                     className={`flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg text-xs font-semibold transition-all ${
                                         loginMethod === 'phone'
-                                            ? 'bg-slate-800 text-teal-300 shadow-sm'
-                                            : 'text-slate-400 hover:text-white'
+                                            ? 'bg-white dark:bg-slate-800 text-teal-700 dark:text-teal-300 shadow-sm border border-slate-200/80 dark:border-transparent'
+                                            : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                                     }`}
                                 >
                                     <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1335,9 +1424,12 @@ function PatientLoginForm() {
                                             type="button"
                                             onClick={() => {
                                                 setError(null);
-                                                setInfoMessage('Password reset instructions have been dispatched to your registered contact. Please check your SMS and email.');
+                                                setForgotError(null);
+                                                setForgotSuccess(null);
+                                                setForgotEmail(loginMethod === 'email' ? email.trim() : '');
+                                                setShowForgotModal(true);
                                             }}
-                                            className="text-[11px] text-teal-600 dark:text-teal-400 hover:text-teal-500 hover:underline"
+                                            className="text-[11px] text-teal-600 dark:text-teal-400 hover:text-teal-500 hover:underline font-medium"
                                         >
                                             Forgot password?
                                         </button>
@@ -1393,38 +1485,38 @@ function PatientLoginForm() {
                         </CardContent>
                     </Card>
 
-                    {/* Quick Demo Logins (Click to autofill) - Exactly as in the reference image */}
-                    <div className="p-3 rounded-xl bg-slate-900/60 border border-slate-800 space-y-2">
-                        <div className="text-[11px] font-semibold text-slate-400 flex items-center gap-1.5">
-                            <span className="text-teal-400">⚡</span>
+                    {/* Quick Demo Logins (Click to autofill) */}
+                    <div className="p-3 rounded-xl bg-slate-100 dark:bg-slate-900/60 border border-slate-200 dark:border-slate-800 space-y-2">
+                        <div className="text-[11px] font-semibold text-slate-700 dark:text-slate-400 flex items-center gap-1.5">
+                            <span className="text-teal-600 dark:text-teal-400">⚡</span>
                             <span>Quick Demo Logins (Click to autofill)</span>
                         </div>
                         <div className="flex flex-wrap gap-1.5">
                             <button
                                 type="button"
                                 onClick={() => handleAutofill('amit')}
-                                className="px-2.5 py-1 rounded-lg text-[11px] font-medium bg-teal-500/10 hover:bg-teal-500/20 text-teal-300 border border-teal-500/30 transition-all"
+                                className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-teal-50 hover:bg-teal-100 dark:bg-teal-500/10 dark:hover:bg-teal-500/20 text-teal-800 dark:text-teal-300 border border-teal-300 dark:border-teal-500/30 transition-all shadow-sm"
                             >
                                 Patient (Amit - Cardio)
                             </button>
                             <button
                                 type="button"
                                 onClick={() => handleAutofill('priya')}
-                                className="px-2.5 py-1 rounded-lg text-[11px] font-medium bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 border border-purple-500/30 transition-all"
+                                className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-purple-50 hover:bg-purple-100 dark:bg-purple-500/10 dark:hover:bg-purple-500/20 text-purple-800 dark:text-purple-300 border border-purple-300 dark:border-purple-500/30 transition-all shadow-sm"
                             >
                                 Patient (Priya - Neuro)
                             </button>
                             <button
                                 type="button"
                                 onClick={() => handleAutofill('sarah')}
-                                className="px-2.5 py-1 rounded-lg text-[11px] font-medium bg-blue-500/10 hover:bg-blue-500/20 text-blue-300 border border-blue-500/30 transition-all"
+                                className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-blue-50 hover:bg-blue-100 dark:bg-blue-500/10 dark:hover:bg-blue-500/20 text-blue-800 dark:text-blue-300 border border-blue-300 dark:border-blue-500/30 transition-all shadow-sm"
                             >
                                 Patient (Sarah - Fresh)
                             </button>
                             <button
                                 type="button"
                                 onClick={() => handleAutofill('mobile')}
-                                className="px-2.5 py-1 rounded-lg text-[11px] font-medium bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 transition-all"
+                                className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-500/10 dark:hover:bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-500/30 transition-all shadow-sm"
                             >
                                 Mobile (9876511111)
                             </button>
@@ -1433,17 +1525,165 @@ function PatientLoginForm() {
                 </div>
 
                 {/* Footer Terms & Legal Disclaimer */}
-                <div className="text-center text-[11px] text-slate-500 space-y-1">
+                <div className="text-center text-[11px] text-slate-600 dark:text-slate-400 space-y-1">
                     <p>
                         By clicking continue, you agree to our{' '}
-                        <Link href="/terms" className="underline hover:text-slate-400">Terms of Service</Link> and{' '}
-                        <Link href="/privacy" className="underline hover:text-slate-400">Privacy Policy</Link>.
+                        <Link href="/terms" className="underline font-semibold text-slate-800 dark:text-slate-300 hover:text-teal-600">Terms of Service</Link> and{' '}
+                        <Link href="/privacy" className="underline font-semibold text-slate-800 dark:text-slate-300 hover:text-teal-600">Privacy Policy</Link>.
                     </p>
-                    <p className="text-[10px] text-slate-600">
+                    <p className="text-[10px] text-slate-500 dark:text-slate-500 font-medium">
                         256-bit Encrypted Session • Compliant with Indian DPDP Act 2023
                     </p>
                 </div>
             </div>
+
+
+
+            {/* Forgot Password Modal */}
+            {showForgotModal && (
+                <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-sm flex items-center justify-center p-4">
+                    <div className="relative w-full max-w-md bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 p-6 space-y-4">
+                        <div className="flex items-start justify-between">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-xl bg-teal-50 dark:bg-teal-900/30 text-teal-600 dark:text-teal-400 flex items-center justify-center shrink-0 border border-teal-200 dark:border-teal-800/50">
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                                    </svg>
+                                </div>
+                                <div>
+                                    <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                                        Reset Your Password
+                                    </h3>
+                                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                                        CarePulse Patient Security Desk
+                                    </p>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setShowForgotModal(false);
+                                    setForgotError(null);
+                                    setForgotSuccess(null);
+                                }}
+                                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 rounded-lg"
+                                aria-label="Close"
+                            >
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </div>
+
+                        {forgotError && (
+                            <Alert
+                                variant="error"
+                                title="Verification Error"
+                                onClose={() => setForgotError(null)}
+                            >
+                                {forgotError}
+                            </Alert>
+                        )}
+
+                        {forgotSuccess ? (
+                            <div className="space-y-4">
+                                <div className="p-4 bg-teal-50 dark:bg-teal-950/40 border border-teal-200 dark:border-teal-800 rounded-xl space-y-2">
+                                    <div className="flex items-center gap-2 text-teal-800 dark:text-teal-200 font-semibold text-xs">
+                                        <svg className="w-4 h-4 text-teal-600 dark:text-teal-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                        </svg>
+                                        <span>Reset Email Dispatched!</span>
+                                    </div>
+                                    <p className="text-xs text-teal-700 dark:text-teal-300 leading-relaxed">
+                                        A secure password reset link has been dispatched to <strong className="font-semibold underline">{forgotSuccess.email}</strong>. The link is valid for <strong>30 minutes</strong>.
+                                    </p>
+                                </div>
+
+                                {forgotSuccess.reset_url && (
+                                    <div className="p-3.5 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl space-y-2">
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400">
+                                                ⚡ Instant Reset Link (Dev & Testing)
+                                            </span>
+                                            <span className="text-[10px] text-teal-600 dark:text-teal-400 font-medium">Valid 30m</span>
+                                        </div>
+                                        <p className="text-xs text-slate-600 dark:text-slate-400">
+                                            Click below to directly open the password reset page and set your new password:
+                                        </p>
+                                        <Link
+                                            href={forgotSuccess.reset_url.replace(/^https?:\/\/[^/]+/, '')}
+                                            onClick={() => setShowForgotModal(false)}
+                                            className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-xs font-semibold text-white bg-teal-600 hover:bg-teal-700 shadow-md shadow-teal-500/20 transition-all text-center"
+                                        >
+                                            <span>Open Reset Password Page</span>
+                                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                                            </svg>
+                                        </Link>
+                                    </div>
+                                )}
+
+                                <div className="pt-2 flex justify-end">
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => {
+                                            setShowForgotModal(false);
+                                            setForgotSuccess(null);
+                                        }}
+                                    >
+                                        Close
+                                    </Button>
+                                </div>
+                            </div>
+                        ) : (
+                            <form onSubmit={handleForgotPasswordSubmit} className="space-y-4">
+                                <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                                    Please enter your registered email address. We will verify your account in our database and send you an email with a secure link to reset your password.
+                                </p>
+
+                                <Input
+                                    id="forgotPasswordEmail"
+                                    label="Registered Email Address"
+                                    type="email"
+                                    required
+                                    placeholder="patient@example.com"
+                                    value={forgotEmail}
+                                    onChange={(e) => setForgotEmail(e.target.value)}
+                                    disabled={forgotLoading}
+                                    leadingIcon={
+                                        <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                                        </svg>
+                                    }
+                                />
+
+                                <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        disabled={forgotLoading}
+                                        onClick={() => setShowForgotModal(false)}
+                                    >
+                                        Cancel
+                                    </Button>
+                                    <Button
+                                        type="submit"
+                                        variant="primary"
+                                        size="sm"
+                                        className="bg-teal-600 hover:bg-teal-700 text-white"
+                                        isLoading={forgotLoading}
+                                    >
+                                        Send Reset Email
+                                    </Button>
+                                </div>
+                            </form>
+                        )}
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

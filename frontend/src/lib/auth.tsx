@@ -10,6 +10,7 @@ import {
     PatientSignupRequest,
     PatientLoginRequest,
     OrgRegisterRequest,
+    GoogleAuthRequest,
 } from './api';
 
 export interface AuthContextType {
@@ -25,6 +26,8 @@ export interface AuthContextType {
     isSuperAdmin: boolean;
     login: (identifier: string, password: string, rememberMe?: boolean) => Promise<User>;
     patientLogin: (identifier: string, password: string, rememberMe?: boolean) => Promise<User>;
+    googleLogin: (data: GoogleAuthRequest, rememberMe?: boolean) => Promise<User>;
+    handleOAuthTokens: (accessToken: string, refreshToken: string) => Promise<User>;
     signup: (data: SignupRequest) => Promise<User>;
     patientSignup: (data: PatientSignupRequest) => Promise<User>;
     registerOrg: (data: OrgRegisterRequest) => Promise<User>;
@@ -233,6 +236,58 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
     };
 
+    const googleLogin = async (data: GoogleAuthRequest, rememberMe: boolean = true): Promise<User> => {
+        setIsLoading(true);
+        try {
+            const tokenRes: TokenResponse = await authApi.googleAuth(data);
+
+            if (typeof window !== 'undefined') {
+                const targetStorage = rememberMe ? localStorage : sessionStorage;
+                if (!rememberMe) {
+                    localStorage.removeItem('access_token');
+                    localStorage.removeItem('refresh_token');
+                    localStorage.removeItem('auth_user');
+                }
+                targetStorage.setItem('access_token', tokenRes.access_token);
+                targetStorage.setItem('refresh_token', tokenRes.refresh_token);
+            }
+            setToken(tokenRes.access_token);
+            setRefreshToken(tokenRes.refresh_token);
+
+            // Fetch active patient profile
+            const currentUser = await authApi.me();
+            setUser(currentUser);
+            if (typeof window !== 'undefined') {
+                const targetStorage = rememberMe ? localStorage : sessionStorage;
+                targetStorage.setItem('auth_user', JSON.stringify(currentUser));
+            }
+            return currentUser;
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleOAuthTokens = async (accessToken: string, refreshTokenStr: string): Promise<User> => {
+        setIsLoading(true);
+        try {
+            if (typeof window !== 'undefined') {
+                localStorage.setItem('access_token', accessToken);
+                localStorage.setItem('refresh_token', refreshTokenStr);
+            }
+            setToken(accessToken);
+            setRefreshToken(refreshTokenStr);
+
+            const currentUser = await authApi.me();
+            setUser(currentUser);
+            if (typeof window !== 'undefined') {
+                localStorage.setItem('auth_user', JSON.stringify(currentUser));
+            }
+            return currentUser;
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
     const signup = async (data: SignupRequest): Promise<User> => {
         setIsLoading(true);
         try {
@@ -332,6 +387,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 isSuperAdmin,
                 login,
                 patientLogin,
+                googleLogin,
+                handleOAuthTokens,
                 signup,
                 patientSignup,
                 registerOrg,

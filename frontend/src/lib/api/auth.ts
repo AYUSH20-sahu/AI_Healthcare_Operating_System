@@ -53,6 +53,14 @@ export interface PatientLoginRequest {
     password: string;
 }
 
+export interface GoogleAuthRequest {
+    email: string;
+    full_name?: string;
+    avatar_url?: string;
+    google_id?: string;
+    credential?: string;
+}
+
 export interface OrgRegisterRequest {
     // Step 1: Admin & Basic Facility Information
     admin_name: string;
@@ -82,6 +90,26 @@ export interface OrgRegisterRequest {
     clinical_review_policy?: string;
 }
 
+export interface ForgotPasswordRequest {
+    email: string;
+}
+
+export interface ForgotPasswordResponse {
+    message: string;
+    email: string;
+    reset_url?: string;
+}
+
+export interface ResetPasswordRequest {
+    token: string;
+    new_password: string;
+}
+
+export interface ResetPasswordResponse {
+    message: string;
+    email: string;
+}
+
 export const authApi = {
     login: (credentials: LoginRequest) =>
         api.post<TokenResponse>('/auth/login', credentials),
@@ -97,6 +125,26 @@ export const authApi = {
 
     registerOrg: (data: OrgRegisterRequest) =>
         api.post<User>('/auth/register-org', data),
+
+    googleAuth: (data: GoogleAuthRequest) =>
+        api.post<TokenResponse>('/auth/google', data),
+
+    getGoogleAuthUrl: (redirectUri?: string) =>
+        api.get<{ auth_url: string; client_id: string }>(
+            `/auth/google/url${redirectUri ? `?redirect_uri=${encodeURIComponent(redirectUri)}` : ''}`
+        ),
+
+    googleOAuthCallback: (code: string, redirectUri?: string) =>
+        api.post<TokenResponse>('/auth/google/callback', {
+            code,
+            redirect_uri: redirectUri,
+        }),
+
+    forgotPassword: (data: ForgotPasswordRequest) =>
+        api.post<ForgotPasswordResponse>('/auth/forgot-password', data),
+
+    resetPassword: (data: ResetPasswordRequest) =>
+        api.post<ResetPasswordResponse>('/auth/reset-password', data),
 
     refresh: (refreshToken: string) =>
         api.post<TokenResponse>('/auth/refresh', { refresh_token: refreshToken }),

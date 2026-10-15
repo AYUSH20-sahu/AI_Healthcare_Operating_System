@@ -62,6 +62,11 @@ class Settings(BaseSettings):
     SMTP_PASSWORD: str | None = None
     SMTP_FROM_EMAIL: str | None = None
 
+    # Google OAuth 2.0 (accounts.google.com)
+    GOOGLE_CLIENT_ID: str | None = None
+    GOOGLE_CLIENT_SECRET: str | None = None
+    GOOGLE_REDIRECT_URI: str | None = None
+
     # ABDM/FHIR
     ABDM_CLIENT_ID: str | None = None
     ABDM_CLIENT_SECRET: str | None = None
@@ -98,6 +103,7 @@ class Settings(BaseSettings):
     # Frontend
     NEXT_PUBLIC_API_URL: str | None = None
     NEXT_PUBLIC_APP_URL: str | None = None
+    FRONTEND_URL: str = "http://localhost:3000"
 
     @field_validator("DATABASE_URL", mode="before")
     @classmethod

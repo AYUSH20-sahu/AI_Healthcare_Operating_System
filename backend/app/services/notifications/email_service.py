@@ -239,3 +239,103 @@ async def send_appointment_reminder_email(
     except Exception as exc:
         logger.error("Failed to send appointment reminder email to %s: %s", to_email, exc)
         return False
+
+
+def _password_reset_html(user_name: str, reset_url: str, expires_in_minutes: int = 30) -> str:
+    return f"""
+<!DOCTYPE html>
+<html>
+<head><meta charset='utf-8'><title>Reset Your Password — CarePulse</title></head>
+<body style='margin:0;padding:0;background:#f8fafc;font-family:Inter,Arial,sans-serif'>
+  <table width='100%' cellpadding='0' cellspacing='0'>
+    <tr><td align='center' style='padding:32px 16px'>
+      <table width='560' cellpadding='0' cellspacing='0'
+             style='background:#ffffff;border-radius:16px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08)'>
+
+        <!-- Header -->
+        <tr><td style='background:linear-gradient(135deg,#0d9488,#14b8a6);padding:28px 32px'>
+          <h1 style='margin:0;color:#ffffff;font-size:20px;font-weight:700'>🔒 Password Reset Request</h1>
+          <p style='margin:6px 0 0;color:#ccfbf1;font-size:13px'>CarePulse / AI-HOS Patient & Clinical Portal</p>
+        </td></tr>
+
+        <!-- Body -->
+        <tr><td style='padding:28px 32px'>
+          <p style='margin:0 0 16px;font-size:15px;color:#374151'>
+            Hello <strong>{user_name}</strong>,<br/>
+            We received a request to reset your CarePulse account password. Click the button below to choose a new password:
+          </p>
+
+          <div style='text-align:center;margin:28px 0'>
+            <a href='{reset_url}'
+               style='background:#0d9488;color:#ffffff;text-decoration:none;padding:12px 28px;border-radius:10px;font-weight:700;font-size:14px;display:inline-block'>
+              Reset My Password
+            </a>
+          </div>
+
+          <p style='margin:0 0 8px;font-size:13px;color:#6b7280'>
+            Or copy and paste this link into your browser:
+          </p>
+          <p style='margin:0 0 20px;font-size:12px;color:#0d9488;word-break:break-all'>
+            <a href='{reset_url}' style='color:#0d9488'>{reset_url}</a>
+          </p>
+
+          <div style='background:#fef3c7;border:1px solid #fde68a;border-radius:8px;padding:12px 16px;margin-bottom:20px'>
+            <p style='margin:0;font-size:12px;color:#92400e'>
+              ⏱️ This password reset link is valid for <strong>{expires_in_minutes} minutes</strong> and can only be used once. If you did not request this, you can safely ignore this email.
+            </p>
+          </div>
+        </td></tr>
+
+        <!-- Footer -->
+        <tr><td style='background:#f8fafc;padding:16px 32px;border-top:1px solid #e2e8f0'>
+          <p style='margin:0;font-size:11px;color:#9ca3af;text-align:center'>
+            CarePulse Healthcare Operating System • 256-bit Secure Encryption • Automated notification. Do not reply.
+          </p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>
+"""
+
+
+async def send_password_reset_email(
+    to_email: str,
+    user_name: str,
+    reset_url: str,
+    expires_in_minutes: int = 30,
+) -> bool:
+    """Send a password reset email with a secure token link.
+    
+    Returns True if sent via SMTP, False if SMTP not configured or failed.
+    Always logs the reset link to logger for instant testing and debugging.
+    Always safe to call — never raises.
+    """
+    logger.info("🔑 [PASSWORD RESET DISPATCH] Email: %s | Reset Link: %s", to_email, reset_url)
+
+    if not HAS_FASTMAIL:
+        logger.warning("fastapi-mail not installed — password reset email to %s skipped via SMTP", to_email)
+        return False
+
+    config = _get_mail_config()
+    if not config:
+        logger.debug("SMTP not enabled — password reset email logged to console for %s", to_email)
+        return False
+
+    try:
+        html = _password_reset_html(user_name, reset_url, expires_in_minutes)
+        message = MessageSchema(
+            subject="🔒 Password Reset Request — CarePulse AI-HOS",
+            recipients=[to_email],
+            body=html,
+            subtype=MessageType.html,
+        )
+        fm = FastMail(config)
+        await fm.send_message(message)
+        logger.info("Password reset email successfully sent to %s", to_email)
+        return True
+    except Exception as exc:
+        logger.error("Failed to send password reset email to %s: %s", to_email, exc)
+        return False
+
