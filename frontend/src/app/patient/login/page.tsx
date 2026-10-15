@@ -761,14 +761,16 @@ function PatientLoginForm() {
         setGoogleLoading(true);
 
         try {
-            const envClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
+            const envClientId = (
+                process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || ''
+            ).trim();
             const redirectUri = typeof window !== 'undefined'
                 ? `${window.location.origin}/auth/callback/google`
                 : 'http://localhost:3000/auth/callback/google';
 
-            if (envClientId && envClientId.trim()) {
+            if (envClientId) {
                 const params = new URLSearchParams({
-                    client_id: envClientId.trim(),
+                    client_id: envClientId,
                     redirect_uri: redirectUri,
                     response_type: 'code',
                     scope: 'openid email profile',

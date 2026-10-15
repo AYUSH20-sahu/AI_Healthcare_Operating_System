@@ -301,21 +301,73 @@ async def _authenticate_or_register_google_user(
     return Token(access_token=access_token, refresh_token=refresh_token)
 
 
+def _get_google_credentials() -> tuple[str | None, str | None, str | None]:
+    """Retrieve Google OAuth credentials dynamically from settings, os.environ, .env files, or configured fallback."""
+    import os
+    from pathlib import Path
+    from app.core.config import settings
+
+    client_id = settings.GOOGLE_CLIENT_ID or os.getenv("GOOGLE_CLIENT_ID")
+    client_secret = settings.GOOGLE_CLIENT_SECRET or os.getenv("GOOGLE_CLIENT_SECRET")
+    redirect_uri = settings.GOOGLE_REDIRECT_URI or os.getenv("GOOGLE_REDIRECT_URI")
+
+    if not client_id or not client_secret:
+        # Search all possible .env file locations
+        candidate_files = [
+            Path.cwd() / ".env",
+            Path.cwd() / "backend" / ".env",
+            Path(__file__).resolve().parents[2] / ".env",          # backend/.env
+            Path(__file__).resolve().parents[3] / ".env",          # repo/.env
+            Path(__file__).resolve().parents[4] / ".env",          # workspace/.env
+            Path(__file__).resolve().parents[3] / "frontend" / ".env.local",
+        ]
+        vals: dict[str, str] = {}
+        for env_path in candidate_files:
+            try:
+                if env_path.is_file():
+                    with open(env_path, "r", encoding="utf-8") as f:
+                        for line in f:
+                            line = line.strip()
+                            if not line or line.startswith("#") or "=" not in line:
+                                continue
+                            k, v = line.split("=", 1)
+                            key = k.strip()
+                            val = v.strip().strip("'\"")
+                            if val:
+                                vals[key] = val
+            except Exception:
+                continue
+
+        client_id = client_id or vals.get("GOOGLE_CLIENT_ID") or vals.get("NEXT_PUBLIC_GOOGLE_CLIENT_ID")
+        client_secret = client_secret or vals.get("GOOGLE_CLIENT_SECRET")
+        redirect_uri = redirect_uri or vals.get("GOOGLE_REDIRECT_URI")
+
+    # Default fallback redirect URI if not configured
+    if not redirect_uri:
+        redirect_uri = "http://localhost:3000/auth/callback/google"
+
+    return (
+        client_id.strip() if client_id else None,
+        client_secret.strip() if client_secret else None,
+        redirect_uri.strip() if redirect_uri else None,
+    )
+
+
 @router.get("/google/url")
 async def get_google_auth_url(redirect_uri: str | None = None):
     """Generate official Google Accounts OAuth 2.0 authorization URL for accounts.google.com."""
     from app.core.config import settings
 
-    client_id = settings.GOOGLE_CLIENT_ID
-    if not client_id or not client_id.strip():
+    client_id, _, default_redirect_uri = _get_google_credentials()
+    if not client_id:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Google OAuth Client ID is not configured. Please add GOOGLE_CLIENT_ID in your .env file.",
         )
 
-    cb_uri = redirect_uri or settings.GOOGLE_REDIRECT_URI or f"{settings.FRONTEND_URL}/auth/callback/google"
+    cb_uri = redirect_uri or default_redirect_uri or f"{settings.FRONTEND_URL}/auth/callback/google"
     params = {
-        "client_id": client_id.strip(),
+        "client_id": client_id,
         "redirect_uri": cb_uri,
         "response_type": "code",
         "scope": "openid email profile",
@@ -335,15 +387,15 @@ async def google_login_redirect(redirect_uri: str | None = None):
     """Direct browser redirect to official accounts.google.com OAuth screen."""
     from app.core.config import settings
 
-    client_id = settings.GOOGLE_CLIENT_ID
+    client_id, _, default_redirect_uri = _get_google_credentials()
     frontend_base = (getattr(settings, "FRONTEND_URL", None) or "http://localhost:3000").rstrip("/")
-    if not client_id or not client_id.strip():
+    if not client_id:
         msg = urllib.parse.quote("Google OAuth is not configured. Please set GOOGLE_CLIENT_ID in .env.")
         return RedirectResponse(url=f"{frontend_base}/patient/login?error={msg}")
 
-    cb_uri = redirect_uri or settings.GOOGLE_REDIRECT_URI or f"{frontend_base}/auth/callback/google"
+    cb_uri = redirect_uri or default_redirect_uri or f"{frontend_base}/auth/callback/google"
     params = {
-        "client_id": client_id.strip(),
+        "client_id": client_id,
         "redirect_uri": cb_uri,
         "response_type": "code",
         "scope": "openid email profile",
@@ -359,15 +411,14 @@ async def google_oauth_callback(data: GoogleOAuthCallbackRequest, db: AsyncSessi
     """Exchange authorization code from accounts.google.com for Google tokens, fetch profile, and authenticate."""
     from app.core.config import settings
 
-    client_id = settings.GOOGLE_CLIENT_ID
-    client_secret = settings.GOOGLE_CLIENT_SECRET
+    client_id, client_secret, default_redirect_uri = _get_google_credentials()
     if not client_id or not client_secret:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Google OAuth credentials (GOOGLE_CLIENT_ID & GOOGLE_CLIENT_SECRET) are not configured in backend .env.",
         )
 
-    cb_uri = data.redirect_uri or settings.GOOGLE_REDIRECT_URI or f"{settings.FRONTEND_URL}/auth/callback/google"
+    cb_uri = data.redirect_uri or default_redirect_uri or f"{settings.FRONTEND_URL}/auth/callback/google"
 
     # 1. Exchange authorization code for Google access token
     async with httpx.AsyncClient(timeout=15.0) as client:
